@@ -35,6 +35,11 @@ export default function LoginScreen({ navigation }: Props) {
     navigation.navigate('AuthenticationScreen');
   };
 
+  const onSignUp = () => {
+    Keyboard.dismiss();
+    navigation.navigate('AuthenticationScreen');
+  };
+
   return (
     <>
       <StatusBar
@@ -144,9 +149,11 @@ export default function LoginScreen({ navigation }: Props) {
                 <View style={styles.divider} />
               </View>
 
-              {/* <Text style={[styles.registerText, { color: paperTheme.colors.onSurfaceVariant }]}>
-                New staff or student? <Text style={styles.registerLink}>Register Account</Text>
-              </Text> */}
+              <TouchableOpacity onPress={onSignUp}>
+                <Text style={[styles.registerText, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  New staff or student? <Text style={styles.registerLink}>Register Account</Text>
+                </Text>
+              </TouchableOpacity>
             </View>
 
           </View>
