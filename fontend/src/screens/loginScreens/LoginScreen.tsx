@@ -37,7 +37,7 @@ export default function LoginScreen({ navigation }: Props) {
 
   const onSignUp = () => {
     Keyboard.dismiss();
-    navigation.navigate('AuthenticationScreen');
+    navigation.navigate('SignUpScreen');
   };
 
   return (
@@ -151,7 +151,7 @@ export default function LoginScreen({ navigation }: Props) {
 
               <TouchableOpacity onPress={onSignUp}>
                 <Text style={[styles.registerText, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  New staff or student? <Text style={styles.registerLink}>Register Account</Text>
+                  New staff ? <Text style={styles.registerLink}>Register Account</Text>
                 </Text>
               </TouchableOpacity>
             </View>
