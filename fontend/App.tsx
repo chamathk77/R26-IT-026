@@ -10,6 +10,7 @@ import { store } from './src/store/store';
 import AppNavigator from './src/navigation/AppNavigation';
 import { ThemeProvider } from './src/context/ThemeContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 function ThemedApp() {
   const { paperTheme } = useTheme();
@@ -59,11 +60,13 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <Provider store={store}>
-        <ThemeProvider>
-          <ThemedApp />
-        </ThemeProvider>
-      </Provider>
+      <SafeAreaProvider>
+        <Provider store={store}>
+          <ThemeProvider>
+            <ThemedApp />
+          </ThemeProvider>
+        </Provider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
