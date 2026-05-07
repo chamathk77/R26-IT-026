@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Keyboard, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Keyboard, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TextInput as PaperTextInput } from 'react-native-paper';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -7,13 +7,18 @@ import { RootStackParamList } from '../../navigation/RootStackParamsList';
 import { useTheme } from '../../context/ThemeContext';
 import { fonts } from '../../constants/fonts';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { signup_Service } from '../../services/AuthService';
+import { useDispatch } from 'react-redux';
+import { AppDispatch } from '../../store/store';
+import { devLog } from '../../utils/devLog';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SignUpScreen'>;
 
 export default function SignUpScreen({ navigation }: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [name, setName] = useState(''); 
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [role, setRole] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -21,9 +26,55 @@ export default function SignUpScreen({ navigation }: Props) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
 
-  const onCreateAccount = () => {
+  const dispatch = useDispatch<AppDispatch>();
+
+  const onCreateAccount = async () => {
+
+    try {
+      if (
+        !name.trim() ||
+        !email.trim() ||
+        !phone.trim() ||
+        !role.trim() ||
+        !password.trim() ||
+        !confirmPassword.trim()
+      ) {
+        Alert.alert('Validation', 'Please fill in all fields.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        Alert.alert('Validation', 'Passwords do not match.');
+        return;
+      }
+      const response = await dispatch(
+        signup_Service({ name, email, phone: phone.trim(), role, password }),
+      ).unwrap();
+      devLog('Signup response:', response);
+      Alert.alert('Success', 'Signup successful');
+
+      Keyboard.dismiss();
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'LoginScreen' }],
+      });
+      
+
+      setName('');
+      setEmail('');
+      setPhone('');
+      setRole('');
+      setPassword('');
+      setConfirmPassword('');
+      setShowPassword(false);
+      setShowConfirmPassword(false);
+      setIsRoleMenuOpen(false);
+    
+    } catch (error) {
+      devLog('Signup error:', error);
+      Alert.alert('Error', 'Signup failed');
+      
+    }
     Keyboard.dismiss();
-    navigation.navigate('AuthenticationScreen');
   };
 
   return (
@@ -55,7 +106,7 @@ export default function SignUpScreen({ navigation }: Props) {
                 Fill in your details to sign up.
               </Text>
 
-              <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>PHONE NUMBER</Text>
+              <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>Full Name</Text>
               <View style={styles.inputWrapper}>
                 <PaperTextInput
                   style={styles.input}
@@ -63,11 +114,11 @@ export default function SignUpScreen({ navigation }: Props) {
                   underlineColor="transparent"
                   activeUnderlineColor="transparent"
                   contentStyle={styles.inputContent}
-                  placeholder="Enter your phone number"
+                  placeholder="Enter your full name"
                   placeholderTextColor="#9b9ca5"
-                  keyboardType="phone-pad"
-                  value={phoneNumber}
-                  onChangeText={setPhoneNumber}
+                  keyboardType="default"
+                  value={name}
+                  onChangeText={setName}
                   cursorColor="#a16207"
                   theme={paperTheme}
                 />
@@ -87,6 +138,25 @@ export default function SignUpScreen({ navigation }: Props) {
                   keyboardType="email-address"
                   value={email}
                   onChangeText={setEmail}
+                  cursorColor="#a16207"
+                  theme={paperTheme}
+                />
+              </View>
+
+              <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>PHONE</Text>
+              <View style={styles.inputWrapper}>
+                <PaperTextInput
+                  style={styles.input}
+                  mode="flat"
+                  underlineColor="transparent"
+                  activeUnderlineColor="transparent"
+                  contentStyle={styles.inputContent}
+                  placeholder="Enter your phone number"
+                  placeholderTextColor="#9b9ca5"
+                  autoCapitalize="none"
+                  keyboardType="phone-pad"
+                  value={phone}
+                  onChangeText={setPhone}
                   cursorColor="#a16207"
                   theme={paperTheme}
                 />

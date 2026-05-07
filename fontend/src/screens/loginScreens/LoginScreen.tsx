@@ -9,6 +9,10 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import React, { useRef } from 'react';
 import { RootStackParamList } from '../../navigation/RootStackParamsList';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { login_Service } from '../../services/AuthService';
+import { useDispatch } from 'react-redux';
+import { AppDispatch } from '../../store/store';
+import { devLog } from '../../utils/devLog';
 
 const appVersion = require('../../../package.json').version;
 
@@ -16,23 +20,33 @@ const appVersion = require('../../../package.json').version;
 type Props = NativeStackScreenProps<RootStackParamList, "LoginScreen">;
 
 export default function LoginScreen({ navigation }: Props) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("chamathhasarinda4321@gmail.com");
+  const [password, setPassword] = useState('123456');
   const [showPassword, setShowPassword] = useState(false);
   const { paperTheme, resolvedTheme } = useTheme();
   const scrollRef = useRef<any>(null);
   const emailInputRef = useRef<any>(null);
   const passwordInputRef = useRef<any>(null);
+   const dispatch = useDispatch<AppDispatch>();
 
-  const onLogin = () => {
-    // if (!email.trim() || !password.trim()) {
-    //   Alert.alert('Validation', 'Please enter both institutional email and password.');
-    //   return;
-    // }
+  const onLogin = async () => {
 
-    // Alert.alert('Login', `Welcome back, ${email}!`);
-    Keyboard.dismiss();
-    navigation.navigate('AuthenticationScreen');
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Validation', 'Please enter both institutional email and password.');
+      return;
+    }
+    try {
+      const response = await dispatch(login_Service({ email, password })).unwrap();
+      devLog('Login response:', response);
+
+      Keyboard.dismiss();
+      Alert.alert('Success', 'Login successful');
+    } catch (error) {
+     devLog('Login error:', error);
+     Alert.alert('Error', 'Login failed');
+    }
+    
+
   };
 
   const onSignUp = () => {
