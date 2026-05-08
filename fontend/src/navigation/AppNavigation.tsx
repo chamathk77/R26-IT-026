@@ -6,6 +6,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '../screens/loginScreens/LoginScreen';
 import SignUpScreen from '../screens/loginScreens/SignUpScreen';
 import MainBottomTabNavigator from './MainBottomTabNavigator';
+import ModuleHubScreen from '../screens/hub/ModuleHubScreen';
+import CostManagementScreen from '../screens/cost/CostManagementScreen';
 import { RootStackParamList } from './RootStackParamsList';
 
 
@@ -20,7 +22,9 @@ export default function AppNavigator() {
       <Stack.Navigator id="RootStack" initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
         <Stack.Screen name="LoginScreen" component={LoginScreen} />
         <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
+        <Stack.Screen name="ModuleHub" component={ModuleHubScreen} />
         <Stack.Screen name="PosMain" component={MainBottomTabNavigator} />
+        <Stack.Screen name="CostManagementMain" component={CostManagementScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

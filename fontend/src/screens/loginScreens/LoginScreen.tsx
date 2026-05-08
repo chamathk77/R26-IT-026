@@ -40,7 +40,7 @@ export default function LoginScreen({ navigation }: Props) {
       devLog('Login response:', response);
 
       Keyboard.dismiss();
-      navigation.reset({ index: 0, routes: [{ name: 'PosMain' }] });
+      navigation.reset({ index: 0, routes: [{ name: 'ModuleHub' }] });
     } catch (error) {
      devLog('Login error:', error);
      Alert.alert('Error', 'Login failed');
