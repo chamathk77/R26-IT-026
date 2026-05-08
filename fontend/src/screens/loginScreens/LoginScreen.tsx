@@ -1,12 +1,23 @@
-import { useState } from 'react';
-import { Alert, Keyboard, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import {
+  Alert,
+  BackHandler,
+  Keyboard,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TextInput as PaperTextInput } from 'react-native-paper';
 import LottieView from 'lottie-react-native';
 import { fonts } from '../../constants/fonts';
 import { useTheme } from '../../context/ThemeContext';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import React, { useRef } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { RootStackParamList } from '../../navigation/RootStackParamsList';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { login_Service } from '../../services/AuthService';
@@ -27,7 +38,34 @@ export default function LoginScreen({ navigation }: Props) {
   const scrollRef = useRef<any>(null);
   const emailInputRef = useRef<any>(null);
   const passwordInputRef = useRef<any>(null);
-   const dispatch = useDispatch<AppDispatch>();
+  const dispatch = useDispatch<AppDispatch>();
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'android') {
+        return undefined;
+      }
+
+      const onHardwareBack = () => {
+        Alert.alert(
+          'Exit app',
+          'Do you want to exit the app?',
+          [
+            { text: 'No', style: 'cancel' },
+            {
+              text: 'Yes',
+              onPress: () => BackHandler.exitApp(),
+            },
+          ],
+          { cancelable: true },
+        );
+        return true;
+      };
+
+      const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
+      return () => sub.remove();
+    }, []),
+  );
 
   const onLogin = async () => {
 

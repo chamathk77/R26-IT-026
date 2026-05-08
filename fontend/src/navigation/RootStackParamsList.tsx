@@ -4,6 +4,10 @@ export type RootStackParamList = {
   ModuleHub: undefined;
   PosMain: undefined;
   CostManagementMain: undefined;
-  AuthenticationScreen: undefined;
   EnterEmailScreen: undefined;
+  Settings: undefined;
+  ProfileDetails: undefined;
+  ManageAccount: undefined;
+  EditUser: { userId: string };
+  ThemePreference: undefined;
 };

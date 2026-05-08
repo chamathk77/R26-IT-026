@@ -7,6 +7,7 @@ import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { MainBottomTabParamList } from '../../navigation/MainBottomTabParamList';
 import { fonts } from '../../constants/fonts';
 import { useTheme } from '../../context/ThemeContext';
+import { navigationRef } from '../../navigation/RootNavigation';
 
 type Props = BottomTabScreenProps<MainBottomTabParamList, 'Home'>;
 
@@ -61,13 +62,28 @@ export default function HomeScreen({ navigation }: Props) {
                 Smart POS
               </Text>
             </View>
-            <TouchableOpacity
-              accessibilityRole="button"
-              style={[styles.iconBtn, { backgroundColor: surface }]}
-              onPress={() => {}}
-            >
-              <Ionicons name="notifications-outline" size={22} color={primary} />
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Notifications"
+                style={[styles.iconBtn, { backgroundColor: surface }]}
+                onPress={() => {}}
+              >
+                <Ionicons name="notifications-outline" size={22} color={primary} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Settings"
+                style={[styles.iconBtn, { backgroundColor: surface }]}
+                onPress={() => {
+                  if (navigationRef.isReady()) {
+                    navigationRef.navigate('Settings');
+                  }
+                }}
+              >
+                <Ionicons name="settings-outline" size={22} color={primary} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <Searchbar
@@ -221,6 +237,11 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   search: {
     borderRadius: 14,

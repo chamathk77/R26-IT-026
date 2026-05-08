@@ -8,6 +8,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { Provider } from 'react-redux';
 import { store } from './src/store/store';
 import AppNavigator from './src/navigation/AppNavigation';
+import { navigationRef } from './src/navigation/RootNavigation';
+import { DummySessionProvider } from './src/context/DummySessionContext';
 import { ThemeProvider } from './src/context/ThemeContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -15,9 +17,20 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 function ThemedApp() {
   const { paperTheme } = useTheme();
 
+  const exitToLogin = () => {
+    if (navigationRef.isReady()) {
+      navigationRef.reset({
+        index: 0,
+        routes: [{ name: 'LoginScreen' }],
+      });
+    }
+  };
+
   return (
     <PaperProvider theme={paperTheme}>
-      <AppNavigator />
+      <DummySessionProvider onExitToLogin={exitToLogin}>
+        <AppNavigator />
+      </DummySessionProvider>
     </PaperProvider>
   );
 }
