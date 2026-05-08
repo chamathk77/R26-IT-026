@@ -8,9 +8,9 @@ import { fonts } from '../../constants/fonts';
 import { useTheme } from '../../context/ThemeContext';
 import CommonHeader from '../../components/CommonHeader/CommonHeader';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'CostManagementMain'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'CostAnalysis'>;
 
-export default function CostManagementScreen({ navigation }: Props) {
+export default function CostAnalysisScreen({ navigation }: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
 
   return (
@@ -24,21 +24,21 @@ export default function CostManagementScreen({ navigation }: Props) {
         edges={['top']}
       >
         <CommonHeader
-          title="Manage Cost"
+          title="Analysis"
           titleColor={paperTheme.colors.onBackground}
           iconColor={paperTheme.colors.onBackground}
           onPressLeftBtn={() => navigation.goBack()}
         />
         <Text style={[styles.title, { color: paperTheme.colors.onBackground }]}>
-          Manage Cost
+          Analysis
         </Text>
         <Text style={[styles.sub, { color: paperTheme.colors.onSurfaceVariant }]}>
-          Overview of costs, budgets, and trends will appear here.
+          Trends, variance, and reporting will appear here.
         </Text>
         <View style={[styles.placeholder, { backgroundColor: paperTheme.colors.surface }]}>
-          <Ionicons name="pie-chart-outline" size={52} color={paperTheme.colors.primary} />
+          <Ionicons name="bar-chart-outline" size={52} color={paperTheme.colors.primary} />
           <Text style={[styles.placeholderText, { color: paperTheme.colors.onSurfaceVariant }]}>
-            Connect your data sources to visualize spending and margins.
+            Connect cost data to visualize trends and margins.
           </Text>
         </View>
       </SafeAreaView>
@@ -52,6 +52,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.PoppinsBold,
     fontSize: 22,
     marginBottom: 8,
+    marginTop: 8,
   },
   sub: {
     fontFamily: fonts.PoppinsRegular,

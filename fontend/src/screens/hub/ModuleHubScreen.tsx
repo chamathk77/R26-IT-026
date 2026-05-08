@@ -25,7 +25,7 @@ export default function ModuleHubScreen({ navigation }: Props) {
   };
 
   const goCost = () => {
-    navigation.navigate("CostManagementMain");
+    navigation.navigate("CostModuleHub");
   };
 
   return (
@@ -42,10 +42,7 @@ export default function ModuleHubScreen({ navigation }: Props) {
           title="Select Module"
           titleColor={paperTheme.colors.onBackground}
           iconColor={paperTheme.colors.onBackground}
-          onPressLeftBtn={() => navigation.reset({ index: 0, routes: [{ name: 'LoginScreen' }] })
-
-
-          }
+          onPressLeftBtn={() => navigation.reset({ index: 0, routes: [{ name: 'LoginScreen' }] })}
           // onPressRightBtn={() => navigation.goBack()}
         />
         <View style={{ paddingHorizontal: 20 }}> 

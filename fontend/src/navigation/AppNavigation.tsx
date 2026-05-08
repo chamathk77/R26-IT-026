@@ -7,6 +7,8 @@ import LoginScreen from '../screens/loginScreens/LoginScreen';
 import SignUpScreen from '../screens/loginScreens/SignUpScreen';
 import MainBottomTabNavigator from './MainBottomTabNavigator';
 import ModuleHubScreen from '../screens/hub/ModuleHubScreen';
+import CostModuleHubScreen from '../screens/cost/CostModuleHubScreen';
+import CostAnalysisScreen from '../screens/cost/CostAnalysisScreen';
 import CostManagementScreen from '../screens/cost/CostManagementScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import ProfileDetailsScreen from '../screens/settings/ProfileDetailsScreen';
@@ -29,6 +31,8 @@ export default function AppNavigator() {
         <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
         <Stack.Screen name="ModuleHub" component={ModuleHubScreen} />
         <Stack.Screen name="PosMain" component={MainBottomTabNavigator} />
+        <Stack.Screen name="CostModuleHub" component={CostModuleHubScreen} />
+        <Stack.Screen name="CostAnalysis" component={CostAnalysisScreen} />
         <Stack.Screen name="CostManagementMain" component={CostManagementScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
         <Stack.Screen name="ProfileDetails" component={ProfileDetailsScreen} />

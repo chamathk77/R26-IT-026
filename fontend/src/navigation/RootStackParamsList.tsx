@@ -3,6 +3,8 @@ export type RootStackParamList = {
   SignUpScreen: undefined;
   ModuleHub: undefined;
   PosMain: undefined;
+  CostModuleHub: undefined;
+  CostAnalysis: undefined;
   CostManagementMain: undefined;
   EnterEmailScreen: undefined;
   Settings: undefined;

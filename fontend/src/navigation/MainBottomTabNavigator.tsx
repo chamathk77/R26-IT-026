@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fonts } from '../constants/fonts';
-import { useTheme } from '../context/ThemeContext';
 import { MainBottomTabParamList } from './MainBottomTabParamList';
 import HomeScreen from '../screens/pos/HomeScreen';
 import InventoryScreen from '../screens/pos/InventoryScreen';
@@ -13,8 +12,13 @@ import HistoryScreen from '../screens/pos/HistoryScreen';
 
 const Tab = createBottomTabNavigator<MainBottomTabParamList>();
 
+const TAB_BAR_BG = '#1c1917';
+const TAB_ICON_ACTIVE = '#ffffff';
+const TAB_ICON_INACTIVE = 'rgba(255, 255, 255, 0.52)';
+const TAB_LABEL_ACTIVE = '#ffffff';
+const TAB_LABEL_INACTIVE = 'rgba(255, 255, 255, 0.55)';
+
 export default function MainBottomTabNavigator() {
-  const { paperTheme } = useTheme();
   const insets = useSafeAreaInsets();
 
   return (
@@ -39,25 +43,26 @@ export default function MainBottomTabNavigator() {
           }
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: paperTheme.colors.primary,
-        tabBarInactiveTintColor: paperTheme.colors.outline,
+        tabBarActiveTintColor: TAB_ICON_ACTIVE,
+        tabBarInactiveTintColor: TAB_ICON_INACTIVE,
         tabBarHideOnKeyboard: true,
         tabBarLabelStyle: {
           fontSize: 11,
           fontFamily: fonts.PoppinsRegular,
         },
         tabBarStyle: {
-          backgroundColor: paperTheme.colors.secondary,
+          backgroundColor: TAB_BAR_BG,
+          borderTopWidth: 0,
           borderTopLeftRadius: 20,
           borderTopRightRadius: 20,
           height: 68 + insets.bottom,
           paddingBottom: Math.max(insets.bottom, 8),
           paddingTop: 6,
-          elevation: 8,
+          elevation: 12,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 8,
+          shadowOpacity: 0.22,
+          shadowRadius: 10,
         },
         tabBarItemStyle: {
           justifyContent: 'center',
@@ -76,7 +81,7 @@ export default function MainBottomTabNavigator() {
                 fontSize: 11,
                 fontFamily: fonts.PoppinsRegular,
                 textAlign: 'center',
-                color: paperTheme.colors.primary,
+                color: focused ? TAB_LABEL_ACTIVE : TAB_LABEL_INACTIVE,
                 fontWeight: focused ? '700' : '400',
               }}
             >
@@ -95,7 +100,7 @@ export default function MainBottomTabNavigator() {
                 fontSize: 11,
                 fontFamily: fonts.PoppinsRegular,
                 textAlign: 'center',
-                color: paperTheme.colors.primary,
+                color: focused ? TAB_LABEL_ACTIVE : TAB_LABEL_INACTIVE,
                 fontWeight: focused ? '700' : '400',
               }}
             >
@@ -114,7 +119,7 @@ export default function MainBottomTabNavigator() {
                 fontSize: 11,
                 fontFamily: fonts.PoppinsRegular,
                 textAlign: 'center',
-                color: paperTheme.colors.primary,
+                color: focused ? TAB_LABEL_ACTIVE : TAB_LABEL_INACTIVE,
                 fontWeight: focused ? '700' : '400',
               }}
             >
@@ -133,7 +138,7 @@ export default function MainBottomTabNavigator() {
                 fontSize: 11,
                 fontFamily: fonts.PoppinsRegular,
                 textAlign: 'center',
-                color: paperTheme.colors.primary,
+                color: focused ? TAB_LABEL_ACTIVE : TAB_LABEL_INACTIVE,
                 fontWeight: focused ? '700' : '400',
               }}
             >
