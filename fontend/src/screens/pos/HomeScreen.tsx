@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -15,6 +15,24 @@ export default function HomeScreen(_props: Props) {
 
   const surface = paperTheme.colors.surface;
   const primary = paperTheme.colors.primary;
+
+  const confirmLogout = () => {
+    Alert.alert('Log out', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Log out',
+        style: 'destructive',
+        onPress: () => {
+          if (navigationRef.isReady()) {
+            navigationRef.reset({
+              index: 0,
+              routes: [{ name: 'LoginScreen' }],
+            });
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <>
@@ -40,6 +58,14 @@ export default function HomeScreen(_props: Props) {
               </Text>
             </View>
             <View style={styles.headerActions}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Log out"
+                style={[styles.iconBtn, { backgroundColor: surface }]}
+                onPress={confirmLogout}
+              >
+                <Ionicons name="chevron-back" size={24} color={primary} />
+              </TouchableOpacity>
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel="Notifications"
