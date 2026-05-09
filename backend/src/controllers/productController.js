@@ -10,18 +10,18 @@ const createProduct = async (req, res) => {
     const { name, category, price, image } = req.body;
 
     if (name === undefined || name === '') {
-      return res.status(400).json({ message: 'Name is required' });
+      return res.status(400).json({ message: 'Name is required', success: false });
     }
     if (category === undefined || category === '') {
-      return res.status(400).json({ message: 'Category is required' });
+      return res.status(400).json({ message: 'Category is required', success: false });
     }
     if (price === undefined || price === null || Number.isNaN(Number(price))) {
-      return res.status(400).json({ message: 'Valid price is required' });
+      return res.status(400).json({ message: 'Valid price is required', success: false });
     }
 
     const priceNum = Number(price);
     if (priceNum < 0) {
-      return res.status(400).json({ message: 'Price must be zero or positive' });
+      return res.status(400).json({ message: 'Price must be zero or positive', success: false });
     }
 
     const product = await Product.create({
@@ -34,9 +34,9 @@ const createProduct = async (req, res) => {
 
     const populated = await Product.findById(product._id).populate('createdBy', 'name email role');
 
-    res.status(201).json(populated);
+    res.status(201).json({ success: true, data: populated });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: error.message, success: false });
   }
 };
 
@@ -45,9 +45,9 @@ const getProducts = async (req, res) => {
     const products = await Product.find()
       .populate('createdBy', 'name email role')
       .sort({ createdAt: -1 });
-    res.json(products);
+    res.json({ success: true, data: products });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: error.message, success: false });
   }
 };
 
@@ -66,14 +66,14 @@ const updateProduct = async (req, res) => {
     if (price !== undefined) {
       const priceNum = Number(price);
       if (Number.isNaN(priceNum) || priceNum < 0) {
-        return res.status(400).json({ message: 'Valid non-negative price is required' });
+        return res.status(400).json({ message: 'Valid non-negative price is required', success: false });
       }
       updates.price = priceNum;
     }
     if (image !== undefined) updates.image = String(image);
 
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ message: 'No fields to update' });
+      return res.status(400).json({ message: 'No fields to update', success: false });
     }
 
     const product = await Product.findByIdAndUpdate(id, updates, {
@@ -82,12 +82,12 @@ const updateProduct = async (req, res) => {
     }).populate('createdBy', 'name email role');
 
     if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
+      return res.status(404).json({ message: 'Product not found', success: false });
     }
 
-    res.json(product);
+    res.json({ success: true, data: product });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: error.message, success: false });
   }
 };
 
@@ -100,12 +100,12 @@ const deleteProduct = async (req, res) => {
 
     const product = await Product.findByIdAndDelete(id);
     if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
+      return res.status(404).json({ message: 'Product not found', success: false });
     }
 
-    res.json({ message: 'Product removed', id: product._id });
+      res.json({ success: true, message: 'Product removed', id: product._id });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: error.message, success: false });
   }
 };
 
