@@ -11,7 +11,6 @@ export interface LoginResponse {
     phone?: string;
     role: string;
     message: string;
-    token: string;
 }
 
 export interface SignUpRequest {

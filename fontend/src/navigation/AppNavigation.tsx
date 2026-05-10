@@ -15,6 +15,8 @@ import ProfileDetailsScreen from '../screens/settings/ProfileDetailsScreen';
 import ManageAccountScreen from '../screens/settings/ManageAccountScreen';
 import EditUserScreen from '../screens/settings/EditUserScreen';
 import ThemePreferenceScreen from '../screens/settings/ThemePreferenceScreen';
+import ManageCatogoryScreen from '../screens/ManageCatogory/ManageCatogoryScreen';
+import CreateCatogoryScreen from '../screens/ManageCatogory/CreateCatogoryScreen';
 import { RootStackParamList } from './RootStackParamsList';
 
 
@@ -31,6 +33,8 @@ export default function AppNavigator() {
         <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
         <Stack.Screen name="ModuleHub" component={ModuleHubScreen} />
         <Stack.Screen name="PosMain" component={MainBottomTabNavigator} />
+        <Stack.Screen name="ManageCatogory" component={ManageCatogoryScreen} />
+        <Stack.Screen name="CreateCatogory" component={CreateCatogoryScreen} />
         <Stack.Screen name="CostModuleHub" component={CostModuleHubScreen} />
         <Stack.Screen name="CostAnalysis" component={CostAnalysisScreen} />
         <Stack.Screen name="CostManagementMain" component={CostManagementScreen} />

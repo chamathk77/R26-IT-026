@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useCallback } from "react";
 import {
+  BackHandler,
+  Platform,
   StatusBar,
   StyleSheet,
   Text,
@@ -14,12 +16,15 @@ import { RootStackParamList } from "../../navigation/RootStackParamsList";
 import { fonts } from "../../constants/fonts";
 import { useTheme } from "../../context/ThemeContext";
 import CommonHeader from "../../components/CommonHeader/CommonHeader";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCommonAlert } from "../../hooks/useCommonAlert";
+import CommonAlert from "../../components/CommonAlert/CommonAlert";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ModuleHub">;
 
 export default function ModuleHubScreen({ navigation }: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
-
+  const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
   const goPos = () => {
     navigation.navigate("PosMain");
   };
@@ -27,6 +32,40 @@ export default function ModuleHubScreen({ navigation }: Props) {
   const goCost = () => {
     navigation.navigate("CostModuleHub");
   };
+
+  
+  const onBackPress = () => {
+    show_Alert(
+      'error',
+      'Logout',
+      'Do you want to logout?',
+      2,
+      false,
+      'Logout',
+      () => {
+        navigation.reset({ index: 0, routes: [{ name: 'LoginScreen' }] });
+      },
+      'Cancel',
+      () => {
+        hideAlert();
+      },
+    );
+
+    return true;
+  };
+
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'android') {
+        return undefined;
+      }
+
+
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }, []),
+  );
 
   return (
     <>
@@ -42,7 +81,7 @@ export default function ModuleHubScreen({ navigation }: Props) {
           title="Select Module"
           titleColor={paperTheme.colors.onBackground}
           iconColor={paperTheme.colors.onBackground}
-          onPressLeftBtn={() => navigation.reset({ index: 0, routes: [{ name: 'LoginScreen' }] })}
+          onPressLeftBtn={onBackPress}
           // onPressRightBtn={() => navigation.goBack()}
         />
         <View style={{ paddingHorizontal: 20 }}> 
@@ -166,6 +205,16 @@ export default function ModuleHubScreen({ navigation }: Props) {
           </TouchableOpacity>
         </View>
       </SafeAreaView>
+      <CommonAlert
+        visible={visible}
+        type={alertConfig?.type || 'success'}
+        title={alertConfig?.title || ''}
+        message={alertConfig?.message || ''}
+        buttons={alertConfig?.buttons || 1}
+        onPositivePress={alertConfig?.onPositivePress}
+        onNegativePress={alertConfig?.onNegativePress}
+        onClose={() => hideAlert()}
+      />
     </>
   );
 }

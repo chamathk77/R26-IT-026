@@ -138,6 +138,20 @@ export default function HomeScreen(_props: Props) {
             </View>
           </View>
 
+          <TouchableOpacity
+            style={[styles.manageCategoryBtn, { backgroundColor: paperTheme.colors.primary }]}
+            onPress={() => {
+              if (navigationRef.isReady()) {
+                navigationRef.navigate('ManageCatogory');
+              }
+            }}
+          >
+            <Ionicons name="pricetags-outline" size={18} color={paperTheme.colors.onPrimary} />
+            <Text style={[styles.manageCategoryBtnText, { color: paperTheme.colors.onPrimary }]}>
+              Manage Catogory
+            </Text>
+          </TouchableOpacity>
+
           <View style={{ height: 24 }} />
         </ScrollView>
       </SafeAreaView>
@@ -196,5 +210,18 @@ const styles = StyleSheet.create({
   statValue: {
     fontFamily: fonts.PoppinsBold,
     fontSize: 22,
+  },
+  manageCategoryBtn: {
+    marginTop: 10,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  manageCategoryBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 15,
   },
 });

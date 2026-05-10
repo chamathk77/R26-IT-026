@@ -5,9 +5,13 @@ function invalidIdResponse(res) {
   return res.status(400).json({ message: 'Invalid category id', success: false });
 }
 
+function isValidHexColor(value) {
+  return /^#[0-9A-Fa-f]{6}$/.test(String(value).trim());
+}
+
 const createCategory = async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, colorCode } = req.body;
 
     if (name === undefined || String(name).trim() === '') {
       return res.status(400).json({ message: 'Name is required', success: false });
@@ -15,10 +19,19 @@ const createCategory = async (req, res) => {
     if (description === undefined || String(description).trim() === '') {
       return res.status(400).json({ message: 'Description is required', success: false });
     }
+    if (colorCode === undefined || String(colorCode).trim() === '') {
+      return res.status(400).json({ message: 'Color code is required', success: false });
+    }
+    if (!isValidHexColor(colorCode)) {
+      return res
+        .status(400)
+        .json({ message: 'Color code must be a valid hex value like #3B82F6', success: false });
+    }
 
     const category = await Category.create({
       name: String(name).trim(),
       description: String(description).trim(),
+      colorCode: String(colorCode).trim().toUpperCase(),
       createdBy: req.user.id,
     });
 
@@ -66,7 +79,7 @@ const updateCategory = async (req, res) => {
       return invalidIdResponse(res);
     }
 
-    const { name, description } = req.body;
+    const { name, description, colorCode } = req.body;
     const updates = {};
 
     if (name !== undefined) {
@@ -83,6 +96,19 @@ const updateCategory = async (req, res) => {
         return res.status(400).json({ message: 'Description cannot be empty', success: false });
       }
       updates.description = descriptionTrimmed;
+    }
+
+    if (colorCode !== undefined) {
+      const colorTrimmed = String(colorCode).trim();
+      if (colorTrimmed === '') {
+        return res.status(400).json({ message: 'Color code cannot be empty', success: false });
+      }
+      if (!isValidHexColor(colorTrimmed)) {
+        return res
+          .status(400)
+          .json({ message: 'Color code must be a valid hex value like #3B82F6', success: false });
+      }
+      updates.colorCode = colorTrimmed.toUpperCase();
     }
 
     if (Object.keys(updates).length === 0) {

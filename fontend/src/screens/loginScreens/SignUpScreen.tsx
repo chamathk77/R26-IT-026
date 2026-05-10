@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Alert, Keyboard, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Alert, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TextInput as PaperTextInput } from 'react-native-paper';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -11,12 +11,15 @@ import { signup_Service } from '../../services/AuthService';
 import { useDispatch } from 'react-redux';
 import { AppDispatch } from '../../store/store';
 import { devLog } from '../../utils/devLog';
+import { useCommonAlert } from '../../hooks/useCommonAlert';
+import CommonAlert from '../../components/CommonAlert/CommonAlert';
+import CommonHeader from '../../components/CommonHeader/CommonHeader';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SignUpScreen'>;
 
 export default function SignUpScreen({ navigation }: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
-  const [name, setName] = useState(''); 
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('');
@@ -27,6 +30,18 @@ export default function SignUpScreen({ navigation }: Props) {
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
 
   const dispatch = useDispatch<AppDispatch>();
+
+
+  const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
+
+  const fullnameInputRef = useRef<any>(null);
+  const emailInputRef = useRef<any>(null);
+  const phoneInputRef = useRef<any>(null);
+  const roleInputRef = useRef<any>(null);
+  const passwordInputRef = useRef<any>(null);
+  const confirmPasswordInputRef = useRef<any>(null);
+
+  const scrollRef = useRef<ScrollView>(null);
 
   const onCreateAccount = async () => {
 
@@ -39,25 +54,55 @@ export default function SignUpScreen({ navigation }: Props) {
         !password.trim() ||
         !confirmPassword.trim()
       ) {
-        Alert.alert('Validation', 'Please fill in all fields.');
+
+        show_Alert(
+          "error",
+          "Validation",
+          "Please fill in all fields.",
+          1,
+          true,
+          "OK",
+          () => {
+            console.log("do it")
+          },
+        )
         return;
       }
       if (password !== confirmPassword) {
-        Alert.alert('Validation', 'Passwords do not match.');
+        show_Alert(
+          "error",
+          "Validation",
+          "Passwords do not match.",
+          1,
+          true,
+          "OK",
+          () => {
+            console.log("do it")
+          },
+        )
         return;
       }
       const response = await dispatch(
         signup_Service({ name, email, phone: phone.trim(), role, password }),
       ).unwrap();
       devLog('Signup response:', response);
-      Alert.alert('Success', 'Signup successful');
+      show_Alert(
+        "success",
+        "Success",
+        "Signup successful",
+        1,
+        true,
+        "OK",
+        () => {
+          Keyboard.dismiss();
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'LoginScreen' }],
+          });
 
-      Keyboard.dismiss();
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'LoginScreen' }],
-      });
-      
+        },
+      )
+
 
       setName('');
       setEmail('');
@@ -68,13 +113,23 @@ export default function SignUpScreen({ navigation }: Props) {
       setShowPassword(false);
       setShowConfirmPassword(false);
       setIsRoleMenuOpen(false);
-    
+
     } catch (error) {
+      Keyboard.dismiss();
       devLog('Signup error:', error);
-      Alert.alert('Error', 'Signup failed');
-      
+      show_Alert(
+        "error",
+        "Error",
+        error.message || "Signup failed",
+        1,
+        true,
+        "OK",
+        () => {
+          console.log("do it")
+        },
+      )
     }
-    Keyboard.dismiss();
+
   };
 
   return (
@@ -85,169 +140,228 @@ export default function SignUpScreen({ navigation }: Props) {
         translucent={false}
       />
       <SafeAreaView style={[styles.safeArea, { backgroundColor: paperTheme.colors.background }]}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-          contentContainerStyle={styles.scrollViewContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          <KeyboardAwareScrollView
-            contentContainerStyle={styles.scrollViewContent}
-            bounces={false}
-            showsVerticalScrollIndicator={false}
-            enableOnAndroid={true}
-            enableAutomaticScroll={true}
-            enableResetScrollToCoords={false}
-            extraScrollHeight={Platform.OS === 'ios' ? 20 : 50}
+        <CommonHeader
+          title="Create Account"
+          titleColor={paperTheme.colors.onBackground}
+          iconColor={paperTheme.colors.onBackground}
+          onPressLeftBtn={() => navigation.goBack()}
+        />
+        
+        
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
           >
-            <View style={[styles.container, { backgroundColor: paperTheme.colors.background }]}>
-              <Text style={[styles.heading, { color: paperTheme.colors.onSurface }]}>Create Account</Text>
-              <Text style={[styles.subheading, { color: paperTheme.colors.onSurfaceVariant }]}>
-                Fill in your details to sign up.
-              </Text>
 
-              <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>Full Name</Text>
-              <View style={styles.inputWrapper}>
-                <PaperTextInput
-                  style={styles.input}
-                  mode="flat"
-                  underlineColor="transparent"
-                  activeUnderlineColor="transparent"
-                  contentStyle={styles.inputContent}
-                  placeholder="Enter your full name"
-                  placeholderTextColor="#9b9ca5"
-                  keyboardType="default"
-                  value={name}
-                  onChangeText={setName}
-                  cursorColor="#a16207"
-                  theme={paperTheme}
-                />
-              </View>
-
-              <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>EMAIL</Text>
-              <View style={styles.inputWrapper}>
-                <PaperTextInput
-                  style={styles.input}
-                  mode="flat"
-                  underlineColor="transparent"
-                  activeUnderlineColor="transparent"
-                  contentStyle={styles.inputContent}
-                  placeholder="Enter your email"
-                  placeholderTextColor="#9b9ca5"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  value={email}
-                  onChangeText={setEmail}
-                  cursorColor="#a16207"
-                  theme={paperTheme}
-                />
-              </View>
-
-              <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>PHONE</Text>
-              <View style={styles.inputWrapper}>
-                <PaperTextInput
-                  style={styles.input}
-                  mode="flat"
-                  underlineColor="transparent"
-                  activeUnderlineColor="transparent"
-                  contentStyle={styles.inputContent}
-                  placeholder="Enter your phone number"
-                  placeholderTextColor="#9b9ca5"
-                  autoCapitalize="none"
-                  keyboardType="phone-pad"
-                  value={phone}
-                  onChangeText={setPhone}
-                  cursorColor="#a16207"
-                  theme={paperTheme}
-                />
-              </View>
-
-              <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>ROLE</Text>
-              <TouchableOpacity style={styles.inputWrapper} onPress={() => setIsRoleMenuOpen((prev) => !prev)}>
-                <Text style={[styles.dropdownValue, { color: role ? '#18181b' : '#9b9ca5' }]}>
-                  {role || 'Select your role'}
+            <ScrollView
+              ref={scrollRef}
+              style={{ flex: 1 }}
+              contentContainerStyle={{
+                flexGrow: 1,
+                justifyContent: 'flex-end',
+              }}
+              bounces={false}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={[styles.container, { backgroundColor: paperTheme.colors.background }]}>
+                <Text style={[styles.heading, { color: paperTheme.colors.onSurface }]}>Create Account</Text>
+                <Text style={[styles.subheading, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  Fill in your details to sign up.
                 </Text>
-                <Text style={styles.dropdownArrow}>{isRoleMenuOpen ? '^' : 'v'}</Text>
-              </TouchableOpacity>
 
-              {isRoleMenuOpen && (
-                <View style={styles.dropdownMenu}>
-                  {['admin', 'owner', 'staff'].map((option) => (
-                    <TouchableOpacity
-                      key={option}
-                      style={styles.dropdownItem}
-                      onPress={() => {
-                        setRole(option);
-                        setIsRoleMenuOpen(false);
-                      }}
-                    >
-                      <Text style={styles.dropdownItemText}>{option}</Text>
-                    </TouchableOpacity>
-                  ))}
+                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>Full Name</Text>
+                <View style={styles.inputWrapper}>
+                  <PaperTextInput
+                    ref={fullnameInputRef}
+                    style={styles.input}
+                    mode="flat"
+                    underlineColor="transparent"
+                    activeUnderlineColor="transparent"
+                    contentStyle={styles.inputContent}
+                    placeholder="Enter your full name"
+                    placeholderTextColor="#9b9ca5"
+                    keyboardType="default"
+                    value={name}
+                    onChangeText={setName}
+                    cursorColor="#a16207"
+                    theme={paperTheme}
+                    returnKeyType="next"
+                    onSubmitEditing={() => {
+                      emailInputRef.current?.focus();
+                    }}
+                  />
                 </View>
-              )}
 
-              <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>PASSWORD</Text>
-              <View style={styles.inputWrapper}>
-                <PaperTextInput
-                  style={styles.input}
-                  mode="flat"
-                  underlineColor="transparent"
-                  activeUnderlineColor="transparent"
-                  contentStyle={styles.inputContent}
-                  right={
-                    <PaperTextInput.Icon
-                      icon={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                      onPress={() => setShowPassword((prev) => !prev)}
-                    />
-                  }
-                  placeholder="Enter password"
-                  placeholderTextColor="#9b9ca5"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
-                  cursorColor="#a16207"
-                  theme={paperTheme}
-                />
+                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>EMAIL</Text>
+                <View style={styles.inputWrapper}>
+                  <PaperTextInput
+                    ref={emailInputRef}
+                    style={styles.input}
+                    mode="flat"
+                    underlineColor="transparent"
+                    activeUnderlineColor="transparent"
+                    contentStyle={styles.inputContent}
+                    placeholder="Enter your email"
+                    placeholderTextColor="#9b9ca5"
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    value={email}
+                    onChangeText={setEmail}
+                    cursorColor="#a16207"
+                    theme={paperTheme}
+                    returnKeyType="next"
+                    onSubmitEditing={() => {
+                      phoneInputRef.current?.focus();
+                    }}
+                  />
+                </View>
+
+                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>PHONE</Text>
+                <View style={styles.inputWrapper}>
+                  <PaperTextInput
+                    ref={phoneInputRef}
+                    style={styles.input}
+                    mode="flat"
+                    underlineColor="transparent"
+                    activeUnderlineColor="transparent"
+                    contentStyle={styles.inputContent}
+                    placeholder="Enter your phone number"
+                    placeholderTextColor="#9b9ca5"
+                    autoCapitalize="none"
+                    keyboardType="phone-pad"
+                    value={phone}
+                    onChangeText={setPhone}
+                    cursorColor="#a16207"
+                    theme={paperTheme}
+                    returnKeyType="next"
+                    onSubmitEditing={() => {
+                      Keyboard.dismiss();
+                    }}
+                  />
+                </View>
+
+                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>ROLE</Text>
+                <TouchableOpacity style={styles.inputWrapper} onPress={() => setIsRoleMenuOpen((prev) => !prev)}>
+                  <Text style={[styles.dropdownValue, { color: role ? '#18181b' : '#9b9ca5' }]}>
+                    {role || 'Select your role'}
+                  </Text>
+                  <Text style={styles.dropdownArrow}>{isRoleMenuOpen ? '^' : 'v'}</Text>
+                </TouchableOpacity>
+
+                {isRoleMenuOpen && (
+                  <View style={styles.dropdownMenu}>
+                    {['admin', 'owner', 'staff'].map((option) => (
+                      <TouchableOpacity
+                        key={option}
+                        style={styles.dropdownItem}
+                        onPress={() => {
+                          setRole(option);
+                          setIsRoleMenuOpen(false);
+                        }}
+                      >
+                        <Text style={styles.dropdownItemText}>{option}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>PASSWORD</Text>
+                <View style={styles.inputWrapper}>
+                  <PaperTextInput
+                    ref={passwordInputRef}
+                    style={styles.input}
+                    mode="flat"
+                    underlineColor="transparent"
+                    activeUnderlineColor="transparent"
+                    contentStyle={styles.inputContent}
+                    right={
+                      <PaperTextInput.Icon
+                        icon={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        onPress={() => setShowPassword((prev) => !prev)}
+                      />
+                    }
+                    placeholder="Enter password"
+                    placeholderTextColor="#9b9ca5"
+                    secureTextEntry={!showPassword}
+                    value={password}
+                    onChangeText={setPassword}
+                    cursorColor="#a16207"
+                    theme={paperTheme}
+                    returnKeyType="next"
+                    onSubmitEditing={() => {
+                      confirmPasswordInputRef.current?.focus();
+                    }}
+                    onFocus={
+                      () => {
+                        scrollRef.current?.scrollTo({ y: 500, animated: true });
+                      }
+                    }
+                  />
+                </View>
+
+                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>CONFIRM PASSWORD</Text>
+                <View style={styles.inputWrapper}>
+                  <PaperTextInput
+                    ref={confirmPasswordInputRef}
+                    style={styles.input}
+                    mode="flat"
+                    underlineColor="transparent"
+                    activeUnderlineColor="transparent"
+                    contentStyle={styles.inputContent}
+                    right={
+                      <PaperTextInput.Icon
+                        icon={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                        onPress={() => setShowConfirmPassword((prev) => !prev)}
+                      />
+                    }
+                    placeholder="Confirm password"
+                    placeholderTextColor="#9b9ca5"
+                    secureTextEntry={!showConfirmPassword}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    cursorColor="#a16207"
+                    theme={paperTheme}
+                    returnKeyType="done"
+                    // onSubmitEditing={onCreateAccount}
+                    onFocus={
+                      () => {
+                        scrollRef.current?.scrollTo({ y: 100, animated: true });
+                      }
+                    }
+                  />
+                </View>
+
+                <TouchableOpacity style={[styles.button, { backgroundColor: paperTheme.colors.primary }]} onPress={onCreateAccount}>
+                  <Text style={[styles.buttonText, { color: paperTheme.colors.onPrimary }]}>SIGN UP</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => navigation.navigate('LoginScreen')}>
+                  <Text style={[styles.loginText, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    Already have an account? <Text style={styles.loginLink}>Sign In</Text>
+                  </Text>
+                </TouchableOpacity>
               </View>
-
-              <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>CONFIRM PASSWORD</Text>
-              <View style={styles.inputWrapper}>
-                <PaperTextInput
-                  style={styles.input}
-                  mode="flat"
-                  underlineColor="transparent"
-                  activeUnderlineColor="transparent"
-                  contentStyle={styles.inputContent}
-                  right={
-                    <PaperTextInput.Icon
-                      icon={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
-                      onPress={() => setShowConfirmPassword((prev) => !prev)}
-                    />
-                  }
-                  placeholder="Confirm password"
-                  placeholderTextColor="#9b9ca5"
-                  secureTextEntry={!showConfirmPassword}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  cursorColor="#a16207"
-                  theme={paperTheme}
-                />
-              </View>
-
-              <TouchableOpacity style={[styles.button, { backgroundColor: paperTheme.colors.primary }]} onPress={onCreateAccount}>
-                <Text style={[styles.buttonText, { color: paperTheme.colors.onPrimary }]}>SIGN UP</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity onPress={() => navigation.navigate('LoginScreen')}>
-                <Text style={[styles.loginText, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  Already have an account? <Text style={styles.loginLink}>Sign In</Text>
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </KeyboardAwareScrollView>
-        </ScrollView>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        
       </SafeAreaView>
+
+      {alertConfig && (
+        <CommonAlert
+          visible={visible}
+          type={alertConfig.type}
+          title={alertConfig.title}
+          message={alertConfig.message}
+          buttons={alertConfig.buttons}
+          positiveButtonText={alertConfig.positiveButtonText}
+          negativeButtonText={alertConfig.negativeButtonText}
+          onPositivePress={alertConfig.onPositivePress}
+          onNegativePress={alertConfig.onNegativePress}
+          onClose={hideAlert}
+        />
+      )}
     </>
   );
 }

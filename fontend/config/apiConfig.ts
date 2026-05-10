@@ -6,6 +6,7 @@ import axios, {
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { ensureInternetConnection } from '../src/utils/checkInternetConnection';
+import { getSavedToken } from '../src/utils/secureStorage';
 
 function trimEnv(value: string | undefined): string | undefined {
   const t = value?.trim();
@@ -89,6 +90,10 @@ export const apiClient: AxiosInstance = axios.create({
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
     await ensureInternetConnection();
+    const token = await getSavedToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
 );

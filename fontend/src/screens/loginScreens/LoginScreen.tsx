@@ -24,6 +24,10 @@ import { login_Service } from '../../services/AuthService';
 import { useDispatch } from 'react-redux';
 import { AppDispatch } from '../../store/store';
 import { devLog } from '../../utils/devLog';
+import { saveToken } from '../../utils/secureStorage';
+import { setUserData } from '../../store/reducers/AuthReducer';
+import { useCommonAlert } from '../../hooks/useCommonAlert';
+import CommonAlert from '../../components/CommonAlert/CommonAlert';
 
 const appVersion = require('../../../package.json').version;
 
@@ -40,6 +44,8 @@ export default function LoginScreen({ navigation }: Props) {
   const passwordInputRef = useRef<any>(null);
   const dispatch = useDispatch<AppDispatch>();
 
+  const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
+
   useFocusEffect(
     useCallback(() => {
       if (Platform.OS !== 'android') {
@@ -47,18 +53,18 @@ export default function LoginScreen({ navigation }: Props) {
       }
 
       const onHardwareBack = () => {
-        Alert.alert(
+        show_Alert(
+          'error',
           'Exit app',
           'Do you want to exit the app?',
-          [
-            { text: 'No', style: 'cancel' },
-            {
-              text: 'Yes',
-              onPress: () => BackHandler.exitApp(),
-            },
-          ],
-          { cancelable: true },
+          1,
+          false,
+          'Exit app',
+          () => {
+            BackHandler.exitApp();
+          },
         );
+
         return true;
       };
 
@@ -69,19 +75,46 @@ export default function LoginScreen({ navigation }: Props) {
 
   const onLogin = async () => {
 
+    
+
+
+
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Validation', 'Please enter both institutional email and password.');
+     
+      show_Alert(
+        "error",
+        "Validation",
+        "Please enter both institutional email and password.",
+        1,
+        true,
+        "OK",
+        () => {
+            console.log("do it")
+        },
+    )
       return;
     }
     try {
-      const response = await dispatch(login_Service({ email, password })).unwrap();
+      const response:any = await dispatch(login_Service({ email, password })).unwrap();
       devLog('Login response:', response);
-
+      saveToken(response.token);
+      dispatch(setUserData(response));
+    
       Keyboard.dismiss();
       navigation.reset({ index: 0, routes: [{ name: 'ModuleHub' }] });
     } catch (error) {
      devLog('Login error:', error);
-     Alert.alert('Error', 'Login failed');
+     show_Alert(
+      "error",
+      "Error",
+       error.message || "Login failed ",
+      1,
+      true,
+      "OK",
+      () => {
+        console.log("do it")
+      },
+    )
     }
     
 
@@ -211,6 +244,21 @@ export default function LoginScreen({ navigation }: Props) {
           </View>
         </KeyboardAwareScrollView>
         </ScrollView>
+
+        {alertConfig && (
+        <CommonAlert
+          visible={visible}
+          type={alertConfig.type}
+          title={alertConfig.title}
+          message={alertConfig.message}
+          buttons={alertConfig.buttons}
+          positiveButtonText={alertConfig.positiveButtonText}
+          negativeButtonText={alertConfig.negativeButtonText}
+          onPositivePress={alertConfig.onPositivePress}
+          onNegativePress={alertConfig.onNegativePress}
+          onClose={hideAlert}
+        />
+      )}
       </SafeAreaView>
     </>
   );
