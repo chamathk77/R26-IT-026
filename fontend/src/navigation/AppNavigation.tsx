@@ -17,6 +17,8 @@ import EditUserScreen from '../screens/settings/EditUserScreen';
 import ThemePreferenceScreen from '../screens/settings/ThemePreferenceScreen';
 import ManageCatogoryScreen from '../screens/ManageCatogory/ManageCatogoryScreen';
 import CreateCatogoryScreen from '../screens/ManageCatogory/CreateCatogoryScreen';
+import ManageInventoryScreen from '../screens/pos/ManageInventoryScreen';
+import { AddProductScreen, EditProductScreen } from '../screens/pos/ProductFormScreen';
 import { RootStackParamList } from './RootStackParamsList';
 
 
@@ -34,6 +36,9 @@ export default function AppNavigator() {
         <Stack.Screen name="ModuleHub" component={ModuleHubScreen} />
         <Stack.Screen name="PosMain" component={MainBottomTabNavigator} />
         <Stack.Screen name="ManageCatogory" component={ManageCatogoryScreen} />
+        <Stack.Screen name="ManageInventory" component={ManageInventoryScreen} />
+        <Stack.Screen name="AddProduct" component={AddProductScreen} />
+        <Stack.Screen name="EditProduct" component={EditProductScreen} />
         <Stack.Screen name="CreateCatogory" component={CreateCatogoryScreen} />
         <Stack.Screen name="CostModuleHub" component={CostModuleHubScreen} />
         <Stack.Screen name="CostAnalysis" component={CostAnalysisScreen} />

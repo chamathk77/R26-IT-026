@@ -1,4 +1,5 @@
 import type { Category } from '../type/category';
+import type { InventoryProductFormParams } from '../type/inventory';
 
 export type RootStackParamList = {
   LoginScreen: undefined;
@@ -6,6 +7,9 @@ export type RootStackParamList = {
   ModuleHub: undefined;
   PosMain: undefined;
   ManageCatogory: undefined;
+  ManageInventory: undefined;
+  AddProduct: undefined;
+  EditProduct: InventoryProductFormParams;
   CreateCatogory: { category?: Category };
   CostModuleHub: undefined;
   CostAnalysis: undefined;

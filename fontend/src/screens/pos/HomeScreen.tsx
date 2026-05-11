@@ -152,6 +152,18 @@ export default function HomeScreen(_props: Props) {
             </Text>
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={[styles.manageInventoryBtn, { backgroundColor: surface, borderColor: primary }]}
+            onPress={() => {
+              if (navigationRef.isReady()) {
+                navigationRef.navigate('ManageInventory');
+              }
+            }}
+          >
+            <Ionicons name="cube-outline" size={18} color={primary} />
+            <Text style={[styles.manageInventoryBtnText, { color: primary }]}>Manage Inventory</Text>
+          </TouchableOpacity>
+
           <View style={{ height: 24 }} />
         </ScrollView>
       </SafeAreaView>
@@ -221,6 +233,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   manageCategoryBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 15,
+  },
+  manageInventoryBtn: {
+    marginTop: 12,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    borderWidth: 2,
+  },
+  manageInventoryBtnText: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 15,
   },
