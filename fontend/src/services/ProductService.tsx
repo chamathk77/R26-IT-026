@@ -126,6 +126,46 @@ export const fetchProducts_Service = createAsyncThunk(
   },
 );
 
+export const deleteProduct_Service = createAsyncThunk(
+  'product/delete',
+  async (id: string) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.delete<{ success: boolean; message?: string; id?: string }>(
+        `/api/products/${id}`,
+      );
+
+      if (isHttpSuccess(response.status)) {
+        return id;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: 'Could not delete product',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      throw apiError;
+    } catch (error: any) {
+      console.log('Delete product error:---', error);
+      if (error.error && error.message && error.status && error.timestamp) {
+        throw error as ApiErrorResponse;
+      }
+
+      const networkError: ApiErrorResponse = {
+        error: 'Network Error',
+        message:
+          error.message ||
+          'Network error. Please check your connection and try again.',
+        status: 0,
+        timestamp: new Date().toISOString(),
+      };
+      throw networkError;
+    }
+  },
+);
+
 export const updateProduct_Service = createAsyncThunk(
   'product/update',
   async (payload: UpdateProductPayload) => {

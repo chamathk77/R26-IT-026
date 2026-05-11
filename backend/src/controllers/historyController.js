@@ -82,6 +82,87 @@ const checkoutCart = async (req, res) => {
   }
 };
 
+function getTodayCheckoutRange() {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+
+  return { start, end };
+}
+
+function parseStatsDate(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getStatsDateRange(query) {
+  const start = parseStatsDate(query?.from);
+  const end = parseStatsDate(query?.to);
+
+  if (start && end && end > start) {
+    return { start, end };
+  }
+
+  return getTodayCheckoutRange();
+}
+
+function mapSalesStats(rows) {
+  const row = rows[0];
+
+  return {
+    totalSales: Number((row?.totalSales ?? 0).toFixed(2)),
+    orderCount: row?.orderCount ?? 0,
+  };
+}
+
+const getTodayStats = async (req, res) => {
+  try {
+    const { start, end } = getStatsDateRange(req.query);
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const dateFilter = { checkoutAt: { $gte: start, $lt: end } };
+
+    const [mineRows, allRows] = await Promise.all([
+      History.aggregate([
+        { $match: { ...dateFilter, handledUser: userId } },
+        {
+          $group: {
+            _id: null,
+            totalSales: { $sum: '$totalPrice' },
+            orderCount: { $sum: 1 },
+          },
+        },
+      ]),
+      History.aggregate([
+        { $match: dateFilter },
+        {
+          $group: {
+            _id: null,
+            totalSales: { $sum: '$totalPrice' },
+            orderCount: { $sum: 1 },
+          },
+        },
+      ]),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        mine: mapSalesStats(mineRows),
+        all: mapSalesStats(allRows),
+      },
+      message: 'Today sales stats loaded',
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const getHistory = async (req, res) => {
   try {
     const scopeRaw = req.query?.scope;
@@ -115,5 +196,6 @@ const getHistory = async (req, res) => {
 
 module.exports = {
   checkoutCart,
+  getTodayStats,
   getHistory,
 };

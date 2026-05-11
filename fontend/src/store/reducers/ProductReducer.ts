@@ -1,6 +1,7 @@
 import { createSlice } from '@reduxjs/toolkit';
 import {
   createProduct_Service,
+  deleteProduct_Service,
   fetchProducts_Service,
   updateProduct_Service,
 } from '../../services/ProductService';
@@ -135,6 +136,11 @@ export const ProductSlice = createSlice({
         payload?.message ||
         action.error.message ||
         'Could not update product';
+    });
+
+    builder.addCase(deleteProduct_Service.fulfilled, (state, action) => {
+      const id = String(action.payload);
+      state.list.items = state.list.items.filter((product) => String(product._id) !== id);
     });
   },
 });

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
@@ -22,7 +23,7 @@ import { fonts } from '../../../constants/fonts';
 import { useTheme } from '../../../context/ThemeContext';
 import { AppDispatch, RootState } from '../../../store/store';
 import { fetchCategories_Service } from '../../../services/CategoryService';
-import { fetchProducts_Service } from '../../../services/ProductService';
+import { deleteProduct_Service, fetchProducts_Service } from '../../../services/ProductService';
 import { Product } from '../../../type/product';
 import { useCommonAlert } from '../../../hooks/useCommonAlert';
 import { devLog } from '../../../utils/devLog';
@@ -56,6 +57,7 @@ export default function ManageInventoryScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
 
   const filteredProducts = useMemo(() => {
@@ -101,55 +103,113 @@ export default function ManageInventoryScreen({ navigation }: Props) {
     }
   }, [loadInventory]);
 
+  const confirmDeleteProduct = useCallback(
+    (item: Product) => {
+      const closeSwipe = () => swipeableRefs.current.get(item._id)?.close();
+
+      show_Alert(
+        'error',
+        'Delete product?',
+        `Are you sure you want to delete "${item.name}"? This cannot be undone.`,
+        2,
+        false,
+        'Yes',
+        async () => {
+          try {
+            await dispatch(deleteProduct_Service(item._id)).unwrap();
+            swipeableRefs.current.get(item._id)?.close();
+            await loadInventory();
+          } catch (err: unknown) {
+            show_Alert('error', 'Error', thunkErrorMessage(err, 'Could not delete product'), 1, true, 'OK');
+          }
+        },
+        'Cancel',
+        closeSwipe,
+      );
+    },
+    [dispatch, show_Alert, loadInventory],
+  );
+
   const isAllSelected = selectedCategoryId === null;
 
   const renderProductRow = ({ item }: { item: Product }) => {
     const cat = categories.find((c) => c._id === item.category);
     const imageUri = resolveProductImageUri(item.image);
     return (
-      <View style={[styles.productRow, { backgroundColor: paperTheme.colors.surface }]}>
-        {imageUri ? (
-          <Image source={{ uri: imageUri }} style={styles.productThumb} resizeMode="cover" />
-        ) : (
-          <View
-            style={[
-              styles.productThumbPlaceholder,
-              { backgroundColor: paperTheme.colors.surfaceVariant },
-            ]}
-          >
-            <Ionicons name="image-outline" size={22} color={paperTheme.colors.onSurfaceVariant} />
+      <Swipeable
+        ref={(ref) => {
+          if (ref) swipeableRefs.current.set(item._id, ref);
+          else swipeableRefs.current.delete(item._id);
+        }}
+        friction={2}
+        overshootRight={false}
+        renderRightActions={() => (
+          <View style={styles.swipeDeleteWrap}>
+            <TouchableOpacity
+              style={styles.swipeDeleteBtn}
+              activeOpacity={0.85}
+              onPress={() => confirmDeleteProduct(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`Delete ${item.name}`}
+            >
+              <Ionicons name="trash-outline" size={22} color="#FFFFFF" />
+              <Text style={styles.swipeDeleteText}>Delete</Text>
+            </TouchableOpacity>
           </View>
         )}
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[styles.productName, { color: paperTheme.colors.onSurface }]} numberOfLines={2}>
-            {item.name}
-          </Text>
-          <Text style={[styles.productMeta, { color: paperTheme.colors.onSurfaceVariant }]}>
-            {cat?.name ?? 'Uncategorized'}
-          </Text>
+      >
+        <View style={[styles.productRow, { backgroundColor: paperTheme.colors.surface }]}>
+          <View style={styles.productThumbWrap}>
+            {imageUri ? (
+              <Image source={{ uri: imageUri }} style={styles.productThumb} resizeMode="cover" />
+            ) : (
+              <View
+                style={[
+                  styles.productThumbPlaceholder,
+                  { backgroundColor: paperTheme.colors.surfaceVariant },
+                ]}
+              >
+                <Ionicons name="image-outline" size={22} color={paperTheme.colors.onSurfaceVariant} />
+              </View>
+            )}
+            <View
+              style={[
+                styles.categoryColorBadge,
+                { backgroundColor: cat?.colorCode ?? paperTheme.colors.outline },
+              ]}
+            />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[styles.productName, { color: paperTheme.colors.onSurface }]} numberOfLines={2}>
+              {item.name}
+            </Text>
+            <Text style={[styles.productMeta, { color: paperTheme.colors.onSurfaceVariant }]}>
+              {cat?.name ?? 'Uncategorized'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.editBtn, { backgroundColor: paperTheme.colors.primaryContainer }]}
+            onPress={() =>
+              navigation.navigate('EditProduct', {
+                id: item._id,
+                name: item.name,
+                categoryId: item.category,
+                unitPrice: item.price,
+                image: item.image,
+              })
+            }
+            accessibilityRole="button"
+            accessibilityLabel={`Edit ${item.name}`}
+          >
+            <Ionicons name="create-outline" size={20} color={paperTheme.colors.primary} />
+          </TouchableOpacity>
+          <View style={styles.productRight}>
+            <Text style={[styles.price, { color: paperTheme.colors.primary }]}>
+              ${item.price.toFixed(2)}
+            </Text>
+          </View>
         </View>
-        <TouchableOpacity
-          style={[styles.editBtn, { backgroundColor: paperTheme.colors.primaryContainer }]}
-          onPress={() =>
-            navigation.navigate('EditProduct', {
-              id: item._id,
-              name: item.name,
-              categoryId: item.category,
-              unitPrice: item.price,
-              image: item.image,
-            })
-          }
-          accessibilityRole="button"
-          accessibilityLabel={`Edit ${item.name}`}
-        >
-          <Ionicons name="create-outline" size={20} color={paperTheme.colors.primary} />
-        </TouchableOpacity>
-        <View style={styles.productRight}>
-          <Text style={[styles.price, { color: paperTheme.colors.primary }]}>
-            ${item.price.toFixed(2)}
-          </Text>
-        </View>
-      </View>
+      </Swipeable>
     );
   };
 
@@ -443,6 +503,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  productThumbWrap: {
+    position: 'relative',
+  },
   productThumb: {
     width: 56,
     height: 56,
@@ -455,11 +518,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  categoryColorBadge: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
   productName: { fontFamily: fonts.PoppinsSemiBold, fontSize: 15 },
   productMeta: { fontFamily: fonts.PoppinsRegular, fontSize: 12, marginTop: 2 },
   productsLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   productRight: { alignItems: 'flex-end', minWidth: 64 },
   price: { fontSize: 16, fontFamily: fonts.PoppinsBold },
+  swipeDeleteWrap: {
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
+  swipeDeleteBtn: {
+    backgroundColor: '#DC2626',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 88,
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 14,
+    gap: 4,
+  },
+  swipeDeleteText: {
+    color: '#FFFFFF',
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 12,
+  },
   emptyList: { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 },
   emptyListTitle: { fontFamily: fonts.PoppinsSemiBold, fontSize: 16, marginTop: 12 },
   emptyListBody: { fontFamily: fonts.PoppinsRegular, fontSize: 14, textAlign: 'center', marginTop: 6 },
