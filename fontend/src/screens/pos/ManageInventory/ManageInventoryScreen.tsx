@@ -16,15 +16,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
-import { RootStackParamList } from '../../navigation/RootStackParamsList';
-import { fonts } from '../../constants/fonts';
-import { useTheme } from '../../context/ThemeContext';
-import { AppDispatch, RootState } from '../../store/store';
-import { fetchCategories_Service } from '../../services/CategoryService';
-import { Category } from '../../type/category';
-import { useCommonAlert } from '../../hooks/useCommonAlert';
-import { devLog } from '../../utils/devLog';
-import CommonAlert from '../../components/CommonAlert/CommonAlert';
+import { RootStackParamList } from '../../../navigation/RootStackParamsList';
+import { fonts } from '../../../constants/fonts';
+import { useTheme } from '../../../context/ThemeContext';
+import { AppDispatch, RootState } from '../../../store/store';
+import { fetchCategories_Service } from '../../../services/CategoryService';
+import { Category } from '../../../type/category';
+import { useCommonAlert } from '../../../hooks/useCommonAlert';
+import { devLog } from '../../../utils/devLog';
+import CommonAlert from '../../../components/CommonAlert/CommonAlert';
 
 type DummyInventoryItem = {
   id: string;

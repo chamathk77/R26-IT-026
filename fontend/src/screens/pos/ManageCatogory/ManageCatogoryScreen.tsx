@@ -15,15 +15,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
-import { RootStackParamList } from '../../navigation/RootStackParamsList';
-import { fonts } from '../../constants/fonts';
-import { useTheme } from '../../context/ThemeContext';
-import { AppDispatch, RootState } from '../../store/store';
-import { deleteCategory_Service, fetchCategories_Service } from '../../services/CategoryService';
-import { Category } from '../../type/category';
-import { useCommonAlert } from '../../hooks/useCommonAlert';
-import { devLog } from '../../utils/devLog';
-import CommonAlert from '../../components/CommonAlert/CommonAlert';
+import { RootStackParamList } from '../../../navigation/RootStackParamsList';
+import { fonts } from '../../../constants/fonts';
+import { useTheme } from '../../../context/ThemeContext';
+import { AppDispatch, RootState } from '../../../store/store';
+import { deleteCategory_Service, fetchCategories_Service } from '../../../services/CategoryService';
+import { Category } from '../../../type/category';
+import { useCommonAlert } from '../../../hooks/useCommonAlert';
+import { devLog } from '../../../utils/devLog';
+import CommonAlert from '../../../components/CommonAlert/CommonAlert';
 
 /** RTK unwrap() rejects with rejectWithValue payload ({ message }), not always Error. */
 function thunkErrorMessage(err: unknown, fallback: string): string {

@@ -16,16 +16,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDispatch, useSelector } from 'react-redux';
-import { RootStackParamList } from '../../navigation/RootStackParamsList';
-import { fonts } from '../../constants/fonts';
-import { useTheme } from '../../context/ThemeContext';
-import CommonHeader from '../../components/CommonHeader/CommonHeader';
-import { AppDispatch, RootState } from '../../store/store';
-import { createCategory_Service, updateCategory_Service } from '../../services/CategoryService';
-import { devLog } from '../../utils/devLog';
-import { Category } from '../../type/category';
-import { useCommonAlert } from '../../hooks/useCommonAlert';
-import CommonAlert from '../../components/CommonAlert';
+import { RootStackParamList } from '../../../navigation/RootStackParamsList';
+import { fonts } from '../../../constants/fonts';
+import { useTheme } from '../../../context/ThemeContext';
+import CommonHeader from '../../../components/CommonHeader/CommonHeader';
+import { AppDispatch, RootState } from '../../../store/store';
+import { createCategory_Service, updateCategory_Service } from '../../../services/CategoryService';
+import { devLog } from '../../../utils/devLog';
+import { Category } from '../../../type/category';
+import { useCommonAlert } from '../../../hooks/useCommonAlert';
+import CommonAlert from '../../../components/CommonAlert';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateCatogory'>;
 

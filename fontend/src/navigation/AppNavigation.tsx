@@ -15,10 +15,10 @@ import ProfileDetailsScreen from '../screens/settings/ProfileDetailsScreen';
 import ManageAccountScreen from '../screens/settings/ManageAccountScreen';
 import EditUserScreen from '../screens/settings/EditUserScreen';
 import ThemePreferenceScreen from '../screens/settings/ThemePreferenceScreen';
-import ManageCatogoryScreen from '../screens/ManageCatogory/ManageCatogoryScreen';
-import CreateCatogoryScreen from '../screens/ManageCatogory/CreateCatogoryScreen';
-import ManageInventoryScreen from '../screens/pos/ManageInventoryScreen';
-import { AddProductScreen, EditProductScreen } from '../screens/pos/ProductFormScreen';
+import ManageCatogoryScreen from '../screens/pos/ManageCatogory/ManageCatogoryScreen';
+import CreateCatogoryScreen from '../screens/pos/ManageCatogory/CreateCatogoryScreen';
+import ManageInventoryScreen from '../screens/pos/ManageInventory/ManageInventoryScreen';
+import { AddProductScreen, EditProductScreen } from '../screens/pos/ManageInventory/ProductFormScreen';
 import { RootStackParamList } from './RootStackParamsList';
 
 

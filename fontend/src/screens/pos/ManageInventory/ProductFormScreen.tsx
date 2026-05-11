@@ -16,12 +16,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSelector } from 'react-redux';
-import { RootStackParamList } from '../../navigation/RootStackParamsList';
-import { fonts } from '../../constants/fonts';
-import { useTheme } from '../../context/ThemeContext';
-import { RootState } from '../../store/store';
-import { Category } from '../../type/category';
-import { InventoryProductFormParams } from '../../type/inventory';
+import { RootStackParamList } from '../../../navigation/RootStackParamsList';
+import { fonts } from '../../../constants/fonts';
+import { useTheme } from '../../../context/ThemeContext';
+import { RootState } from '../../../store/store';
+import { Category } from '../../../type/category';
+import { InventoryProductFormParams } from '../../../type/inventory';
 
 type FormMode = 'add' | 'edit';
 
