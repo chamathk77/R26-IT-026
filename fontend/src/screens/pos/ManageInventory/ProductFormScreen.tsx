@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -12,18 +14,34 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { RootStackParamList } from '../../../navigation/RootStackParamsList';
 import { fonts } from '../../../constants/fonts';
 import { useTheme } from '../../../context/ThemeContext';
-import { RootState } from '../../../store/store';
+import { AppDispatch, RootState } from '../../../store/store';
+import { createProduct_Service, updateProduct_Service } from '../../../services/ProductService';
 import { Category } from '../../../type/category';
 import { InventoryProductFormParams } from '../../../type/inventory';
+import { resolveProductImageUri } from '../../../utils/productImage';
+import { useCommonAlert } from '../../../hooks/useCommonAlert';
+import CommonAlert from '../../../components/CommonAlert';
 
 type FormMode = 'add' | 'edit';
+
+type EditSnapshot = {
+  name: string;
+  categoryId: string;
+  price: string;
+  imageUri: string | null;
+};
+
+function isLocalImageUri(uri: string): boolean {
+  return /^(file|content|ph|assets-library):\/\//i.test(uri);
+}
 
 type ProductFormContentProps = {
   navigation: NativeStackNavigationProp<RootStackParamList>;
@@ -31,44 +49,146 @@ type ProductFormContentProps = {
   initial?: InventoryProductFormParams;
 };
 
+function thunkErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object' && 'message' in err) {
+    const message = (err as { message: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  if (err instanceof Error && err.message.trim()) return err.message;
+  return fallback;
+}
+
 function ProductFormContent({ navigation, mode, initial }: ProductFormContentProps) {
   const { paperTheme, resolvedTheme } = useTheme();
+  const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
+  const dispatch = useDispatch<AppDispatch>();
   const categories = useSelector((state: RootState) => state.CategoryReducer.list.items);
+
 
   const [name, setName] = useState('');
   const [categoryId, setCategoryId] = useState<string>('');
   const [price, setPrice] = useState('');
+  const [imageUri, setImageUri] = useState<string | null>(null);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [initialSnapshot, setInitialSnapshot] = useState<EditSnapshot | null>(null);
 
   useEffect(() => {
     if (mode === 'edit' && initial) {
+      const resolvedImage = resolveProductImageUri(initial.image);
+      const nextPrice = String(initial.unitPrice);
       setName(initial.name);
       setCategoryId(initial.categoryId);
-      setPrice(String(initial.unitPrice));
+      setPrice(nextPrice);
+      setImageUri(resolvedImage);
+      setInitialSnapshot({
+        name: initial.name.trim(),
+        categoryId: initial.categoryId,
+        price: nextPrice,
+        imageUri: resolvedImage,
+      });
     } else {
       setName('');
       setCategoryId('');
       setPrice('');
+      setImageUri(null);
+      setInitialSnapshot(null);
     }
-  }, [mode, initial?.id, initial?.name, initial?.categoryId, initial?.unitPrice]);
+  }, [mode, initial?.id, initial?.name, initial?.categoryId, initial?.unitPrice, initial?.image]);
 
   const selectedCategory = useMemo(
     () => categories.find((c) => c._id === categoryId),
     [categories, categoryId],
   );
 
-  const onSaveUiOnly = () => {
-    Alert.alert(
-      mode === 'add' ? 'Add product' : 'Update product',
-      'This screen is UI only — hook up the products API when ready.',
-      [{ text: 'OK' }],
+  const isDirty = useMemo(() => {
+    if (mode !== 'edit' || !initialSnapshot) return true;
+    return (
+      name.trim() !== initialSnapshot.name ||
+      categoryId !== initialSnapshot.categoryId ||
+      price !== initialSnapshot.price ||
+      imageUri !== initialSnapshot.imageUri
     );
+  }, [mode, initialSnapshot, name, categoryId, price, imageUri]);
+
+  const canSave = useMemo(() => {
+    if (mode === 'edit') return isDirty;
+    return true;
+  }, [mode, isDirty]);
+
+  const onSave = async () => {
+    if (!canSave || saving) return;
+
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      show_Alert
+      ('error', 'Error', 'Missing name', 1, true, 'OK');
+      return;
+    }
+    if (!categoryId) {
+      show_Alert
+      ('error', 'Error', 'Missing category', 1, true, 'OK');
+      return;
+    }
+
+    const priceNum = Number(price);
+    if (price.trim() === '' || Number.isNaN(priceNum) || priceNum < 0) {
+      show_Alert
+      ('error', 'Error', 'Invalid price', 1, true, 'OK');
+      return;
+    }
+
+    const payload = {
+      name: trimmedName,
+      category: categoryId,
+      price: priceNum,
+      imageUri: imageUri && isLocalImageUri(imageUri) ? imageUri : null,
+    };
+
+    setSaving(true);
+    try {
+      if (mode === 'edit' && initial?.id) {
+        await dispatch(
+          updateProduct_Service({
+            id: initial.id,
+            ...payload,
+          }),
+        ).unwrap();
+    show_Alert
+    ('success', 'Success', 'Product updated successfully.', 1, true, 'OK');
+
+
+      } else {
+        await dispatch(createProduct_Service(payload)).unwrap();
+    show_Alert
+    ('success', 'Success', 'Product saved successfully.', 1, true, 'OK');
+      }
+    } catch (error: any) {
+    show_Alert
+    ('error', 'Error', error.message, 1, true, 'OK');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const openImagePlaceholder = () => {
-    Alert.alert('Product image', 'Image picker will be wired here (e.g. camera / gallery or upload).', [
-      { text: 'OK' },
-    ]);
+  const pickImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      show_Alert
+      ('error', 'Error', 'Photo access needed', 1, true, 'OK');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.85,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      setImageUri(result.assets[0].uri);
+    }
   };
 
   return (
@@ -95,7 +215,7 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
                 {mode === 'add' ? 'Add product' : 'Edit product'}
               </Text>
               <Text style={[styles.subtitle, { color: paperTheme.colors.onSurfaceVariant }]}>
-                Name, category, price, and image (form UI only)
+                Name, category, price, and product image
               </Text>
             </View>
           </View>
@@ -103,7 +223,7 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
           {mode === 'edit' && initial ? (
             <View style={[styles.metaBanner, { backgroundColor: paperTheme.colors.surfaceVariant }]}>
               <Text style={[styles.metaText, { color: paperTheme.colors.onSurfaceVariant }]}>
-                SKU {initial.sku} · Stock {initial.stock}
+                Product ID {initial.id}
               </Text>
             </View>
           ) : null}
@@ -168,33 +288,69 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
             <TouchableOpacity
               style={[
                 styles.imageBox,
+                imageUri && styles.imageBoxFilled,
                 {
                   borderColor: paperTheme.colors.outline,
                   backgroundColor: paperTheme.colors.surface,
                 },
               ]}
-              onPress={openImagePlaceholder}
+              onPress={pickImage}
               activeOpacity={0.85}
             >
-              <Ionicons name="image-outline" size={36} color={paperTheme.colors.primary} />
-              <Text style={[styles.imageBoxTitle, { color: paperTheme.colors.onSurface }]}>
-                Add product image
-              </Text>
-              <Text style={[styles.imageBoxHint, { color: paperTheme.colors.onSurfaceVariant }]}>
-                UI placeholder — no file saved yet
-              </Text>
+              {imageUri ? (
+                <>
+                  <Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="cover" />
+                  <View style={styles.imageOverlay}>
+                    <Ionicons name="images-outline" size={22} color={paperTheme.colors.onPrimary} />
+                    <Text style={[styles.imageOverlayText, { color: paperTheme.colors.onPrimary }]}>
+                      Tap to change photo
+                    </Text>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="image-outline" size={36} color={paperTheme.colors.primary} />
+                  <Text style={[styles.imageBoxTitle, { color: paperTheme.colors.onSurface }]}>
+                    Add product image
+                  </Text>
+                  <Text style={[styles.imageBoxHint, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    Choose a photo from your device
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
+            {imageUri ? (
+              <TouchableOpacity
+                style={styles.removeImageBtn}
+                onPress={() => setImageUri(null)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="trash-outline" size={18} color={paperTheme.colors.error} />
+                <Text style={[styles.removeImageText, { color: paperTheme.colors.error }]}>Remove photo</Text>
+              </TouchableOpacity>
+            ) : null}
 
-            <TouchableOpacity
-              style={[styles.saveBtn, { backgroundColor: paperTheme.colors.primary }]}
-              onPress={onSaveUiOnly}
-              activeOpacity={0.9}
-            >
-              <Ionicons name="checkmark-circle-outline" size={20} color={paperTheme.colors.onPrimary} />
-              <Text style={[styles.saveBtnText, { color: paperTheme.colors.onPrimary }]}>
-                {mode === 'add' ? 'Save product' : 'Save changes'}
-              </Text>
-            </TouchableOpacity>
+            {canSave ? (
+              <TouchableOpacity
+                style={[
+                  styles.saveBtn,
+                  { backgroundColor: paperTheme.colors.primary },
+                  saving && styles.saveBtnDisabled,
+                ]}
+                onPress={onSave}
+                activeOpacity={0.9}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color={paperTheme.colors.onPrimary} />
+                ) : (
+                  <Ionicons name="checkmark-circle-outline" size={20} color={paperTheme.colors.onPrimary} />
+                )}
+                <Text style={[styles.saveBtnText, { color: paperTheme.colors.onPrimary }]}>
+                  {saving ? 'Saving...' : mode === 'add' ? 'Save product' : 'Save changes'}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </ScrollView>
 
           <Modal
@@ -258,6 +414,22 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
             </TouchableOpacity>
           </Modal>
         </KeyboardAvoidingView>
+
+
+        {alertConfig && (
+          <CommonAlert
+            visible={visible}
+            type={alertConfig.type}
+            title={alertConfig.title}
+            message={alertConfig.message}
+            buttons={alertConfig.buttons}
+            positiveButtonText={alertConfig.positiveButtonText}
+            negativeButtonText={alertConfig.negativeButtonText}
+            onPositivePress={alertConfig.onPositivePress}
+            onNegativePress={alertConfig.onNegativePress}
+            onClose={hideAlert}
+          />
+        )}s
       </SafeAreaView>
     </>
   );
@@ -336,9 +508,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginBottom: 8,
+    overflow: 'hidden',
+  },
+  imageBoxFilled: {
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    borderStyle: 'solid',
+  },
+  imagePreview: {
+    width: '100%',
+    height: 220,
+  },
+  imageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  imageOverlayText: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 14,
   },
   imageBoxTitle: { fontFamily: fonts.PoppinsSemiBold, fontSize: 16 },
   imageBoxHint: { fontFamily: fonts.PoppinsRegular, fontSize: 13, textAlign: 'center' },
+  removeImageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 8,
+    paddingVertical: 8,
+  },
+  removeImageText: { fontFamily: fonts.PoppinsMedium, fontSize: 14 },
   saveBtn: {
     marginTop: 20,
     borderRadius: 14,
@@ -347,6 +549,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+  },
+  saveBtnDisabled: {
+    opacity: 0.75,
   },
   saveBtnText: { fontFamily: fonts.PoppinsSemiBold, fontSize: 16 },
   modalBackdrop: {

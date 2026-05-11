@@ -1,9 +1,8 @@
-/** Params when opening the product form in edit mode (dummy / future API row). */
+/** Params when opening the product form in edit mode. */
 export type InventoryProductFormParams = {
   id: string;
   name: string;
   categoryId: string;
-  sku: string;
-  stock: number;
   unitPrice: number;
+  image?: string;
 };

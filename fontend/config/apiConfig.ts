@@ -48,6 +48,10 @@ function resolveApiBaseUrl(): string {
 
 const API_BASE_URL = resolveApiBaseUrl();
 
+export function getApiBaseUrl(): string {
+  return API_BASE_URL;
+}
+
 const SENSITIVE_KEYS = new Set([
   'password',
   'token',

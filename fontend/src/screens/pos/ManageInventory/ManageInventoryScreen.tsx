@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -21,19 +22,12 @@ import { fonts } from '../../../constants/fonts';
 import { useTheme } from '../../../context/ThemeContext';
 import { AppDispatch, RootState } from '../../../store/store';
 import { fetchCategories_Service } from '../../../services/CategoryService';
-import { Category } from '../../../type/category';
+import { fetchProducts_Service } from '../../../services/ProductService';
+import { Product } from '../../../type/product';
 import { useCommonAlert } from '../../../hooks/useCommonAlert';
 import { devLog } from '../../../utils/devLog';
+import { resolveProductImageUri } from '../../../utils/productImage';
 import CommonAlert from '../../../components/CommonAlert/CommonAlert';
-
-type DummyInventoryItem = {
-  id: string;
-  name: string;
-  categoryId: string;
-  sku: string;
-  stock: number;
-  unitPrice: number;
-};
 
 function thunkErrorMessage(err: unknown, fallback: string): string {
   if (err && typeof err === 'object' && 'message' in err) {
@@ -44,131 +38,105 @@ function thunkErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
-/** Placeholder stock items per real category (replace with API later). */
-function buildDummyProductsForCategories(categories: Category[]): DummyInventoryItem[] {
-  if (categories.length === 0) return [];
-
-  const items: DummyInventoryItem[] = [];
-  categories.forEach((cat, index) => {
-    const n = index + 1;
-    items.push(
-      {
-        id: `${cat._id}-dummy-1`,
-        name: `${cat.name} — Demo SKU A`,
-        categoryId: cat._id,
-        sku: `D-${n.toString().padStart(3, '0')}-A`,
-        stock: 12 + index * 3,
-        unitPrice: 9.99 + index,
-      },
-      {
-        id: `${cat._id}-dummy-2`,
-        name: `${cat.name} — Demo SKU B`,
-        categoryId: cat._id,
-        sku: `D-${n.toString().padStart(3, '0')}-B`,
-        stock: 8 + index * 2,
-        unitPrice: 14.5 + index * 0.5,
-      },
-      {
-        id: `${cat._id}-dummy-3`,
-        name: `${cat.name} — Demo SKU C`,
-        categoryId: cat._id,
-        sku: `D-${n.toString().padStart(3, '0')}-C`,
-        stock: 24 - index,
-        unitPrice: 4.25 + index,
-      },
-    );
-  });
-  return items;
-}
-
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageInventory'>;
 
 export default function ManageInventoryScreen({ navigation }: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
   const dispatch = useDispatch<AppDispatch>();
-  const { items: categories, loading, error } = useSelector(
-    (state: RootState) => state.CategoryReducer.list,
-  );
+  const {
+    items: categories,
+    loading: categoriesLoading,
+    error: categoriesError,
+  } = useSelector((state: RootState) => state.CategoryReducer.list);
+  const {
+    items: products,
+    loading: productsLoading,
+    error: productsError,
+  } = useSelector((state: RootState) => state.ProductReducer.list);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
 
-  const dummyProducts = useMemo(
-    () => buildDummyProductsForCategories(categories),
-    [categories],
-  );
-
   const filteredProducts = useMemo(() => {
-    let list = dummyProducts;
+    let list = products;
     if (selectedCategoryId !== null) {
-      list = list.filter((p) => p.categoryId === selectedCategoryId);
+      list = list.filter((product) => product.category === selectedCategoryId);
     }
     const q = searchQuery.trim().toLowerCase();
     if (q) {
-      list = list.filter((p) => {
-        const cat = categories.find((c) => c._id === p.categoryId);
+      list = list.filter((product) => {
+        const cat = categories.find((c) => c._id === product.category);
         const catName = cat?.name.toLowerCase() ?? '';
-        return (
-          p.name.toLowerCase().includes(q) ||
-          p.sku.toLowerCase().includes(q) ||
-          catName.includes(q)
-        );
+        return product.name.toLowerCase().includes(q) || catName.includes(q);
       });
     }
     return list;
-  }, [dummyProducts, selectedCategoryId, searchQuery, categories]);
+  }, [products, selectedCategoryId, searchQuery, categories]);
 
-  const loadCategories = useCallback(async () => {
+  const loadInventory = useCallback(async () => {
     try {
-      await dispatch(fetchCategories_Service()).unwrap();
+      await Promise.all([
+        dispatch(fetchCategories_Service()).unwrap(),
+        dispatch(fetchProducts_Service()).unwrap(),
+      ]);
     } catch (err: unknown) {
-      devLog('Manage inventory load categories:', err);
-      show_Alert('error', 'Error', thunkErrorMessage(err, 'Failed to load categories'), 1, true, 'OK');
+      devLog('Manage inventory load:', err);
+      show_Alert('error', 'Error', thunkErrorMessage(err, 'Failed to load inventory'), 1, true, 'OK');
     }
   }, [dispatch, show_Alert]);
 
   useFocusEffect(
     useCallback(() => {
-      void loadCategories();
-    }, [loadCategories]),
+      void loadInventory();
+    }, [loadInventory]),
   );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await loadCategories();
+      await loadInventory();
     } finally {
       setRefreshing(false);
     }
-  }, [loadCategories]);
+  }, [loadInventory]);
 
   const isAllSelected = selectedCategoryId === null;
 
-  const renderProductRow = ({ item }: { item: DummyInventoryItem }) => {
-    const cat = categories.find((c) => c._id === item.categoryId);
+  const renderProductRow = ({ item }: { item: Product }) => {
+    const cat = categories.find((c) => c._id === item.category);
+    const imageUri = resolveProductImageUri(item.image);
     return (
       <View style={[styles.productRow, { backgroundColor: paperTheme.colors.surface }]}>
-        <View style={[styles.productDot, { backgroundColor: cat?.colorCode ?? paperTheme.colors.outline }]} />
+        {imageUri ? (
+          <Image source={{ uri: imageUri }} style={styles.productThumb} resizeMode="cover" />
+        ) : (
+          <View
+            style={[
+              styles.productThumbPlaceholder,
+              { backgroundColor: paperTheme.colors.surfaceVariant },
+            ]}
+          >
+            <Ionicons name="image-outline" size={22} color={paperTheme.colors.onSurfaceVariant} />
+          </View>
+        )}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[styles.productName, { color: paperTheme.colors.onSurface }]} numberOfLines={2}>
             {item.name}
           </Text>
           <Text style={[styles.productMeta, { color: paperTheme.colors.onSurfaceVariant }]}>
-            {item.sku}
-            {cat ? ` · ${cat.name}` : ''}
+            {cat?.name ?? 'Uncategorized'}
           </Text>
         </View>
         <TouchableOpacity
           style={[styles.editBtn, { backgroundColor: paperTheme.colors.primaryContainer }]}
           onPress={() =>
             navigation.navigate('EditProduct', {
-              id: item.id,
+              id: item._id,
               name: item.name,
-              categoryId: item.categoryId,
-              sku: item.sku,
-              stock: item.stock,
-              unitPrice: item.unitPrice,
+              categoryId: item.category,
+              unitPrice: item.price,
+              image: item.image,
             })
           }
           accessibilityRole="button"
@@ -177,10 +145,8 @@ export default function ManageInventoryScreen({ navigation }: Props) {
           <Ionicons name="create-outline" size={20} color={paperTheme.colors.primary} />
         </TouchableOpacity>
         <View style={styles.productRight}>
-          <Text style={[styles.stockLabel, { color: paperTheme.colors.onSurfaceVariant }]}>Stock</Text>
-          <Text style={[styles.stockValue, { color: paperTheme.colors.onSurface }]}>{item.stock}</Text>
           <Text style={[styles.price, { color: paperTheme.colors.primary }]}>
-            ${item.unitPrice.toFixed(2)}
+            ${item.price.toFixed(2)}
           </Text>
         </View>
       </View>
@@ -204,13 +170,16 @@ export default function ManageInventoryScreen({ navigation }: Props) {
           <View style={{ flex: 1 }}>
             <Text style={[styles.title, { color: paperTheme.colors.onBackground }]}>Manage Inventory</Text>
             <Text style={[styles.subtitle, { color: paperTheme.colors.onSurfaceVariant }]}>
-              Dummy stock per category — tap a category to filter
+              Products from your catalog — tap a category to filter
             </Text>
           </View>
         </View>
 
-        {error ? (
-          <Text style={[styles.errorText, { color: paperTheme.colors.error }]}>{error}</Text>
+        {categoriesError ? (
+          <Text style={[styles.errorText, { color: paperTheme.colors.error }]}>{categoriesError}</Text>
+        ) : null}
+        {productsError ? (
+          <Text style={[styles.errorText, { color: paperTheme.colors.error }]}>{productsError}</Text>
         ) : null}
 
         <TouchableOpacity
@@ -226,7 +195,7 @@ export default function ManageInventoryScreen({ navigation }: Props) {
 
         <Text style={[styles.sectionLabel, { color: paperTheme.colors.onSurfaceVariant }]}>Categories</Text>
 
-        {loading && !refreshing && categories.length === 0 ? (
+        {categoriesLoading && !refreshing && categories.length === 0 ? (
           <View style={styles.categoriesLoading}>
             <ActivityIndicator size="small" color={paperTheme.colors.primary} />
           </View>
@@ -265,7 +234,7 @@ export default function ManageInventoryScreen({ navigation }: Props) {
               </Text>
             </TouchableOpacity>
 
-            {categories.length === 0 && !loading ? (
+            {categories.length === 0 && !categoriesLoading ? (
               <Text style={[styles.emptyCategories, { color: paperTheme.colors.onSurfaceVariant }]}>
                 No categories yet.
               </Text>
@@ -315,7 +284,7 @@ export default function ManageInventoryScreen({ navigation }: Props) {
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Search name, SKU, or category…"
+            placeholder="Search name or category…"
             placeholderTextColor={paperTheme.colors.onSurfaceVariant}
             style={[styles.searchInput, { color: paperTheme.colors.onSurface }]}
             autoCorrect={false}
@@ -330,13 +299,18 @@ export default function ManageInventoryScreen({ navigation }: Props) {
         </View>
 
         <Text style={[styles.listHeader, { color: paperTheme.colors.onSurfaceVariant }]}>
-          {isAllSelected ? 'All dummy items' : 'This category only'} · {filteredProducts.length} shown
+          {isAllSelected ? 'All products' : 'This category only'} · {filteredProducts.length} shown
         </Text>
 
+        {productsLoading && !refreshing && products.length === 0 ? (
+          <View style={styles.productsLoading}>
+            <ActivityIndicator size="small" color={paperTheme.colors.primary} />
+          </View>
+        ) : (
         <FlatList
           style={styles.productList}
           data={filteredProducts}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item._id}
           renderItem={renderProductRow}
           contentContainerStyle={styles.listContent}
           refreshControl={
@@ -350,17 +324,18 @@ export default function ManageInventoryScreen({ navigation }: Props) {
             <View style={styles.emptyList}>
               <Ionicons name="cube-outline" size={40} color={paperTheme.colors.outline} />
               <Text style={[styles.emptyListTitle, { color: paperTheme.colors.onSurface }]}>
-                No items match
+                No products match
               </Text>
               <Text style={[styles.emptyListBody, { color: paperTheme.colors.onSurfaceVariant }]}>
-                {categories.length === 0
-                  ? 'Add categories first, then dummy rows will appear per category.'
+                {products.length === 0
+                  ? 'Add a product to start building your inventory.'
                   : 'Try another category or clear the search.'}
               </Text>
             </View>
           }
           ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         />
+        )}
 
         {alertConfig && (
           <CommonAlert
@@ -468,13 +443,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  productDot: { width: 12, height: 12, borderRadius: 6 },
+  productThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+  },
+  productThumbPlaceholder: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   productName: { fontFamily: fonts.PoppinsSemiBold, fontSize: 15 },
   productMeta: { fontFamily: fonts.PoppinsRegular, fontSize: 12, marginTop: 2 },
+  productsLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   productRight: { alignItems: 'flex-end', minWidth: 64 },
-  stockLabel: { fontSize: 10, fontFamily: fonts.PoppinsRegular },
-  stockValue: { fontSize: 16, fontFamily: fonts.PoppinsBold },
-  price: { fontSize: 13, fontFamily: fonts.PoppinsSemiBold, marginTop: 4 },
+  price: { fontSize: 16, fontFamily: fonts.PoppinsBold },
   emptyList: { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 },
   emptyListTitle: { fontFamily: fonts.PoppinsSemiBold, fontSize: 16, marginTop: 12 },
   emptyListBody: { fontFamily: fonts.PoppinsRegular, fontSize: 14, textAlign: 'center', marginTop: 6 },

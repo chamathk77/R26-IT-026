@@ -1,7 +1,17 @@
 module.exports = ({ config }) => ({
   ...config,
   userInterfaceStyle: 'automatic',
-  plugins: [...(config.plugins || []), 'expo-font'],
+  plugins: [
+    ...(config.plugins || []),
+    'expo-font',
+    [
+      'expo-image-picker',
+      {
+        photosPermission:
+          'We need photo library access so you can choose product images from your device.',
+      },
+    ],
+  ],
   splash: {
     image: './assets/splash-icon.png',
     resizeMode: 'contain',
