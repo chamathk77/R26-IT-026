@@ -1,8 +1,6 @@
 const mongoose = require('mongoose');
 
-const CART_STATUSES = ['pending', 'added', 'proceed'];
-
-const cartItemSchema = new mongoose.Schema(
+const historyItemSchema = new mongoose.Schema(
   {
     productId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -24,43 +22,40 @@ const cartItemSchema = new mongoose.Schema(
   { _id: false },
 );
 
-const cartSchema = new mongoose.Schema(
+const historySchema = new mongoose.Schema(
   {
-    user: {
+    handledUser: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
       index: true,
     },
-    sessionId: {
+    cartSessionId: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
       index: true,
     },
     items: {
-      type: [cartItemSchema],
+      type: [historyItemSchema],
       default: [],
     },
     totalPrice: {
       type: Number,
       required: true,
       min: 0,
-      default: 0,
     },
-    status: {
-      type: String,
-      enum: CART_STATUSES,
-      default: 'pending',
+    checkoutAt: {
+      type: Date,
+      required: true,
+      default: Date.now,
+      index: true,
     },
   },
   { timestamps: true },
 );
 
-cartSchema.index({ user: 1, sessionId: 1 }, { unique: true });
-cartSchema.index({ user: 1, status: 1 });
+historySchema.index({ handledUser: 1, checkoutAt: -1 });
 
-const Cart = mongoose.model('Cart', cartSchema);
+const History = mongoose.model('History', historySchema);
 
-Cart.CART_STATUSES = CART_STATUSES;
-
-module.exports = Cart;
+module.exports = History;

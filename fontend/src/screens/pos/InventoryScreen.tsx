@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Modal,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -22,9 +23,20 @@ import { fonts } from '../../constants/fonts';
 import { useTheme } from '../../context/ThemeContext';
 import { useCommonAlert } from '../../hooks/useCommonAlert';
 import { fetchCategories_Service } from '../../services/CategoryService';
+import {
+  addProductToPendingCart_Service,
+  deleteAddedCartSession_Service,
+  fetchCartItems_Service,
+  fetchPendingCartSessions_Service,
+  proceedCartSession_Service,
+} from '../../services/CartService';
 import { fetchProducts_Service } from '../../services/ProductService';
+import { setActiveSession } from '../../store/reducers/CartReducer';
 import { AppDispatch, RootState } from '../../store/store';
+import { CartSessionSummary } from '../../type/cart';
 import { Product } from '../../type/product';
+import { getCartOrderItemKey } from '../../utils/cartOrder';
+import { getCartNumberForSession } from '../../utils/cartSession';
 import { devLog } from '../../utils/devLog';
 import { resolveProductImageUri } from '../../utils/productImage';
 import CommonAlert from '../../components/CommonAlert/CommonAlert';
@@ -40,7 +52,7 @@ function thunkErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
-export default function ProductsScreen(_props: Props) {
+export default function ProductsScreen({ navigation }: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
   const dispatch = useDispatch<AppDispatch>();
   const {
@@ -53,10 +65,30 @@ export default function ProductsScreen(_props: Props) {
     loading: productsLoading,
     error: productsError,
   } = useSelector((state: RootState) => state.ProductReducer.list);
+  const {
+    items: pendingSessions,
+    loading: pendingSessionsLoading,
+  } = useSelector((state: RootState) => state.CartReducer.pendingSessions);
+  const activeSession = useSelector((state: RootState) => state.CartReducer.activeSession);
+  const {
+    order: reviewOrder,
+    loading: reviewItemsLoading,
+    sessionId: reviewSessionId,
+  } = useSelector((state: RootState) => state.CartReducer.sessionItems);
+  const { loading: addToCartLoading } = useSelector((state: RootState) => state.CartReducer.addToCart);
+  const { loading: proceedLoading } = useSelector((state: RootState) => state.CartReducer.proceed);
+  const { loadingSessionId: manageLoadingSessionId } = useSelector(
+    (state: RootState) => state.CartReducer.manageAdded,
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [productQuantities, setProductQuantities] = useState<Record<string, number>>({});
+  const [addingProductId, setAddingProductId] = useState<string | null>(null);
+  const [pendingModalVisible, setPendingModalVisible] = useState(false);
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
+  const pendingCartCount = pendingSessions.length;
 
   const filteredProducts = useMemo(() => {
     let list = products;
@@ -82,12 +114,148 @@ export default function ProductsScreen(_props: Props) {
       await Promise.all([
         dispatch(fetchCategories_Service()).unwrap(),
         dispatch(fetchProducts_Service()).unwrap(),
+        dispatch(fetchPendingCartSessions_Service()).unwrap(),
       ]);
     } catch (err: unknown) {
       devLog('Products tab load:', err);
       show_Alert('error', 'Error', thunkErrorMessage(err, 'Failed to load products'), 1, true, 'OK');
     }
   }, [dispatch, show_Alert]);
+
+  const getProductQuantity = useCallback(
+    (productId: string) => productQuantities[productId] ?? 0,
+    [productQuantities],
+  );
+
+  const changeProductQuantity = useCallback((productId: string, delta: number) => {
+    setProductQuantities((current) => {
+      const next = Math.max(0, (current[productId] ?? 0) + delta);
+      return { ...current, [productId]: next };
+    });
+  }, []);
+
+  const resetProductQuantity = useCallback((productId: string) => {
+    setProductQuantities((current) => {
+      if ((current[productId] ?? 0) === 0) return current;
+      return { ...current, [productId]: 0 };
+    });
+  }, []);
+
+  const handleAddToPendingCart = useCallback(
+    async (product: Product) => {
+      const quantity = getProductQuantity(product._id);
+      if (quantity < 1 || addToCartLoading) return;
+
+      setAddingProductId(product._id);
+      try {
+        const result = await dispatch(
+          addProductToPendingCart_Service({
+            productId: product._id,
+            quantity,
+          }),
+        ).unwrap();
+        resetProductQuantity(product._id);
+        show_Alert(
+          'success',
+          'Added',
+          `Added to Cart #${result.cartNumber}. You can keep adding items to this order.`,
+          1,
+          true,
+          'OK',
+        );
+      } catch (err: unknown) {
+        devLog('Add to pending cart:', err);
+        show_Alert(
+          'error',
+          'Error',
+          thunkErrorMessage(err, 'Could not add item to cart'),
+          1,
+          true,
+          'OK',
+        );
+      } finally {
+        setAddingProductId(null);
+      }
+    },
+    [addToCartLoading, dispatch, getProductQuantity, resetProductQuantity, show_Alert],
+  );
+
+  const openPendingModal = useCallback(() => {
+    setPendingModalVisible(true);
+    void dispatch(fetchPendingCartSessions_Service());
+  }, [dispatch]);
+
+  const closePendingModal = useCallback(() => {
+    setPendingModalVisible(false);
+  }, []);
+
+  const handleReviewPendingSession = useCallback(
+    (session: CartSessionSummary) => {
+      void dispatch(
+        fetchCartItems_Service({
+          sessionId: session.sessionId,
+          status: 'pending',
+        }),
+      );
+    },
+    [dispatch],
+  );
+
+  const handleResumePendingSession = useCallback(
+    (session: CartSessionSummary) => {
+      const cartNumber = getCartNumberForSession(pendingSessions, session.sessionId);
+      dispatch(
+        setActiveSession({
+          sessionId: session.sessionId,
+          cartNumber,
+        }),
+      );
+      closePendingModal();
+    },
+    [closePendingModal, dispatch, pendingSessions],
+  );
+
+  const handleProceedPendingSession = useCallback(
+    async (session: CartSessionSummary) => {
+      try {
+        await dispatch(proceedCartSession_Service(session.sessionId)).unwrap();
+        closePendingModal();
+        navigation.navigate('Cart');
+      } catch (err: unknown) {
+        devLog('Proceed pending cart:', err);
+        show_Alert(
+          'error',
+          'Error',
+          thunkErrorMessage(err, 'Could not proceed with this order'),
+          1,
+          true,
+          'OK',
+        );
+      }
+    },
+    [closePendingModal, dispatch, navigation, show_Alert],
+  );
+
+  const handleDeletePendingSession = useCallback(
+    async (targetSessionId: string) => {
+      if (manageLoadingSessionId) return;
+
+      try {
+        await dispatch(deleteAddedCartSession_Service(targetSessionId)).unwrap();
+      } catch (err: unknown) {
+        devLog('Delete pending cart:', err);
+        show_Alert(
+          'error',
+          'Error',
+          thunkErrorMessage(err, 'Could not delete this cart'),
+          1,
+          true,
+          'OK',
+        );
+      }
+    },
+    [dispatch, manageLoadingSessionId, show_Alert],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -111,14 +279,20 @@ export default function ProductsScreen(_props: Props) {
   const renderProductRow = ({ item }: { item: Product }) => {
     const category = categories.find((entry) => entry._id === item.category);
     const imageUri = resolveProductImageUri(item.image);
+    const quantity = getProductQuantity(item._id);
+    const isSelected = selectedProductId === item._id;
+    const isAdding = addingProductId === item._id;
 
     return (
-      <View
+      <TouchableOpacity
+        activeOpacity={0.92}
+        onPress={() => setSelectedProductId(item._id)}
         style={[
           styles.productCard,
           {
             backgroundColor: paperTheme.colors.surfaceVariant,
-            borderColor: paperTheme.colors.outline,
+            borderColor: isSelected ? paperTheme.colors.primary : paperTheme.colors.outline,
+            borderWidth: isSelected ? 2 : 1,
           },
         ]}
       >
@@ -145,7 +319,65 @@ export default function ProductsScreen(_props: Props) {
             ${item.price.toFixed(2)}
           </Text>
         </View>
-      </View>
+        <View style={styles.productActions}>
+          <View style={styles.qtyRow}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={`Decrease quantity for ${item.name}`}
+              onPress={() => changeProductQuantity(item._id, -1)}
+              disabled={quantity < 1}
+              style={[
+                styles.qtyButton,
+                {
+                  backgroundColor: paperTheme.colors.surface,
+                  borderColor: paperTheme.colors.outline,
+                  opacity: quantity < 1 ? 0.45 : 1,
+                },
+              ]}
+            >
+              <Ionicons name="remove" size={18} color={paperTheme.colors.onSurface} />
+            </TouchableOpacity>
+            <Text style={[styles.qtyValue, { color: paperTheme.colors.onSurface }]}>{quantity}</Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={`Increase quantity for ${item.name}`}
+              onPress={() => changeProductQuantity(item._id, 1)}
+              style={[
+                styles.qtyButton,
+                {
+                  backgroundColor: paperTheme.colors.surface,
+                  borderColor: paperTheme.colors.outline,
+                },
+              ]}
+            >
+              <Ionicons name="add" size={18} color={paperTheme.colors.onSurface} />
+            </TouchableOpacity>
+          </View>
+          {quantity > 0 ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={`Add ${item.name} to pending cart`}
+              onPress={() => {
+                void handleAddToPendingCart(item);
+              }}
+              disabled={isAdding}
+              style={[
+                styles.addButton,
+                {
+                  backgroundColor: paperTheme.colors.primary,
+                  opacity: isAdding ? 0.7 : 1,
+                },
+              ]}
+            >
+              {isAdding ? (
+                <ActivityIndicator size="small" color={paperTheme.colors.onPrimary} />
+              ) : (
+                <Text style={[styles.addButtonText, { color: paperTheme.colors.onPrimary }]}>Add</Text>
+              )}
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </TouchableOpacity>
     );
   };
 
@@ -159,10 +391,47 @@ export default function ProductsScreen(_props: Props) {
         style={[styles.safe, { backgroundColor: paperTheme.colors.background }]}
         edges={['top']}
       >
-        <Text style={[styles.title, { color: paperTheme.colors.onBackground }]}>Products</Text>
-        <Text style={[styles.sub, { color: paperTheme.colors.onSurfaceVariant }]}>
-          Browse your catalog by category or search.
-        </Text>
+        <View style={styles.titleRow}>
+          <View style={styles.titleBlock}>
+            <Text style={[styles.title, { color: paperTheme.colors.onBackground }]}>Products</Text>
+            <Text style={[styles.sub, { color: paperTheme.colors.onSurfaceVariant }]}>
+              Browse your catalog by category or search.
+            </Text>
+          </View>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="View pending carts"
+            onPress={openPendingModal}
+            style={[
+              styles.pendingBadge,
+              {
+                backgroundColor: paperTheme.colors.surface,
+                borderColor: paperTheme.colors.outline,
+              },
+            ]}
+          >
+            <Ionicons name="cart-outline" size={18} color={paperTheme.colors.primary} />
+            {pendingSessionsLoading ? (
+              <ActivityIndicator size="small" color={paperTheme.colors.primary} />
+            ) : (
+              <Text style={[styles.pendingBadgeCount, { color: paperTheme.colors.onSurface }]}>
+                {pendingCartCount}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {activeSession.sessionId && activeSession.cartNumber ? (
+          <Text style={[styles.activeCart, { color: paperTheme.colors.primary }]}>
+            Adding to Cart #{activeSession.cartNumber}
+          </Text>
+        ) : null}
+
+        {selectedProductId ? (
+          <Text style={[styles.selectedId, { color: paperTheme.colors.onSurfaceVariant }]}>
+            Selected card id: {selectedProductId}
+          </Text>
+        ) : null}
 
         {categoriesError ? (
           <Text style={[styles.errorText, { color: paperTheme.colors.error }]}>{categoriesError}</Text>
@@ -317,6 +586,146 @@ export default function ProductsScreen(_props: Props) {
           />
         )}
 
+        <Modal
+          visible={pendingModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={closePendingModal}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={closePendingModal}
+          >
+            <View
+              style={[styles.modalSheet, { backgroundColor: paperTheme.colors.surface }]}
+              onStartShouldSetResponder={() => true}
+            >
+              <Text style={[styles.modalTitle, { color: paperTheme.colors.onSurface }]}>
+                Pending carts
+              </Text>
+              <ScrollView style={styles.modalList} keyboardShouldPersistTaps="handled">
+                {pendingSessions.length === 0 ? (
+                  <Text style={[styles.modalEmpty, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    No pending carts yet.
+                  </Text>
+                ) : (
+                  pendingSessions.map((session) => {
+                    const cartNumber = getCartNumberForSession(pendingSessions, session.sessionId);
+                    const isReviewing = reviewSessionId === session.sessionId;
+                    const isManaging = manageLoadingSessionId === session.sessionId;
+                    return (
+                      <View
+                        key={session.sessionId}
+                        style={[
+                          styles.modalCartCard,
+                          {
+                            borderColor: paperTheme.colors.outline,
+                            backgroundColor: isReviewing
+                              ? paperTheme.colors.primaryContainer
+                              : paperTheme.colors.surfaceVariant,
+                          },
+                        ]}
+                      >
+                        <View style={styles.modalCartHeaderRow}>
+                          <TouchableOpacity
+                            style={styles.modalCartBody}
+                            onPress={() => handleReviewPendingSession(session)}
+                          >
+                            <Text style={[styles.modalCartTitle, { color: paperTheme.colors.onSurface }]}>
+                              Cart #{cartNumber ?? '—'}
+                            </Text>
+                            <Text
+                              style={[styles.modalCartMeta, { color: paperTheme.colors.onSurfaceVariant }]}
+                            >
+                              {session.itemCount} item{session.itemCount === 1 ? '' : 's'} · $
+                              {session.totalAmount.toFixed(2)}
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            accessibilityRole="button"
+                            accessibilityLabel="Delete pending cart"
+                            disabled={Boolean(manageLoadingSessionId)}
+                            onPress={() => {
+                              void handleDeletePendingSession(session.sessionId);
+                            }}
+                            style={[
+                              styles.modalDeleteBtn,
+                              { backgroundColor: paperTheme.colors.errorContainer },
+                            ]}
+                          >
+                            {isManaging ? (
+                              <ActivityIndicator size="small" color={paperTheme.colors.error} />
+                            ) : (
+                              <Ionicons name="trash-outline" size={18} color={paperTheme.colors.error} />
+                            )}
+                          </TouchableOpacity>
+                        </View>
+
+                        {isReviewing ? (
+                          <View style={styles.reviewBlock}>
+                            {reviewItemsLoading ? (
+                              <ActivityIndicator size="small" color={paperTheme.colors.primary} />
+                            ) : (
+                              (reviewOrder?.items ?? []).map((item) => (
+                                <Text
+                                  key={getCartOrderItemKey(item)}
+                                  style={[styles.reviewLine, { color: paperTheme.colors.onSurface }]}
+                                >
+                                  {item.name} × {item.quantity}
+                                </Text>
+                              ))
+                            )}
+                          </View>
+                        ) : null}
+
+                        <View style={styles.modalActions}>
+                          <TouchableOpacity
+                            style={[styles.modalActionBtn, { backgroundColor: paperTheme.colors.secondaryContainer }]}
+                            onPress={() => handleResumePendingSession(session)}
+                          >
+                            <Text
+                              style={[
+                                styles.modalActionText,
+                                { color: paperTheme.colors.onSecondaryContainer },
+                              ]}
+                            >
+                              Resume
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.modalActionBtn, { backgroundColor: paperTheme.colors.primary }]}
+                            disabled={proceedLoading}
+                            onPress={() => {
+                              void handleProceedPendingSession(session);
+                            }}
+                          >
+                            {proceedLoading ? (
+                              <ActivityIndicator size="small" color={paperTheme.colors.onPrimary} />
+                            ) : (
+                              <Text style={[styles.modalActionText, { color: paperTheme.colors.onPrimary }]}>
+                                Proceed
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+              </ScrollView>
+              <TouchableOpacity
+                style={[styles.modalClose, { backgroundColor: paperTheme.colors.secondaryContainer }]}
+                onPress={closePendingModal}
+              >
+                <Text style={[styles.modalCloseText, { color: paperTheme.colors.onSecondaryContainer }]}>
+                  Close
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
         {alertConfig && (
           <CommonAlert
             visible={visible}
@@ -338,16 +747,142 @@ export default function ProductsScreen(_props: Props) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, paddingHorizontal: 16 },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  titleBlock: { flex: 1, minWidth: 0 },
   title: {
     fontFamily: fonts.PoppinsBold,
     fontSize: 24,
     marginBottom: 8,
-    marginTop: 8,
   },
   sub: {
     fontFamily: fonts.PoppinsRegular,
     fontSize: 14,
-    marginBottom: 16,
+    marginBottom: 8,
+  },
+  pendingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 4,
+  },
+  pendingBadgeCount: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
+    minWidth: 16,
+    textAlign: 'center',
+  },
+  activeCart: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 13,
+    marginBottom: 6,
+  },
+  selectedId: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 12,
+    marginBottom: 12,
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  modalSheet: {
+    maxHeight: '78%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 12,
+  },
+  modalTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 18,
+    marginBottom: 12,
+  },
+  modalList: {
+    maxHeight: 420,
+  },
+  modalEmpty: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 14,
+    paddingVertical: 12,
+  },
+  modalCartCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    gap: 10,
+  },
+  modalCartHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  modalCartBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  modalDeleteBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCartTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 16,
+  },
+  modalCartMeta: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 13,
+    marginTop: 4,
+  },
+  reviewBlock: {
+    gap: 6,
+    marginTop: 4,
+  },
+  reviewLine: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 13,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  modalActionBtn: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalActionText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 13,
+  },
+  modalClose: {
+    marginTop: 4,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
   },
   errorText: { fontFamily: fonts.PoppinsRegular, fontSize: 13, marginBottom: 8 },
   sectionLabel: {
@@ -419,6 +954,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   productBody: { flex: 1, minWidth: 0, gap: 4 },
+  productActions: { alignItems: 'center', justifyContent: 'center', gap: 10, minWidth: 88 },
+  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  qtyButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyValue: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 16,
+    minWidth: 20,
+    textAlign: 'center',
+  },
+  addButton: {
+    minWidth: 72,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addButtonText: { fontFamily: fonts.PoppinsSemiBold, fontSize: 13 },
   productName: { fontFamily: fonts.PoppinsSemiBold, fontSize: 17 },
   productCategory: { fontFamily: fonts.PoppinsRegular, fontSize: 13 },
   productPrice: { fontFamily: fonts.PoppinsBold, fontSize: 18, marginTop: 4 },

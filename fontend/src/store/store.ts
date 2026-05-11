@@ -4,6 +4,8 @@ import SystemInitializationReducer from '../store/reducers/SystemIntitialization
 import AuthReducer from '../store/reducers/AuthReducer';
 import CategoryReducer from '../store/reducers/CategoryReducer';
 import ProductReducer from '../store/reducers/ProductReducer';
+import CartReducer from '../store/reducers/CartReducer';
+import HistoryReducer from '../store/reducers/HistoryReducer';
 
 export const store = configureStore({
   reducer: {
@@ -11,6 +13,8 @@ export const store = configureStore({
     AuthReducer,
     CategoryReducer,
     ProductReducer,
+    CartReducer,
+    HistoryReducer,
   },
 });
 
