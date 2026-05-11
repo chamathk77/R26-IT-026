@@ -45,7 +45,7 @@ export const login_Service = createAsyncThunk(
         message:
           error.message ||
           "Network error. Please check your connection and try again.", 
-        status: 0,
+        status: 400,
         timestamp: new Date().toISOString(),
       };
       throw networkError;

@@ -135,8 +135,8 @@ export const CategorySlice = createSlice({
     });
 
     builder.addCase(deleteCategory_Service.fulfilled, (state, action) => {
-      const id = action.payload;
-      state.list.items = state.list.items.filter((c) => c._id !== id);
+      const id = String(action.payload);
+      state.list.items = state.list.items.filter((c) => String(c._id) !== id);
     });
   },
 });

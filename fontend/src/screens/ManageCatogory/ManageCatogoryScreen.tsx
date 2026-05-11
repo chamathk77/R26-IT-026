@@ -25,6 +25,16 @@ import { useCommonAlert } from '../../hooks/useCommonAlert';
 import { devLog } from '../../utils/devLog';
 import CommonAlert from '../../components/CommonAlert/CommonAlert';
 
+/** RTK unwrap() rejects with rejectWithValue payload ({ message }), not always Error. */
+function thunkErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object' && 'message' in err) {
+    const m = (err as { message: unknown }).message;
+    if (typeof m === 'string' && m.trim()) return m;
+  }
+  if (err instanceof Error && err.message.trim()) return err.message;
+  return fallback;
+}
+
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageCatogory'>;
 
 export default function ManageCatogoryScreen({ navigation }: Props) {
@@ -41,11 +51,9 @@ export default function ManageCatogoryScreen({ navigation }: Props) {
   const loadCategories = useCallback(async () => {
     try {
       await dispatch(fetchCategories_Service()).unwrap();
-    } catch (error: unknown) {
+    } catch (error: any) {
       devLog('Load categories error:', error);
-      const msg =
-        error instanceof Error ? error.message : 'Failed to load categories';
-      show_Alert('error', 'Error', msg, 1, true, 'OK');
+      show_Alert('error', 'Error', error.message, 1, true, 'OK');
     }
   }, [dispatch, show_Alert]);
 
@@ -62,19 +70,18 @@ export default function ManageCatogoryScreen({ navigation }: Props) {
         'Delete',
         async () => {
           try {
-            const response = await dispatch(deleteCategory_Service(item._id)).unwrap();
-            console.log('Category deleted:', response);
-            
-          } catch (err:any) {
-            
-            show_Alert('error', 'Error', err.message, 1, true, 'OK');
+            await dispatch(deleteCategory_Service(item._id)).unwrap();
+            swipeableRefs.current.get(item._id)?.close();
+            await loadCategories();
+          } catch (err: unknown) {
+            show_Alert('error', 'Error', thunkErrorMessage(err, 'Could not delete category'), 1, true, 'OK');
           }
         },
         'Cancel',
         closeSwipe,
       );
     },
-    [dispatch, show_Alert],
+    [dispatch, show_Alert, loadCategories],
   );
 
   useFocusEffect(

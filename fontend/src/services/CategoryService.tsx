@@ -16,7 +16,7 @@ function isHttpSuccess(status: number): boolean {
 
 export const createCategory_Service = createAsyncThunk(
   'category/create',
-  async (payload: CreateCategoryRequest, { rejectWithValue }) => {
+  async (payload: CreateCategoryRequest) => {
     try {
       await ensureInternetConnection();
 
@@ -28,9 +28,8 @@ export const createCategory_Service = createAsyncThunk(
           colorCode: payload.colorCode.trim().toUpperCase(),
         },
       );
- 
 
-      if (isHttpSuccess(response.status) && response.data?.success !== false) {
+      if (isHttpSuccess(response.status)) {
         return response.data;
       }
 
@@ -40,23 +39,29 @@ export const createCategory_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      return rejectWithValue(apiError);
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to create category';
-      return rejectWithValue({
+      throw apiError;
+    } catch (error: any) {
+      console.log('Create category error:---', error);
+      if (error.error && error.message && error.status && error.timestamp) {
+        throw error as ApiErrorResponse;
+      }
+
+      const networkError: ApiErrorResponse = {
         error: 'Network Error',
-        message,
+        message:
+          error.message ||
+          'Network error. Please check your connection and try again.',
         status: 0,
         timestamp: new Date().toISOString(),
-      } satisfies ApiErrorResponse);
+      };
+      throw networkError;
     }
   },
 );
 
 export const updateCategory_Service = createAsyncThunk(
   'category/update',
-  async (payload: UpdateCategoryPayload, { rejectWithValue }) => {
+  async (payload: UpdateCategoryPayload) => {
     try {
       await ensureInternetConnection();
 
@@ -69,7 +74,7 @@ export const updateCategory_Service = createAsyncThunk(
         },
       );
 
-      if (isHttpSuccess(response.status) && response.data?.success !== false) {
+      if (isHttpSuccess(response.status)) {
         return response.data;
       }
 
@@ -79,23 +84,29 @@ export const updateCategory_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      return rejectWithValue(apiError);
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to update category';
-      return rejectWithValue({
+      throw apiError;
+    } catch (error: any) {
+      console.log('Update category error:---', error);
+      if (error.error && error.message && error.status && error.timestamp) {
+        throw error as ApiErrorResponse;
+      }
+
+      const networkError: ApiErrorResponse = {
         error: 'Network Error',
-        message,
+        message:
+          error.message ||
+          'Network error. Please check your connection and try again.',
         status: 0,
         timestamp: new Date().toISOString(),
-      } satisfies ApiErrorResponse);
+      };
+      throw networkError;
     }
   },
 );
 
 export const deleteCategory_Service = createAsyncThunk(
   'category/delete',
-  async (id: string, { rejectWithValue }) => {
+  async (id: string) => {
     try {
       await ensureInternetConnection();
 
@@ -103,7 +114,7 @@ export const deleteCategory_Service = createAsyncThunk(
         `/api/categories/${id}`,
       );
 
-      if (isHttpSuccess(response.status) && response.data?.success !== false) {
+      if (isHttpSuccess(response.status)) {
         return id;
       }
 
@@ -113,29 +124,35 @@ export const deleteCategory_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      return rejectWithValue(apiError);
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to delete category';
-      return rejectWithValue({
+      throw apiError;
+    } catch (error: any) {
+      console.log('Delete category error:---', error);
+      if (error.error && error.message && error.status && error.timestamp) {
+        throw error as ApiErrorResponse;
+      }
+
+      const networkError: ApiErrorResponse = {
         error: 'Network Error',
-        message,
+        message:
+          error.message ||
+          'Network error. Please check your connection and try again.',
         status: 0,
         timestamp: new Date().toISOString(),
-      } satisfies ApiErrorResponse);
+      };
+      throw networkError;
     }
   },
 );
 
 export const fetchCategories_Service = createAsyncThunk(
   'category/fetchAll',
-  async (_void, { rejectWithValue }) => {
+  async (_void) => {
     try {
       await ensureInternetConnection();
 
       const response = await apiClient.get<GetCategoriesResponse>('/api/categories');
 
-      if (isHttpSuccess(response.status) && response.data?.success !== false) {
+      if (isHttpSuccess(response.status)) {
         return response.data;
       }
 
@@ -145,16 +162,22 @@ export const fetchCategories_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      return rejectWithValue(apiError);
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to load categories';
-      return rejectWithValue({
+      throw apiError;
+    } catch (error: any) {
+      console.log('Fetch categories error:---', error);
+      if (error.error && error.message && error.status && error.timestamp) {
+        throw error as ApiErrorResponse;
+      }
+
+      const networkError: ApiErrorResponse = {
         error: 'Network Error',
-        message,
+        message:
+          error.message ||
+          'Network error. Please check your connection and try again.',
         status: 0,
         timestamp: new Date().toISOString(),
-      } satisfies ApiErrorResponse);
+      };
+      throw networkError;
     }
   },
 );

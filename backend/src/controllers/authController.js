@@ -14,6 +14,8 @@ const signup = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Name, email, phone, password, and role are required',
+        timestamp: new Date().toISOString(),
+        
       });
     }
 
