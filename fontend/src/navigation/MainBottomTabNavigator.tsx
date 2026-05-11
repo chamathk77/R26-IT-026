@@ -32,7 +32,7 @@ export default function MainBottomTabNavigator() {
           let iconName: keyof typeof Ionicons.glyphMap;
           if (route.name === 'Home') {
             iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'Inventory') {
+          } else if (route.name === 'Products') {
             iconName = focused ? 'cube' : 'cube-outline';
           } else if (route.name === 'Cart') {
             iconName = focused ? 'cart' : 'cart-outline';
@@ -91,7 +91,7 @@ export default function MainBottomTabNavigator() {
         }}
       />
       <Tab.Screen
-        name="Inventory"
+        name="Products"
         component={InventoryScreen}
         options={{
           tabBarLabel: ({ focused }) => (
@@ -104,7 +104,7 @@ export default function MainBottomTabNavigator() {
                 fontWeight: focused ? '700' : '400',
               }}
             >
-              Inventory
+              Products
             </Text>
           ),
         }}

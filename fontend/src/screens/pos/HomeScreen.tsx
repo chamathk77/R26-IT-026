@@ -7,31 +7,28 @@ import { MainBottomTabParamList } from '../../navigation/MainBottomTabParamList'
 import { fonts } from '../../constants/fonts';
 import { useTheme } from '../../context/ThemeContext';
 import { navigationRef } from '../../navigation/RootNavigation';
+import { useCommonAlert } from '../../hooks/useCommonAlert';
+import CommonAlert from '../../components/CommonAlert';
 
 type Props = BottomTabScreenProps<MainBottomTabParamList, 'Home'>;
 
 export default function HomeScreen(_props: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
+  const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
 
   const surface = paperTheme.colors.surface;
   const primary = paperTheme.colors.primary;
 
   const confirmLogout = () => {
-    Alert.alert('Log out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log out',
-        style: 'destructive',
-        onPress: () => {
-          if (navigationRef.isReady()) {
-            navigationRef.reset({
-              index: 0,
-              routes: [{ name: 'LoginScreen' }],
-            });
-          }
-        },
-      },
-    ]);
+   show_Alert
+   ('error', 'Error', 'Are you sure you want to log out?', 2, true, 'OK', () => {
+    if (navigationRef.isReady()) {
+      navigationRef.reset({
+        index: 0,
+        routes: [{ name: 'LoginScreen' }],
+      });
+    }
+   });
   };
 
   return (
@@ -167,6 +164,21 @@ export default function HomeScreen(_props: Props) {
           <View style={{ height: 24 }} />
         </ScrollView>
       </SafeAreaView>
+
+      {alertConfig && (
+        <CommonAlert
+          visible={visible}
+          type={alertConfig.type}
+          title={alertConfig.title}
+          message={alertConfig.message}
+          buttons={alertConfig.buttons}
+          positiveButtonText={alertConfig.positiveButtonText}
+          negativeButtonText={alertConfig.negativeButtonText}
+          onPositivePress={alertConfig.onPositivePress}
+          onNegativePress={alertConfig.onNegativePress}
+          onClose={hideAlert}
+        />
+      )}
     </>
   );
 }
