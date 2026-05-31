@@ -112,6 +112,18 @@ const shopsDataSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    trailStartDate: {
+      type: Date,
+      default: null,
+    },
+    trailEndDate: {
+      type: Date,
+      default: null,
+    },
+    isTrailCompleted: {
+      type: Boolean,
+      default: false,
+    },
     dueDays: {
       type: Number,
       default: 0,
