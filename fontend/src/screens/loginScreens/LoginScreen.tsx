@@ -234,11 +234,11 @@ export default function LoginScreen({ navigation }: Props) {
                 <View style={styles.divider} />
               </View>
 
-              <TouchableOpacity onPress={onSignUp}>
+              {/* <TouchableOpacity onPress={onSignUp}>
                 <Text style={[styles.registerText, { color: paperTheme.colors.onSurfaceVariant }]}>
                   New staff ? <Text style={styles.registerLink}>Register Account</Text>
                 </Text>
-              </TouchableOpacity>
+              </TouchableOpacity> */}
             </View>
 
           </View>

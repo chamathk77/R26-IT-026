@@ -1,9 +1,25 @@
+const APP_ICON = './assets/icon.png';
+
 module.exports = ({ config }) => ({
   ...config,
+  icon: APP_ICON,
   userInterfaceStyle: 'automatic',
   plugins: [
     ...(config.plugins || []),
     'expo-font',
+    [
+      'expo-splash-screen',
+      {
+        image: APP_ICON,
+        imageWidth: 280,
+        resizeMode: 'contain',
+        backgroundColor: '#000000',
+        dark: {
+          image: APP_ICON,
+          backgroundColor: '#000000',
+        },
+      },
+    ],
     [
       'expo-image-picker',
       {
@@ -13,21 +29,22 @@ module.exports = ({ config }) => ({
     ],
   ],
   splash: {
-    image: './assets/splash-icon.png',
+    image: APP_ICON,
     resizeMode: 'contain',
-    backgroundColor: '#6161DF',
+    backgroundColor: '#000000',
     dark: {
-      image: './assets/splash-icon.png',
+      image: APP_ICON,
       resizeMode: 'contain',
-      backgroundColor: '#6161DF',
+      backgroundColor: '#000000',
     },
   },
   ios: {
     ...config.ios,
+    icon: APP_ICON,
     splash: {
-      image: './assets/splash-icon.png',
+      image: APP_ICON,
       resizeMode: 'contain',
-      backgroundColor: '#6161DF',
+      backgroundColor: '#000000',
     },
     infoPlist: {
       ...config.ios?.infoPlist,
@@ -41,6 +58,16 @@ module.exports = ({ config }) => ({
   },
   android: {
     ...config.android,
+    icon: APP_ICON,
+    adaptiveIcon: {
+      foregroundImage: './assets/adaptive-icon.png',
+      backgroundColor: '#000000',
+    },
+    splash: {
+      image: APP_ICON,
+      resizeMode: 'contain',
+      backgroundColor: '#000000',
+    },
     permissions: [
       'android.permission.INTERNET',
       'android.permission.ACCESS_NETWORK_STATE',
@@ -49,5 +76,9 @@ module.exports = ({ config }) => ({
       'android.permission.READ_EXTERNAL_STORAGE',
       'android.permission.WRITE_EXTERNAL_STORAGE',
     ],
+  },
+  web: {
+    ...config.web,
+    favicon: APP_ICON,
   },
 });

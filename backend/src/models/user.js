@@ -11,6 +11,13 @@ const userSchema = new mongoose.Schema(
       enum: ['admin', 'owner', 'staff'],
       required: true,
     },
+    shopId: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: '',
+      index: true,
+    },
   },
   { timestamps: true }
 );

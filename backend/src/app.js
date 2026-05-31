@@ -8,6 +8,7 @@ const categoryRoutes = require('./routes/categoryRoutes');
 const cartRoutes = require('./routes/cartRoutes');
 const historyRoutes = require('./routes/historyRoutes');
 const forecastRoutes = require('./routes/forecastRoutes');
+const shopsDataRoutes = require('./routes/shopsDataRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -21,6 +22,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/forecast', forecastRoutes);
+app.use('/api/shops', shopsDataRoutes);
 app.use('/api', routes);
 
 app.use((req, res) => {
