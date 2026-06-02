@@ -3,6 +3,11 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { navigationRef } from './RootNavigation';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import OnboardingScreen from '../screens/loginScreens/OnboardingScreen';
+import OnboardOwnerScreen from '../screens/loginScreens/OnboardOwnerScreen';
+import SelectFeaturesScreen from '../screens/loginScreens/SelectFeaturesScreen';
+import CreatePasswordScreen from '../screens/loginScreens/CreatePasswordScreen';
+import OtpValidationScreen from '../screens/loginScreens/OtpValidationScreen';
 import LoginScreen from '../screens/loginScreens/LoginScreen';
 import SignUpScreen from '../screens/loginScreens/SignUpScreen';
 import MainBottomTabNavigator from './MainBottomTabNavigator';
@@ -26,11 +31,16 @@ import { RootStackParamList } from './RootStackParamsList';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {
-  const initialRoute: keyof RootStackParamList = 'LoginScreen';
+  const initialRoute: keyof RootStackParamList = 'OnboardingScreen';
 
   return (
     <NavigationContainer ref={navigationRef}>
       <Stack.Navigator id="RootStack" initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="OnboardingScreen" component={OnboardingScreen} />
+        <Stack.Screen name="OnboardOwnerScreen" component={OnboardOwnerScreen} />
+        <Stack.Screen name="SelectFeaturesScreen" component={SelectFeaturesScreen} />
+        <Stack.Screen name="CreatePasswordScreen" component={CreatePasswordScreen} />
+        <Stack.Screen name="OtpValidationScreen" component={OtpValidationScreen} />
         <Stack.Screen name="LoginScreen" component={LoginScreen} />
         <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
         <Stack.Screen name="ModuleHub" component={ModuleHubScreen} />

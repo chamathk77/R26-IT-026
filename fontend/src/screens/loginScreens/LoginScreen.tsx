@@ -147,7 +147,7 @@ export default function LoginScreen({ navigation }: Props) {
           enableOnAndroid={true}
           enableAutomaticScroll={true}
           enableResetScrollToCoords={false}
-          extraScrollHeight={Platform.OS === 'ios' ? 20 : 50}
+          extraScrollHeight={Platform.OS === 'ios' ? 30 : 60}
           keyboardOpeningTime={0}
           keyboardShouldPersistTaps="handled"
           resetScrollToCoords={{ x: 0, y: 0 }}

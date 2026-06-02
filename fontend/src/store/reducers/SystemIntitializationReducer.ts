@@ -11,7 +11,7 @@ const getSystemTheme = (): 'light' | 'dark' => {
 };
 
 const initialState: SystemInitializationState = {
-    theme: 'system',
+    theme: 'light',
 };
 
 export const SystemInitializationSlice = createSlice({

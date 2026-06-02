@@ -43,7 +43,7 @@ export default function ModuleHubScreen({ navigation }: Props) {
       false,
       'Logout',
       () => {
-        navigation.reset({ index: 0, routes: [{ name: 'LoginScreen' }] });
+        navigation.reset({ index: 0, routes: [{ name: 'OnboardingScreen' }] });
       },
       'Cancel',
       () => {

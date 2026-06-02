@@ -71,7 +71,7 @@ export default function HomeScreen(_props: Props) {
     if (navigationRef.isReady()) {
       navigationRef.reset({
         index: 0,
-        routes: [{ name: 'LoginScreen' }],
+        routes: [{ name: 'OnboardingScreen' }],
       });
     }
    });

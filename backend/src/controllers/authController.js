@@ -123,6 +123,8 @@ const signupStaff = async (req, res) => {
   }
 };
 
+
+
 const signupOnbading = async (req, res) => {
   try {
     const { shopId, name, email, password, role, phone } = req.body;

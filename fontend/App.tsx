@@ -25,7 +25,7 @@ function ThemedApp() {
     if (navigationRef.isReady()) {
       navigationRef.reset({
         index: 0,
-        routes: [{ name: 'LoginScreen' }],
+        routes: [{ name: 'OnboardingScreen' }],
       });
     }
   };

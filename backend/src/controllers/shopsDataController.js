@@ -1,15 +1,5 @@
 const ShopsData = require('../models/shopsData');
 
-const SHOP_FEATURE_KEYS = [
-  'manageInventory',
-  'sms',
-  'kpi',
-  'analyticsModule',
-  'smsMobileNumber',
-  'customerManualOrder',
-  'costModule',
-];
-
 function normalizeShopId(shopId) {
   return String(shopId).trim().toUpperCase();
 }
@@ -25,6 +15,18 @@ function parseFeatureBoolean(value) {
   return null;
 }
 
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim());
+}
+
+function requireBooleanField(value, fieldName) {
+  const parsed = parseFeatureBoolean(value);
+  if (parsed === null) {
+    return { error: `${fieldName} must be a boolean` };
+  }
+  return { value: parsed };
+}
+
 const createShopOnboarding = async (req, res) => {
   try {
     const {
@@ -34,6 +36,7 @@ const createShopOnboarding = async (req, res) => {
       ownerFirstName,
       ownerLastName,
       ownerMobileNumber,
+      email,
     } = req.body;
 
     if (!shopName?.trim()) {
@@ -52,11 +55,18 @@ const createShopOnboarding = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Owner last name is required' });
     }
     if (!ownerMobileNumber?.trim()) {
-      return res.status(400).json({ success: false, message: 'Owner mobile number is required'  });
+      return res.status(400).json({ success: false, message: 'Owner mobile number is required' });
+    }
+    if (!email?.trim()) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid email address' });
     }
 
     const shopMobileTrimmed = String(shopMobileNumber).trim();
     const ownerMobileTrimmed = String(ownerMobileNumber).trim();
+    const emailTrimmed = String(email).trim().toLowerCase();
 
     const existingShopMobile = await ShopsData.findOne({ shopMobileNumber: shopMobileTrimmed }).lean();
     if (existingShopMobile) {
@@ -74,6 +84,14 @@ const createShopOnboarding = async (req, res) => {
       });
     }
 
+    const existingEmail = await ShopsData.findOne({ email: emailTrimmed }).lean();
+    if (existingEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is already registered to another shop',
+      });
+    }
+
     const shop = await ShopsData.create({
       shopName: String(shopName).trim(),
       address: String(address).trim(),
@@ -81,7 +99,9 @@ const createShopOnboarding = async (req, res) => {
       ownerFirstName: String(ownerFirstName).trim(),
       ownerLastName: String(ownerLastName).trim(),
       ownerMobileNumber: ownerMobileTrimmed,
-      isFirstTime: true,
+      email: emailTrimmed,
+      isVerifyEmail: false,
+      isVerifyPhoneNumber: false,
     });
 
     res.status(201).json({
@@ -106,6 +126,12 @@ const createShopOnboarding = async (req, res) => {
           message: 'Owner mobile number is already registered to another shop',
         });
       }
+      if (field === 'email') {
+        return res.status(400).json({
+          success: false,
+          message: 'Email is already registered to another shop',
+        });
+      }
       return res.status(400).json({ success: false, message: 'Shop id conflict, please try again' });
     }
     res.status(500).json({ success: false, message: error.message });
@@ -114,7 +140,18 @@ const createShopOnboarding = async (req, res) => {
 
 const updateShopFeatures = async (req, res) => {
   try {
-    const { shopId } = req.body;
+    const {
+      shopId,
+      manageInventory,
+      sms,
+      kpi,
+      analyticsModule,
+      customerManualOrder,
+      costModule,
+      marketingModule,
+      isAdditionalUsersAdded,
+      numAdditionalUsers,
+    } = req.body;
 
     if (!shopId?.trim()) {
       return res.status(400).json({ success: false, message: 'Shop id is required' });
@@ -131,24 +168,90 @@ const updateShopFeatures = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Shop not found' });
     }
 
-    const updates = {};
-    for (const key of SHOP_FEATURE_KEYS) {
-      if (!(key in req.body)) {
+    const manageInventoryParsed = requireBooleanField(manageInventory, 'manageInventory');
+    if (manageInventoryParsed.error) {
+      return res.status(400).json({ success: false, message: manageInventoryParsed.error });
+    }
+
+    const smsParsed = requireBooleanField(sms, 'sms');
+    if (smsParsed.error) {
+      return res.status(400).json({ success: false, message: smsParsed.error });
+    }
+
+    const kpiParsed = requireBooleanField(kpi, 'kpi');
+    if (kpiParsed.error) {
+      return res.status(400).json({ success: false, message: kpiParsed.error });
+    }
+
+    const analyticsModuleParsed = requireBooleanField(analyticsModule, 'analyticsModule');
+    if (analyticsModuleParsed.error) {
+      return res.status(400).json({ success: false, message: analyticsModuleParsed.error });
+    }
+
+    const customerManualOrderParsed = requireBooleanField(
+      customerManualOrder,
+      'customerManualOrder',
+    );
+    if (customerManualOrderParsed.error) {
+      return res.status(400).json({ success: false, message: customerManualOrderParsed.error });
+    }
+
+    const costModuleParsed = requireBooleanField(costModule, 'costModule');
+    if (costModuleParsed.error) {
+      return res.status(400).json({ success: false, message: costModuleParsed.error });
+    }
+
+    const marketingModuleParsed = requireBooleanField(marketingModule, 'marketingModule');
+    if (marketingModuleParsed.error) {
+      return res.status(400).json({ success: false, message: marketingModuleParsed.error });
+    }
+
+    const isAdditionalUsersAddedParsed = requireBooleanField(
+      isAdditionalUsersAdded,
+      'isAdditionalUsersAdded',
+    );
+    if (isAdditionalUsersAddedParsed.error) {
+      return res.status(400).json({ success: false, message: isAdditionalUsersAddedParsed.error });
+    }
+
+    let numAdditionalUsersValue = null;
+    if (isAdditionalUsersAddedParsed.value) {
+      if (numAdditionalUsers === undefined || numAdditionalUsers === null || numAdditionalUsers === '') {
         return res.status(400).json({
           success: false,
-          message: `Feature field "${key}" is required`,
+          message: 'numAdditionalUsers is required when isAdditionalUsersAdded is true',
         });
       }
 
-      const parsed = parseFeatureBoolean(req.body[key]);
-      if (parsed === null) {
+      const parsedCount = Number.parseInt(String(numAdditionalUsers), 10);
+      if (Number.isNaN(parsedCount) || parsedCount < 1) {
         return res.status(400).json({
           success: false,
-          message: `Feature "${key}" must be a boolean`,
+          message: 'numAdditionalUsers must be a number greater than 0',
         });
       }
-      updates[key] = parsed;
+      numAdditionalUsersValue = parsedCount;
     }
+
+    const currentMaxUsers = shop.maxUsers ?? 3;
+    let updatedMaxUsers = currentMaxUsers;
+
+    if (isAdditionalUsersAddedParsed.value && numAdditionalUsersValue > 0) {
+      updatedMaxUsers = currentMaxUsers + numAdditionalUsersValue;
+    }
+
+    const updates = {
+      manageInventory: manageInventoryParsed.value,
+      sms: smsParsed.value,
+      kpi: kpiParsed.value,
+      analyticsModule: analyticsModuleParsed.value,
+      customerManualOrder: customerManualOrderParsed.value,
+      costModule: costModuleParsed.value,
+      marketingModule: marketingModuleParsed.value,
+      isAdditionalUsersAdded: isAdditionalUsersAddedParsed.value,
+      numAdditionalUsers: numAdditionalUsersValue,
+      maxUsers: updatedMaxUsers,
+    };
 
     const updated = await ShopsData.findOneAndUpdate(
       { shopId: normalizedShopId },
@@ -165,9 +268,12 @@ const updateShopFeatures = async (req, res) => {
         sms: updated.sms,
         kpi: updated.kpi,
         analyticsModule: updated.analyticsModule,
-        smsMobileNumber: updated.smsMobileNumber,
         customerManualOrder: updated.customerManualOrder,
         costModule: updated.costModule,
+        marketingModule: updated.marketingModule,
+        isAdditionalUsersAdded: updated.isAdditionalUsersAdded,
+        numAdditionalUsers: updated.numAdditionalUsers,
+        maxUsers: updated.maxUsers,
       },
     });
   } catch (error) {
@@ -179,5 +285,4 @@ const updateShopFeatures = async (req, res) => {
 module.exports = {
   createShopOnboarding,
   updateShopFeatures,
-  SHOP_FEATURE_KEYS,
 };

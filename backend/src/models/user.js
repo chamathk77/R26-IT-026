@@ -18,6 +18,10 @@ const userSchema = new mongoose.Schema(
       default: '',
       index: true,
     },
+    isFirsttimeLogin: {
+      type: Boolean,
+      default: true,
+    },
   },
   { timestamps: true }
 );

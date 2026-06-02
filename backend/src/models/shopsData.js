@@ -13,6 +13,7 @@ const shopsDataSchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
+    
     shopName: {
       type: String,
       required: true,
@@ -44,6 +45,24 @@ const shopsDataSchema = new mongoose.Schema(
       required: true,
       unique: true,
       trim: true,
+    },
+    email: {
+      type: String,
+      default: null,
+      trim: true,
+      lowercase: true,
+    },
+    isVerifyEmail: {
+      type: Boolean,
+      default: false,
+    },
+    isVerifyPhoneNumber: {
+      type: Boolean,
+      default: false,
+    },
+    otp: {
+      type: Number,
+      default: null,
     },
     // isFirstTime: {
     //   type: Boolean,
@@ -79,6 +98,10 @@ const shopsDataSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    marketingModule: {
+      type: Boolean,
+      default: false,
+    },
 
     //subscription related
     maxUsers: {
@@ -86,7 +109,7 @@ const shopsDataSchema = new mongoose.Schema(
       default: 3,
       min: 1,
     },
-    additionalUsers: {
+    isAdditionalUsersAdded: {
       type: Boolean,
       default: false,
     },
@@ -193,6 +216,10 @@ module.exports = ShopsData;
   // ownerFirstName: string
   // ownerLastName: string
   // ownerMobileNumber: string
+  // email: string
+  // isVerifyEmail: boolean
+  // isVerifyPhoneNumber: boolean
+  // otp: number
 
   // manageInventory: boolean
   // sms: boolean
@@ -201,11 +228,13 @@ module.exports = ShopsData;
   // smsMobileNumber: boolean
   // customerManualOrder: boolean
   // costModule: boolean
+  // marketingModule: boolean
 
 
   // maxUsers: number
-  // additionalUsers: boolean
+  // isAdditionalUsersAdded: boolean
   // numAdditionalUsers: number
+
   // status: string
   // subscriptionStartDate: date
   // currentPaymentDoneDate: date
