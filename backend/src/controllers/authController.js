@@ -2,9 +2,12 @@ const User = require('../models/user');
 const ShopsData = require('../models/shopsData');
 const bcrypt = require('bcryptjs');
 const generateToken = require('../utils/generateToken');
+const { sendSms } = require('../services/smsService');
 
 const ALLOWED_ROLES = ['admin', 'owner', 'staff'];
 const OWNER_CREATABLE_ROLES = ['staff', 'admin'];
+const OTP_LENGTH = 6;
+const OTP_EXPIRY_SECONDS = 300;
 
 function normalizeShopId(shopId) {
   return String(shopId).trim().toUpperCase();
@@ -12,6 +15,26 @@ function normalizeShopId(shopId) {
 
 function isValidShopIdFormat(shopId) {
   return /^SI\d{6}$/.test(shopId);
+}
+
+function generateSixDigitOtp() {
+  return Math.floor(100000 + Math.random() * 900000);
+}
+
+function normalizeOtpInput(otp) {
+  const digits = String(otp).replace(/\D/g, '');
+  if (digits.length !== OTP_LENGTH) {
+    return null;
+  }
+  return Number.parseInt(digits, 10);
+}
+
+function maskMobileNumber(mobile) {
+  const digits = String(mobile).replace(/\D/g, '');
+  if (digits.length < 4) {
+    return digits;
+  }
+  return `${digits.slice(0, 3)}****${digits.slice(-2)}`;
 }
 
 const signupStaff = async (req, res) => {
@@ -198,6 +221,134 @@ const signupOnbading = async (req, res) => {
   }
 };
 
+const sendOtp = async (req, res) => {
+  try {
+    const { shopId } = req.body;
+
+    if (!shopId?.trim()) {
+      return res.status(400).json({ success: false, message: 'Shop id is required' });
+    }
+
+    const normalizedShopId = normalizeShopId(shopId);
+    if (!isValidShopIdFormat(normalizedShopId)) {
+      return res.status(400).json({ success: false, message: 'Invalid shop id format' });
+    }
+
+    const shop = await ShopsData.findOne({ shopId: normalizedShopId });
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found' });
+    }
+
+    if (!shop.ownerMobileNumber?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Owner mobile number is not set for this shop',
+      });
+    }
+
+    const otpCode = generateSixDigitOtp();
+    const otpExpiresAt = new Date(Date.now() + OTP_EXPIRY_SECONDS * 1000);
+
+    const message = `Your Smart Cost verification code is ${otpCode}. Valid for ${OTP_EXPIRY_SECONDS / 60} minutes. Do not share this code.`;
+
+    await sendSms({
+      to: shop.ownerMobileNumber,
+      message,
+    });
+
+    shop.otp = otpCode;
+    shop.otpExpiresAt = otpExpiresAt;
+    await shop.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'OTP sent successfully',
+      shopId: normalizedShopId,
+      mobileNumber: maskMobileNumber(shop.ownerMobileNumber),
+      otpTimerSeconds: OTP_EXPIRY_SECONDS,
+    });
+  } catch (error) {
+    console.log('error in sendOtp', error);
+    const message =
+      error.message?.includes('SMS') || error.message?.includes('NOTIFY')
+        ? error.message
+        : error.response?.data?.message || error.message || 'Failed to send OTP';
+    res.status(500).json({ success: false, message });
+  }
+};
+
+const verifyOtp = async (req, res) => {
+  try {
+    const { shopId, otp } = req.body;
+
+    if (!shopId?.trim()) {
+      return res.status(400).json({ success: false, message: 'Shop id is required' });
+    }
+    if (otp === undefined || otp === null || otp === '') {
+      return res.status(400).json({ success: false, message: 'OTP is required' });
+    }
+
+    const normalizedShopId = normalizeShopId(shopId);
+    if (!isValidShopIdFormat(normalizedShopId)) {
+      return res.status(400).json({ success: false, message: 'Invalid shop id format' });
+    }
+
+    const parsedOtp = normalizeOtpInput(otp);
+    if (parsedOtp === null) {
+      return res.status(400).json({
+        success: false,
+        message: `OTP must be a ${OTP_LENGTH}-digit number`,
+      });
+    }
+
+    const shop = await ShopsData.findOne({ shopId: normalizedShopId });
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found' });
+    }
+
+    if (!shop.otp || !shop.otpExpiresAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'No OTP found. Please request a new code.',
+      });
+    }
+
+    if (Date.now() > new Date(shop.otpExpiresAt).getTime()) {
+      shop.otp = null;
+      shop.otpExpiresAt = null;
+      await shop.save();
+      return res.status(400).json({
+        success: false,
+        message: 'OTP has expired. Please request a new code.',
+        otpTimerSeconds: 0,
+      });
+    }
+
+    if (shop.otp !== parsedOtp) {
+      return res.status(400).json({ success: false, message: 'Invalid OTP' });
+    }
+
+    const remainingMs = new Date(shop.otpExpiresAt).getTime() - Date.now();
+    const otpTimerSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+
+    shop.isVerifyPhoneNumber = true;
+    shop.otp = null;
+    shop.otpExpiresAt = null;
+    await shop.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Phone number verified successfully',
+      shopId: normalizedShopId,
+      isVerifyPhoneNumber: true,
+      otpTimerSeconds,
+    });
+  } catch (error) {
+    console.log('error in verifyOtp', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const login = async (req, res) => {
   try {
     const { phone, password } = req.body;
@@ -240,4 +391,10 @@ const login = async (req, res) => {
   }
 };
 
-module.exports = { signupStaff, signupOnbading, login };
+module.exports = {
+  signupStaff,
+  signupOnbading,
+  sendOtp,
+  verifyOtp,
+  login,
+};

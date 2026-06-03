@@ -64,6 +64,10 @@ const shopsDataSchema = new mongoose.Schema(
       type: Number,
       default: null,
     },
+    otpExpiresAt: {
+      type: Date,
+      default: null,
+    },
     // isFirstTime: {
     //   type: Boolean,
     //   default: true,
@@ -220,6 +224,7 @@ module.exports = ShopsData;
   // isVerifyEmail: boolean
   // isVerifyPhoneNumber: boolean
   // otp: number
+  // otpExpiresAt: date
 
   // manageInventory: boolean
   // sms: boolean
