@@ -8,8 +8,18 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true },
     role: {
       type: String,
-      enum: ['admin', 'owner', 'staff'],
+      enum: ['admin', 'owner', 'staff', 'internalAdmin', 'internalStaff'],
       required: true,
+    },
+    note: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    isInternalUser: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
     shopId: {
       type: String,

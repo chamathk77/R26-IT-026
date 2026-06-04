@@ -10,6 +10,7 @@ const historyRoutes = require('./routes/historyRoutes');
 const forecastRoutes = require('./routes/forecastRoutes');
 const shopsDataRoutes = require('./routes/shopsDataRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
+const dashboardRoutes = require('./routes/dashboard');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -25,6 +26,7 @@ app.use('/api/history', historyRoutes);
 app.use('/api/forecast', forecastRoutes);
 app.use('/api/shops', shopsDataRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/api', routes);
 
 app.use((req, res) => {
