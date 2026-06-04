@@ -30,47 +30,38 @@ function buildShopTrialState(shop) {
   };
 }
 
-function buildUserLoginState(user, onboardStep) {
-  return {
-    _id: user._id,
-    shopId: user.shopId || null,
-    name: user.name,
-    email: user.email,
-    phone: user.phone,
-    role: user.role,
-    onboardStep,
-    isFirsttimeLogin: user.isFirsttimeLogin ?? true,
-  };
+function toPlainDocument(doc) {
+  if (!doc) return null;
+  return typeof doc.toObject === 'function' ? doc.toObject() : { ...doc };
 }
 
-function buildShopLoginState(shop) {
-  if (!shop) {
-    return null;
-  }
+/** Full user for login (excludes password and session token). */
+function formatUserForLogin(user) {
+  const data = toPlainDocument(user);
+  if (!data) return null;
 
-  return {
-    shopId: shop.shopId,
-    shopName: shop.shopName,
-    address: shop.address,
-    shopMobileNumber: shop.shopMobileNumber,
-    ownerFirstName: shop.ownerFirstName,
-    ownerLastName: shop.ownerLastName,
-    ownerMobileNumber: shop.ownerMobileNumber,
-    email: shop.email,
-    status: shop.status,
-    onboardStep: shop.onboardStep,
-    isTrailStared: shop.isTrailStared,
-    isTrailCompleted: shop.isTrailCompleted,
-    trailStartDate: shop.trailStartDate,
-    trailEndDate: shop.trailEndDate,
-    isVerifyEmail: shop.isVerifyEmail,
-    isVerifyPhoneNumber: shop.isVerifyPhoneNumber,
-  };
+  delete data.password;
+  delete data.token;
+  delete data.__v;
+
+  return data;
+}
+
+/** Full shop for login (excludes OTP fields). */
+function formatShopForLogin(shop) {
+  const data = toPlainDocument(shop);
+  if (!data) return null;
+
+  delete data.otp;
+  delete data.otpExpiresAt;
+  delete data.__v;
+
+  return data;
 }
 
 module.exports = {
   shouldShowTrialPrompt,
   buildShopTrialState,
-  buildUserLoginState,
-  buildShopLoginState,
+  formatUserForLogin,
+  formatShopForLogin,
 };

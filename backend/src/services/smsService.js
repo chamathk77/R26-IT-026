@@ -28,26 +28,48 @@ function formatSmsRecipient(mobileNumber) {
   return `94${digits}`;
 }
 
+function extractSmsErrorMessage(data) {
+  if (!data) return null;
+  if (typeof data === 'string') return data;
+  return data.errors || data.message || data.error || null;
+}
+
 async function sendSms({ to, message }) {
   const { apiUrl, userId, apiKey, senderId } = getSmsConfig();
-  console.log('to in sendSms', to);
-  console.log('message in sendSms', message);
+  const payload = {
+    user_id: userId,
+    api_key: apiKey,
+    sender_id: senderId,
+    to: formatSmsRecipient(to),
+    message,
+  };
 
-  const response = await axios.post(
-    apiUrl,
-    {
-      user_id: userId,
-      api_key: apiKey,
-      sender_id: senderId,
-      to: formatSmsRecipient(to),
-      message,
-    },
-    { timeout: 15000 },
-  );
+  try {
+    const response = await axios.post(apiUrl, payload, { timeout: 15000 });
 
-  console.log('response from sendSms', response.data);
+    if (response.data?.status === 'error') {
+      const smsError = extractSmsErrorMessage(response.data) || 'SMS send failed';
+      const err = new Error(smsError);
+      err.code = 'SMS_API_ERROR';
+      throw err;
+    }
 
-  return response.data;
+    return response.data;
+  } catch (error) {
+    if (error.code === 'SMS_API_ERROR') {
+      throw error;
+    }
+
+    const smsError = extractSmsErrorMessage(error.response?.data);
+    if (smsError) {
+      const err = new Error(smsError);
+      err.code = 'SMS_API_ERROR';
+      err.httpStatus = error.response?.status;
+      throw err;
+    }
+
+    throw error;
+  }
 }
 
 module.exports = {

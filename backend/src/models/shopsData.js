@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const SHOP_STATUS = ['trial', 'active', 'disabled', 'due', 'trialExpired'];
+const SHOP_STATUS = ['trial', 'active', 'disabled', 'due', 'trialExpired','diactiveByAdmin','diactiveByUser','initialPaymentPending','paymentPending'];
 
 const ONBOARD_STEPS = [
   'startOnboarding',

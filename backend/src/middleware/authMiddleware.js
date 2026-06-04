@@ -34,9 +34,10 @@ async function enforceTrialAccess(userId) {
       trailEndDate: shop.trailEndDate,
       isTrailCompleted: shop.isTrailCompleted,
       status: shop.status,
+      shop,
     };
   }
-  // check if trial is access blocked
+
   return { expired: false, shop };
 }
 
@@ -72,7 +73,9 @@ async function validateStoredToken(userId, bearerToken) {
   return { valid: true, user };
 }
 
-function createProtect() {
+function createProtect(options = {}) {
+  const { allowWhenTrialExpired = false } = options;
+
   return async (req, res, next) => {
     let bearerToken;
 
@@ -131,7 +134,7 @@ function createProtect() {
       // check if trial is expired
       const trialCheck = await enforceTrialAccess(decoded.id);
 
-      if (trialCheck?.expired) {
+      if (trialCheck?.expired && !allowWhenTrialExpired) {
         await User.findByIdAndUpdate(decoded.id, { token: null });
         return res.status(401).json({
           success: false,
@@ -147,6 +150,7 @@ function createProtect() {
       if (trialCheck?.shop) {
         req.user.shopId = trialCheck.shop.shopId;
         req.user.shopStatus = trialCheck.shop.status;
+        req.user.trialExpired = Boolean(trialCheck.expired);
       }
 
       next();

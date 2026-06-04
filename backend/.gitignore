@@ -6,3 +6,7 @@ node_modules/
 # Uploaded product images (keep folder via .gitkeep)
 uploads/products/*
 !uploads/products/.gitkeep
+
+# Uploaded payment receipts
+uploads/receipts/*
+!uploads/receipts/.gitkeep

@@ -10,8 +10,8 @@ const {
 } = require('../utils/trialHelper');
 const {
   shouldShowTrialPrompt,
-  buildUserLoginState,
-  buildShopLoginState,
+  formatUserForLogin,
+  formatShopForLogin,
 } = require('../utils/trialPromptHelper');
 const { sendSms } = require('../services/smsService');
 
@@ -279,12 +279,16 @@ const sendOtpOnboarding = async (req, res) => {
       otpTimerSeconds: OTP_EXPIRY_SECONDS,
     });
   } catch (error) {
-    console.log('error in sendOtp', error);
-    const message =
-      error.message?.includes('SMS') || error.message?.includes('NOTIFY')
-        ? error.message
-        : error.response?.data?.message || error.message || 'Failed to send OTP';
-    res.status(500).json({ success: false, message });
+    console.log('error in sendOtp', error.response?.data || error.message);
+
+    const isSmsApiError = error.code === 'SMS_API_ERROR';
+    const statusCode = isSmsApiError && error.httpStatus ? error.httpStatus : 500;
+
+    res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Failed to send OTP',
+      code: isSmsApiError ? 'SMS_SEND_FAILED' : 'OTP_SEND_ERROR',
+    });
   }
 };
 
@@ -388,7 +392,6 @@ const login = async (req, res) => {
       });
     }
 
-    let onboardStep = 'startOnboarding';
     let shopLean = null;
     let trialExpired = false;
 
@@ -397,11 +400,6 @@ const login = async (req, res) => {
       if (shop) {
         shop = await completeTrialIfExpired(shop);
         shopLean = shop.toObject();
-
-        if (shopLean.onboardStep) {
-          onboardStep = shopLean.onboardStep;
-        }
-
         trialExpired = isTrialAccessBlocked(shopLean);
       }
     }
@@ -428,8 +426,8 @@ const login = async (req, res) => {
       tokenExpiresInSeconds,
       showTrialPrompt,
       trialExpired,
-      user: buildUserLoginState(user, onboardStep),
-      shop: buildShopLoginState(shopLean),
+      user: formatUserForLogin(user),
+      shop: formatShopForLogin(shopLean),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
