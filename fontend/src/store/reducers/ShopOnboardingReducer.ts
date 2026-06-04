@@ -1,6 +1,12 @@
 import { createSlice } from '@reduxjs/toolkit';
-import { createShopOnboarding_Service } from '../../services/ShopOnboardingService';
-import { CreateShopOnboardingResponse } from '../../type/shopOnboarding';
+import {
+  createShopOnboarding_Service,
+  updateShopFeatures_Service,
+} from '../../services/ShopOnboardingService';
+import {
+  CreateShopOnboardingResponse,
+  UpdateShopFeaturesResponse,
+} from '../../type/shopOnboarding';
 
 interface ShopOnboardingState {
   createShop: {
@@ -11,10 +17,26 @@ interface ShopOnboardingState {
     shopId: string | null;
     onboardStep: string | null;
   };
+  updateFeatures: {
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+    data: UpdateShopFeaturesResponse | null;
+    shopId: string | null;
+    onboardStep: string | null;
+  };
 }
 
 const initialState: ShopOnboardingState = {
   createShop: {
+    loading: false,
+    error: null,
+    success: false,
+    data: null,
+    shopId: null,
+    onboardStep: null,
+  },
+  updateFeatures: {
     loading: false,
     error: null,
     success: false,
@@ -30,6 +52,9 @@ export const ShopOnboardingSlice = createSlice({
   reducers: {
     resetCreateShopOnboarding: (state) => {
       state.createShop = { ...initialState.createShop };
+    },
+    resetUpdateShopFeatures: (state) => {
+      state.updateFeatures = { ...initialState.updateFeatures };
     },
   },
   extraReducers: (builder) => {
@@ -55,9 +80,34 @@ export const ShopOnboardingSlice = createSlice({
       state.createShop.shopId = null;
       state.createShop.onboardStep = null;
     });
+
+    builder.addCase(updateShopFeatures_Service.pending, (state) => {
+      state.updateFeatures.loading = true;
+      state.updateFeatures.error = null;
+      state.updateFeatures.success = false;
+    });
+    builder.addCase(updateShopFeatures_Service.fulfilled, (state, action) => {
+      state.updateFeatures.loading = false;
+      state.updateFeatures.success = true;
+      state.updateFeatures.error = null;
+      state.updateFeatures.data = action.payload;
+      state.updateFeatures.shopId = action.payload.shopId;
+      state.updateFeatures.onboardStep = action.payload.onboardStep;
+    });
+    builder.addCase(updateShopFeatures_Service.rejected, (state, action) => {
+      state.updateFeatures.loading = false;
+      state.updateFeatures.success = false;
+      state.updateFeatures.error =
+        (action.payload as string) ||
+        action.error.message ||
+        'Shop features update failed';
+      state.updateFeatures.data = null;
+      state.updateFeatures.shopId = null;
+      state.updateFeatures.onboardStep = null;
+    });
   },
 });
 
-export const { resetCreateShopOnboarding } = ShopOnboardingSlice.actions;
+export const { resetCreateShopOnboarding, resetUpdateShopFeatures } = ShopOnboardingSlice.actions;
 
 export default ShopOnboardingSlice.reducer;

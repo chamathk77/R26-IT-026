@@ -1,7 +1,9 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { TextInput } from 'react-native';
 import {
+  ActivityIndicator,
   findNodeHandle,
+  Keyboard,
   Platform,
   ScrollView,
   StatusBar,
@@ -11,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TextInput as PaperTextInput } from 'react-native-paper';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
@@ -37,6 +40,8 @@ import {
   ShopFeaturesState,
   SMS_PRICE_PER_MESSAGE_LKR,
 } from '../../type/onboarding';
+import { updateShopFeatures_Service } from '../../services/ShopOnboardingService';
+import { AppDispatch, RootState } from '../../store/store';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SelectFeaturesScreen'>;
 
@@ -47,9 +52,13 @@ function toAdditionalUserCount(text: string): string {
 }
 
 export default function SelectFeaturesScreen({ navigation, route }: Props) {
+  const dispatch = useDispatch<AppDispatch>();
   const { ownerData } = route.params;
   const { paperTheme, resolvedTheme } = useTheme();
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
+  const updateFeaturesLoading = useSelector(
+    (state: RootState) => state.shopOnboarding.updateFeatures.loading,
+  );
   const [features, setFeatures] = useState<ShopFeaturesState>(createDefaultFeatures);
   const [needMoreUsers, setNeedMoreUsers] = useState(false);
   const [additionalUsersCount, setAdditionalUsersCount] = useState('');
@@ -114,13 +123,30 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
     }
   };
 
-  const onContinue = () => {
+  const onContinue = async () => {
+    if (updateFeaturesLoading) {
+      return;
+    }
+
     const hasSelection = Object.values(features).some(Boolean);
     if (!hasSelection) {
       show_Alert(
         'error',
         'Validation',
         'Please select at least one feature to continue.',
+        1,
+        true,
+        'OK',
+        () => {},
+      );
+      return;
+    }
+
+    if (!ownerData.shopId?.trim()) {
+      show_Alert(
+        'error',
+        'Error',
+        'Shop id is missing. Please go back and complete shop details again.',
         1,
         true,
         'OK',
@@ -146,15 +172,42 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
       numAdditionalUsers = parsedAdditionalUsers;
     }
 
-    navigation.navigate('CreatePasswordScreen', {
-      ownerData,
-      features,
-      userConfig: {
-        maxUsers: DEFAULT_MAX_USERS,
-        isAdditionalUsersAdded: needMoreUsers,
-        numAdditionalUsers,
-      },
-    });
+    try {
+      Keyboard.dismiss();
+      const response = await dispatch(
+        updateShopFeatures_Service({
+          shopId: ownerData.shopId,
+          manageInventory: features.manageInventory,
+          sms: features.sms,
+          kpi: features.kpi,
+          analyticsModule: features.analyticsModule,
+          customerManualOrder: features.customerManualOrder,
+          costModule: features.costModule,
+          marketingModule: features.marketingModule,
+          isAdditionalUsersAdded: needMoreUsers,
+          numAdditionalUsers: needMoreUsers ? numAdditionalUsers : null,
+        }),
+      ).unwrap();
+
+      navigation.navigate('CreatePasswordScreen', {
+        ownerData: {
+          ...ownerData,
+          shopId: response.shopId,
+        },
+        features,
+        userConfig: {
+          maxUsers: response.features.maxUsers,
+          isAdditionalUsersAdded: response.features.isAdditionalUsersAdded,
+          numAdditionalUsers: response.features.numAdditionalUsers,
+        },
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Could not save shop features. Please try again.';
+      show_Alert('error', 'Error', message, 1, true, 'OK', () => {});
+    }
   };
 
   return (
@@ -401,13 +454,22 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
           </KeyboardAwareScrollView>
 
           <TouchableOpacity
-            style={[s.primaryButton, { backgroundColor: paperTheme.colors.primary }]}
+            style={[
+              s.primaryButton,
+              { backgroundColor: paperTheme.colors.primary },
+              updateFeaturesLoading && styles.primaryButtonDisabled,
+            ]}
             onPress={onContinue}
             activeOpacity={0.9}
+            disabled={updateFeaturesLoading}
           >
-            <Text style={[s.primaryButtonText, { color: paperTheme.colors.onPrimary }]}>
-              Continue
-            </Text>
+            {updateFeaturesLoading ? (
+              <ActivityIndicator color={paperTheme.colors.onPrimary} />
+            ) : (
+              <Text style={[s.primaryButtonText, { color: paperTheme.colors.onPrimary }]}>
+                Continue
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -533,5 +595,8 @@ const styles = StyleSheet.create({
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 13,
     marginTop: 6,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.7,
   },
 });
