@@ -48,7 +48,7 @@ const paymentsSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
-    currentPaymentDoneDate: {
+    exactPaymentDay: {
       type: Date,
       default: null,
     },
@@ -83,8 +83,8 @@ paymentsSchema.pre('validate', function validatePaymentRules() {
     this.reason = null;
   }
 
-  if (this.status === 'approve' && !this.currentPaymentDoneDate) {
-    this.currentPaymentDoneDate = new Date();
+  if (this.status === 'approve' && !this.exactPaymentDay) {
+    this.exactPaymentDay = new Date();
   }
 });
 
@@ -106,7 +106,7 @@ module.exports = Payments;
 // receiptImagePath
 // submittedDate
 // paymentMonth (enum: january, february, march, april, may, june, july, august, september, october, november, december)
-// currentPaymentDoneDate
+// exactPaymentDay
 // status: pending, approve, rejected, notPaid
 // reason
 

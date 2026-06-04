@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Payments = require('../models/payments');
 const ShopsData = require('../models/shopsData');
 const User = require('../models/user');
@@ -32,6 +33,10 @@ function isValidShopIdFormat(shopId) {
   return /^SI\d{6}$/.test(shopId);
 }
 
+function isValidObjectId(id) {
+  return mongoose.Types.ObjectId.isValid(id);
+}
+
 function startOfDay(date = new Date()) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -43,16 +48,28 @@ function getPaymentMonthFromDate(date) {
 }
 
 /** Resolve payment record dates from shop (shop subscription fields updated on approve only). */
+function isFirstPayment(shop) {
+  if (shop.subscriptionStartDate) {
+    return false;
+  }
+  // After trial ends: no subscription yet → first payment (today)
+  if (shop.status === 'trialExpired') {
+    return true;
+  }
+  // No billing cycle scheduled yet
+  return !shop.nextPaymentDate;
+}
+
 function resolvePaymentSchedule(shop) {
   const today = startOfDay();
-  const isFirstPayment = !shop.subscriptionStartDate;
+  const isFirst = isFirstPayment(shop);
 
-  if (isFirstPayment) {
+  if (isFirst) {
     return {
       isFirstPayment: true,
       paymentMonth: getPaymentMonthFromDate(today),
       submittedDate: today,
-      currentPaymentDoneDate: today,
+      exactPaymentDay: today,
     };
   }
 
@@ -68,7 +85,7 @@ function resolvePaymentSchedule(shop) {
     isFirstPayment: false,
     paymentMonth: getPaymentMonthFromDate(billingDate),
     submittedDate: new Date(),
-    currentPaymentDoneDate: billingDate,
+    exactPaymentDay: billingDate,
   };
 }
 
@@ -106,7 +123,7 @@ function formatPayment(payment) {
     receiptImagePath: payment.receiptImagePath,
     submittedDate: payment.submittedDate,
     paymentMonth: payment.paymentMonth,
-    currentPaymentDoneDate: payment.currentPaymentDoneDate,
+    exactPaymentDay: payment.exactPaymentDay,
     status: payment.status,
     reason: payment.reason,
     createdAt: payment.createdAt,
@@ -303,7 +320,7 @@ const submitPayment = async (req, res) => {
     }
     //
 
-    const { paymentMonth, submittedDate, currentPaymentDoneDate, isFirstPayment } = schedule;
+    const { paymentMonth, submittedDate, exactPaymentDay, isFirstPayment } = schedule;
 
     const user = await User.findById(req.user.id).select('shopId role').lean();
     // check if user exists
@@ -339,7 +356,7 @@ const submitPayment = async (req, res) => {
     // generate the receipt number
     const receiptNumber = await generateReceiptNumber(
       paymentMonth,
-      currentPaymentDoneDate,
+      exactPaymentDay,
     );
     // create the payment
     const payment = await Payments.create({
@@ -349,7 +366,7 @@ const submitPayment = async (req, res) => {
       submittedDate,
       paymentMonth,
       status: 'pending',
-      currentPaymentDoneDate,
+      exactPaymentDay,
       reason: null,
     });
     shop.status = 'initialPaymentPending';
@@ -376,8 +393,108 @@ const submitPayment = async (req, res) => {
   }
 };
 
+const resubmitPayment = async (req, res) => {
+  let savedReceiptPath = null;
+
+  try {
+    const { paymentId } = req.params;
+
+    if (!isValidObjectId(paymentId)) {
+      if (req.file) {
+        unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
+      }
+      return res.status(400).json({ success: false, message: 'Invalid payment id' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Receipt image is required (form field: receipt)',
+      });
+    }
+
+    const payment = await Payments.findById(paymentId);
+    if (!payment) {
+      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
+      return res.status(404).json({ success: false, message: 'Payment not found' });
+    }
+
+    if (payment.status !== 'rejected') {
+      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
+      return res.status(400).json({
+        success: false,
+        message: 'Only rejected payments can be resubmitted',
+        currentStatus: payment.status,
+      });
+    }
+
+    const shopId = normalizeShopId(payment.shopId);
+    const access = await verifyShopAccess(req, shopId);
+    if (access.error) {
+      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
+      return res.status(access.error.status).json(access.error.body);
+    }
+
+    const user = await User.findById(req.user.id).select('shopId role').lean();
+    if (!user) {
+      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
+      return res.status(401).json({ success: false, message: 'User not found' });
+    }
+
+    if (user.shopId && normalizeShopId(user.shopId) !== shopId) {
+      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
+      return res.status(403).json({
+        success: false,
+        message: 'You can only resubmit payment for your own shop',
+      });
+    }
+
+    const existingPending = await Payments.findOne({
+      shopId,
+      paymentMonth: payment.paymentMonth,
+      status: 'pending',
+      _id: { $ne: payment._id },
+    }).lean();
+
+    if (existingPending) {
+      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
+      return res.status(400).json({
+        success: false,
+        message: `A pending payment already exists for ${payment.paymentMonth}`,
+        paymentId: existingPending._id,
+      });
+    }
+
+    const previousReceiptPath = payment.receiptImagePath;
+    savedReceiptPath = publicReceiptPath(req.file.filename);
+
+    payment.receiptImagePath = savedReceiptPath;
+    payment.submittedDate = new Date();
+    payment.status = 'pending';
+    payment.reason = null;
+    await payment.save();
+
+    unlinkReceiptImageIfLocal(previousReceiptPath);
+
+    res.status(200).json({
+      success: true,
+      message: 'Payment resubmitted successfully',
+      payment: formatPayment(payment),
+    });
+  } catch (error) {
+    if (savedReceiptPath) {
+      unlinkReceiptImageIfLocal(savedReceiptPath);
+    } else if (req.file) {
+      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
+    }
+    console.log('error in resubmitPayment', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   submitPayment,
+  resubmitPayment,
   getPaymentsByShop,
   getRecentPaymentByShop,
   getPaymentByReceiptNumber,

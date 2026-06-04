@@ -51,7 +51,7 @@ const listPendingPayments = async (req, res) => {
           receiptImageUrl: formatted.receiptImageUrl,
           submittedDate: formatted.submittedDate,
           paymentMonth: formatted.paymentMonth,
-          currentPaymentDoneDate: formatted.currentPaymentDoneDate,
+          exactPaymentDay: formatted.exactPaymentDay,
           status: formatted.status,
           reason: formatted.reason,
           createdAt: formatted.createdAt,
@@ -104,7 +104,7 @@ const getPaymentDetails = async (req, res) => {
 
 async function applyShopUpdatesOnApprove(shop, payment) {
   const doneDate = startOfDay(
-    payment.currentPaymentDoneDate || payment.submittedDate || new Date(),
+    payment.exactPaymentDay || payment.submittedDate || new Date(),
   );
 
   if (!shop.subscriptionStartDate) {
@@ -171,8 +171,8 @@ const updatePaymentStatus = async (req, res) => {
     payment.reason = statusNormalized === 'rejected' ? reasonTrimmed : null;
     // update shop status
     if (statusNormalized === 'approve') {
-      if (!payment.currentPaymentDoneDate) {
-        payment.currentPaymentDoneDate = startOfDay(
+      if (!payment.exactPaymentDay) {
+        payment.exactPaymentDay = startOfDay(
           payment.submittedDate || new Date(),
         );
       }
