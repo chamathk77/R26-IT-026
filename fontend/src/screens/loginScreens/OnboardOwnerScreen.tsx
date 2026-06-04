@@ -1,6 +1,7 @@
-import React, { useRef, useState } from 'react';
-import type { TextInput } from 'react-native';
+import React, { useRef, useState } from "react";
+import type { TextInput } from "react-native";
 import {
+  ActivityIndicator,
   Keyboard,
   Platform,
   StatusBar,
@@ -8,29 +9,33 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { TextInput as PaperTextInput } from 'react-native-paper';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../navigation/RootStackParamsList';
-import { useTheme } from '../../context/ThemeContext';
-import { fonts } from '../../constants/fonts';
-import CommonHeader from '../../components/CommonHeader/CommonHeader';
-import OnboardingStepIndicator from './onboarding/OnboardingStepIndicator';
-import { onboardingStyles as s } from './onboarding/onboardingStyles';
-import { useCommonAlert } from '../../hooks/useCommonAlert';
-import CommonAlert from '../../components/CommonAlert/CommonAlert';
+} from "react-native";
+import { useDispatch, useSelector } from "react-redux";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { TextInput as PaperTextInput } from "react-native-paper";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { RootStackParamList } from "../../navigation/RootStackParamsList";
+import { useTheme } from "../../context/ThemeContext";
+import { fonts } from "../../constants/fonts";
+import CommonHeader from "../../components/CommonHeader/CommonHeader";
+import OnboardingStepIndicator from "./onboarding/OnboardingStepIndicator";
+import { onboardingStyles as s } from "./onboarding/onboardingStyles";
+import { useCommonAlert } from "../../hooks/useCommonAlert";
+import CommonAlert from "../../components/CommonAlert/CommonAlert";
+import { createShopOnboarding_Service } from "../../services/ShopOnboardingService";
+import { AppDispatch, RootState } from "../../store/store";
 
-type Props = NativeStackScreenProps<RootStackParamList, 'OnboardOwnerScreen'>;
+type Props = NativeStackScreenProps<RootStackParamList, "OnboardOwnerScreen">;
 
 const MOBILE_DIGIT_LENGTH = 10;
 const LOCAL_MOBILE_PATTERN = /^0\d{9}$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function toLocalMobileNumber(text: string): string {
-  let digits = text.replace(/\D/g, '');
+  let digits = text.replace(/\D/g, "");
 
-  if (digits.length > 0 && digits[0] !== '0') {
+  if (digits.length > 0 && digits[0] !== "0") {
     digits = `0${digits}`;
   }
 
@@ -41,25 +46,36 @@ function isValidLocalMobileNumber(value: string): boolean {
   return LOCAL_MOBILE_PATTERN.test(value);
 }
 
+function isValidEmail(value: string): boolean {
+  return EMAIL_PATTERN.test(value.trim());
+}
+
 export default function OnboardOwnerScreen({ navigation }: Props) {
+  const dispatch = useDispatch<AppDispatch>();
   const { paperTheme, resolvedTheme } = useTheme();
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
+  const createShopLoading = useSelector(
+    (state: RootState) => state.shopOnboarding.createShop.loading,
+  );
 
-  const [shopName, setShopName] = useState('');
-  const [address, setAddress] = useState('');
-  const [shopMobileNumber, setShopMobileNumber] = useState('');
-  const [ownerFirstName, setOwnerFirstName] = useState('');
-  const [ownerLastName, setOwnerLastName] = useState('');
-  const [ownerMobileNumber, setOwnerMobileNumber] = useState('');
+  const [shopName, setShopName] = useState("");
+  const [address, setAddress] = useState("");
+  const [shopMobileNumber, setShopMobileNumber] = useState("");
+  const [ownerFirstName, setOwnerFirstName] = useState("");
+  const [ownerLastName, setOwnerLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [ownerMobileNumber, setOwnerMobileNumber] = useState("");
 
   const shopNameRef = useRef<TextInput>(null);
   const addressRef = useRef<TextInput>(null);
   const shopMobileRef = useRef<TextInput>(null);
   const ownerFirstNameRef = useRef<TextInput>(null);
   const ownerLastNameRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
   const ownerMobileRef = useRef<TextInput>(null);
 
-  const phoneKeyboardType = Platform.OS === 'android' ? 'numeric' : 'number-pad';
+  const phoneKeyboardType =
+    Platform.OS === "android" ? "numeric" : "number-pad";
 
   const cardStyle = [
     styles.fieldCard,
@@ -80,27 +96,53 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
 
   const baseInputProps = {
     style: s.input,
-    mode: 'flat' as const,
-    underlineColor: 'transparent',
-    activeUnderlineColor: 'transparent',
+    mode: "flat" as const,
+    underlineColor: "transparent",
+    activeUnderlineColor: "transparent",
     contentStyle: [s.inputContent, styles.inputText, { color: inputTextColor }],
-    placeholderTextColor: '#9b9ca5',
+    placeholderTextColor: "#9b9ca5",
     theme: paperTheme,
     cursorColor: inputCursorColor,
     selectionColor: inputSelectionColor,
     textColor: inputTextColor,
   };
 
-  const onContinue = () => {
+  const onContinue = async () => {
+    if (createShopLoading) {
+      return;
+    }
+
     if (
       !shopName.trim() ||
       !address.trim() ||
       !shopMobileNumber.trim() ||
       !ownerFirstName.trim() ||
       !ownerLastName.trim() ||
+      !email.trim() ||
       !ownerMobileNumber.trim()
     ) {
-      show_Alert('error', 'Validation', 'Please fill in all fields.', 1, true, 'OK', () => {});
+      show_Alert(
+        "error",
+        "Validation",
+        "Please fill in all fields.",
+        1,
+        true,
+        "OK",
+        () => {},
+      );
+      return;
+    }
+
+    if (!isValidEmail(email)) {
+      show_Alert(
+        "error",
+        "Validation",
+        "Please enter a valid email address.",
+        1,
+        true,
+        "OK",
+        () => {},
+      );
       return;
     }
 
@@ -109,37 +151,58 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
       !isValidLocalMobileNumber(ownerMobileNumber)
     ) {
       show_Alert(
-        'error',
-        'Validation',
-        'Mobile numbers must be 10 digits and start with 0 (e.g. 0712345678).',
+        "error",
+        "Validation",
+        "Mobile numbers must be 10 digits and start with 0 (e.g. 0712345678).",
         1,
         true,
-        'OK',
+        "OK",
         () => {},
       );
       return;
     }
 
-    Keyboard.dismiss();
-    navigation.navigate('SelectFeaturesScreen', {
-      ownerData: {
-        shopName: shopName.trim(),
-        address: address.trim(),
-        shopMobileNumber: shopMobileNumber.trim(),
-        ownerFirstName: ownerFirstName.trim(),
-        ownerLastName: ownerLastName.trim(),
-        ownerMobileNumber: ownerMobileNumber.trim(),
-      },
-    });
+    const ownerData = {
+      shopName: shopName.trim(),
+      address: address.trim(),
+      shopMobileNumber: shopMobileNumber.trim(),
+      ownerFirstName: ownerFirstName.trim(),
+      ownerLastName: ownerLastName.trim(),
+      email: email.trim().toLowerCase(),
+      ownerMobileNumber: ownerMobileNumber.trim(),
+    };
+
+    try {
+      Keyboard.dismiss();
+      const response = await dispatch(
+        createShopOnboarding_Service(ownerData),
+      ).unwrap();
+      console.log("response in onboard owner screen", response);
+
+      navigation.navigate("SelectFeaturesScreen", {
+        ownerData: {
+          ...ownerData,
+          shopId: response.shopId,
+        },
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Could not save shop details. Please try again.";
+      show_Alert("error", "Error", message, 1, true, "OK", () => {});
+    }
   };
 
   return (
     <>
       <StatusBar
-        barStyle={resolvedTheme === 'dark' ? 'light-content' : 'dark-content'}
+        barStyle={resolvedTheme === "dark" ? "light-content" : "dark-content"}
         backgroundColor={paperTheme.colors.background}
       />
-      <SafeAreaView style={[s.safeArea, { backgroundColor: paperTheme.colors.background }]}>
+      <SafeAreaView
+        style={[s.safeArea, { backgroundColor: paperTheme.colors.background }]}
+      >
         <CommonHeader
           title="Shop onboarding"
           titleColor={paperTheme.colors.onBackground}
@@ -150,24 +213,39 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
           <OnboardingStepIndicator currentStep={1} />
           <KeyboardAwareScrollView
             style={styles.keyboardScroll}
-            contentContainerStyle={[s.scrollContent, styles.keyboardScrollContent]}
+            contentContainerStyle={[
+              s.scrollContent,
+              styles.keyboardScrollContent,
+            ]}
             showsVerticalScrollIndicator={false}
             bounces={false}
             enableOnAndroid
             enableAutomaticScroll
             enableResetScrollToCoords={false}
-            extraScrollHeight={Platform.OS === 'ios' ? 24 : 80}
+            extraScrollHeight={Platform.OS === "ios" ? 24 : 80}
             keyboardOpeningTime={0}
             keyboardShouldPersistTaps="handled"
           >
-            <Text style={[s.heading, { color: paperTheme.colors.onSurface }]}>Shop & owner</Text>
-            <Text style={[s.subheading, { color: paperTheme.colors.onSurfaceVariant }]}>
+            <Text style={[s.heading, { color: paperTheme.colors.onSurface }]}>
+              Shop & owner
+            </Text>
+            <Text
+              style={[
+                s.subheading,
+                { color: paperTheme.colors.onSurfaceVariant },
+              ]}
+            >
               Tell us about your shop and the owner account.
             </Text>
 
             {/* Shop Name */}
             <View style={cardStyle}>
-              <Text style={[styles.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+              <Text
+                style={[
+                  styles.fieldLabel,
+                  { color: paperTheme.colors.onSurfaceVariant },
+                ]}
+              >
                 SHOP NAME
               </Text>
               <View style={inputWrapperStyle}>
@@ -186,7 +264,12 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
 
             {/* Address */}
             <View style={cardStyle}>
-              <Text style={[styles.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+              <Text
+                style={[
+                  styles.fieldLabel,
+                  { color: paperTheme.colors.onSurfaceVariant },
+                ]}
+              >
                 ADDRESS
               </Text>
               <View style={[inputWrapperStyle, styles.inputWrapperMultiline]}>
@@ -207,7 +290,12 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
 
             {/* Shop Contact Number */}
             <View style={cardStyle}>
-              <Text style={[styles.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+              <Text
+                style={[
+                  styles.fieldLabel,
+                  { color: paperTheme.colors.onSurfaceVariant },
+                ]}
+              >
                 SHOP CONTACT NUMBER
               </Text>
               <View style={inputWrapperStyle}>
@@ -216,7 +304,9 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
                   ref={shopMobileRef}
                   placeholder="e.g. 0712345678"
                   value={shopMobileNumber}
-                  onChangeText={(text) => setShopMobileNumber(toLocalMobileNumber(text))}
+                  onChangeText={(text) =>
+                    setShopMobileNumber(toLocalMobileNumber(text))
+                  }
                   keyboardType={phoneKeyboardType}
                   maxLength={MOBILE_DIGIT_LENGTH}
                   returnKeyType="next"
@@ -228,7 +318,12 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
 
             {/* Owner First Name */}
             <View style={cardStyle}>
-              <Text style={[styles.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+              <Text
+                style={[
+                  styles.fieldLabel,
+                  { color: paperTheme.colors.onSurfaceVariant },
+                ]}
+              >
                 OWNER FIRST NAME
               </Text>
               <View style={inputWrapperStyle}>
@@ -247,7 +342,12 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
 
             {/* Owner Last Name */}
             <View style={cardStyle}>
-              <Text style={[styles.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+              <Text
+                style={[
+                  styles.fieldLabel,
+                  { color: paperTheme.colors.onSurfaceVariant },
+                ]}
+              >
                 OWNER LAST NAME
               </Text>
               <View style={inputWrapperStyle}>
@@ -259,6 +359,33 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
                   onChangeText={setOwnerLastName}
                   returnKeyType="next"
                   blurOnSubmit={false}
+                  onSubmitEditing={() => emailRef.current?.focus()}
+                />
+              </View>
+            </View>
+
+            {/* Email Address */}
+            <View style={cardStyle}>
+              <Text
+                style={[
+                  styles.fieldLabel,
+                  { color: paperTheme.colors.onSurfaceVariant },
+                ]}
+              >
+                EMAIL ADDRESS
+              </Text>
+              <View style={inputWrapperStyle}>
+                <PaperTextInput
+                  {...baseInputProps}
+                  ref={emailRef}
+                  placeholder="e.g. owner@example.com"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  blurOnSubmit={false}
                   onSubmitEditing={() => ownerMobileRef.current?.focus()}
                 />
               </View>
@@ -266,7 +393,12 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
 
             {/* Owner Mobile Number */}
             <View style={cardStyle}>
-              <Text style={[styles.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+              <Text
+                style={[
+                  styles.fieldLabel,
+                  { color: paperTheme.colors.onSurfaceVariant },
+                ]}
+              >
                 OWNER MOBILE NUMBER
               </Text>
               <View style={inputWrapperStyle}>
@@ -275,7 +407,9 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
                   ref={ownerMobileRef}
                   placeholder="e.g. 0712345678"
                   value={ownerMobileNumber}
-                  onChangeText={(text) => setOwnerMobileNumber(toLocalMobileNumber(text))}
+                  onChangeText={(text) =>
+                    setOwnerMobileNumber(toLocalMobileNumber(text))
+                  }
                   keyboardType={phoneKeyboardType}
                   maxLength={MOBILE_DIGIT_LENGTH}
                   returnKeyType="done"
@@ -286,20 +420,40 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
                   }}
                 />
               </View>
-              <Text style={[styles.fieldHint, { color: paperTheme.colors.onSurfaceVariant }]}>
-                We will send a one-time password (OTP) to this number by SMS to verify your account.
+              <Text
+                style={[
+                  styles.fieldHint,
+                  { color: paperTheme.colors.onSurfaceVariant },
+                ]}
+              >
+                We will send a one-time password (OTP) to this number by SMS to
+                verify your account.
               </Text>
             </View>
           </KeyboardAwareScrollView>
 
           <TouchableOpacity
-            style={[s.primaryButton, { backgroundColor: paperTheme.colors.primary }]}
+            style={[
+              s.primaryButton,
+              { backgroundColor: paperTheme.colors.primary },
+              createShopLoading && styles.primaryButtonDisabled,
+            ]}
             onPress={onContinue}
             activeOpacity={0.9}
+            disabled={createShopLoading}
           >
-            <Text style={[s.primaryButtonText, { color: paperTheme.colors.onPrimary }]}>
-              Continue
-            </Text>
+            {createShopLoading ? (
+              <ActivityIndicator color={paperTheme.colors.onPrimary} />
+            ) : (
+              <Text
+                style={[
+                  s.primaryButtonText,
+                  { color: paperTheme.colors.onPrimary },
+                ]}
+              >
+                Continue
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -340,7 +494,7 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 14,
     marginBottom: 12,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
@@ -355,13 +509,13 @@ const styles = StyleSheet.create({
   inputWrapper: {
     minHeight: 52,
     borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 12,
   },
   inputWrapperMultiline: {
     minHeight: 88,
-    alignItems: 'flex-start',
+    alignItems: "flex-start",
     paddingVertical: 10,
   },
   fieldHint: {
@@ -372,5 +526,8 @@ const styles = StyleSheet.create({
   },
   inputText: {
     paddingVertical: 0,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.7,
   },
 });

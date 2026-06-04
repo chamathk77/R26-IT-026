@@ -1,9 +1,11 @@
 export type OnboardingOwnerData = {
+  shopId?: string;
   shopName: string;
   address: string;
   shopMobileNumber: string;
   ownerFirstName: string;
   ownerLastName: string;
+  email: string;
   ownerMobileNumber: string;
 };
 
