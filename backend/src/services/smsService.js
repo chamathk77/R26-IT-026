@@ -30,6 +30,8 @@ function formatSmsRecipient(mobileNumber) {
 
 async function sendSms({ to, message }) {
   const { apiUrl, userId, apiKey, senderId } = getSmsConfig();
+  console.log('to in sendSms', to);
+  console.log('message in sendSms', message);
 
   const response = await axios.post(
     apiUrl,
@@ -42,6 +44,8 @@ async function sendSms({ to, message }) {
     },
     { timeout: 15000 },
   );
+
+  console.log('response from sendSms', response.data);
 
   return response.data;
 }

@@ -1,6 +1,13 @@
 const mongoose = require('mongoose');
 
-const SHOP_STATUS = ['trial', 'active', 'disabled', 'due'];
+const SHOP_STATUS = ['trial', 'active', 'disabled', 'due', 'trialExpired'];
+
+const ONBOARD_STEPS = [
+  'startOnboarding',
+  'shopRegistered',
+  'featureSelected',
+  'completed',
+];
 
 const shopsDataSchema = new mongoose.Schema(
   {
@@ -68,6 +75,11 @@ const shopsDataSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    onboardStep: {
+      type: String,
+      enum: ONBOARD_STEPS,
+      default: 'startOnboarding',
+    },
     // isFirstTime: {
     //   type: Boolean,
     //   default: true,
@@ -125,7 +137,7 @@ const shopsDataSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: SHOP_STATUS,
-      default: 'disabled', // disabled, trial, active, due
+      default: 'disabled', // disabled, trial, active, due,trialExpired
     },
     subscriptionStartDate: {
       type: Date,
@@ -146,6 +158,10 @@ const shopsDataSchema = new mongoose.Schema(
     trailEndDate: {
       type: Date,
       default: null,
+    },
+    isTrailStared: {
+      type: Boolean,
+      default: false,
     },
     isTrailCompleted: {
       type: Boolean,
@@ -207,6 +223,7 @@ shopsDataSchema.pre('validate', async function assignShopId() {
 const ShopsData = mongoose.model('ShopsData', shopsDataSchema);
 
 ShopsData.SHOP_STATUS = SHOP_STATUS;
+ShopsData.ONBOARD_STEPS = ONBOARD_STEPS;
 
 module.exports = ShopsData;
 
@@ -225,6 +242,7 @@ module.exports = ShopsData;
   // isVerifyPhoneNumber: boolean
   // otp: number
   // otpExpiresAt: date
+  // onboardStep: startOnboarding | shopRegistered | featureSelected | completed
 
   // manageInventory: boolean
   // sms: boolean
@@ -249,7 +267,10 @@ module.exports = ShopsData;
   // onDateNotification: boolean
   // beforeSevenDaysSms: boolean
   // onDateSms: boolean
-  
+  // isTrailStared: boolean
+  // isTrailCompleted: boolean
+  // trailStartDate: date
+  // trailEndDate: date
 
 
 

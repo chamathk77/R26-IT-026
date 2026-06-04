@@ -243,6 +243,7 @@ export default function LoginScreen({ navigation }: Props) {
 
           </View>
         </KeyboardAwareScrollView>
+        
         </ScrollView>
 
         {alertConfig && (

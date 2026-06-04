@@ -2,6 +2,17 @@ const User = require('../models/user');
 const ShopsData = require('../models/shopsData');
 const bcrypt = require('bcryptjs');
 const generateToken = require('../utils/generateToken');
+const { createAndSaveLoginToken, createAndSaveTrialToken, clearUserToken } = require('../utils/tokenHelper');
+const {
+  isActiveTrial,
+  isTrialAccessBlocked,
+  completeTrialIfExpired,
+} = require('../utils/trialHelper');
+const {
+  shouldShowTrialPrompt,
+  buildUserLoginState,
+  buildShopLoginState,
+} = require('../utils/trialPromptHelper');
 const { sendSms } = require('../services/smsService');
 
 const ALLOWED_ROLES = ['admin', 'owner', 'staff'];
@@ -221,7 +232,7 @@ const signupOnbading = async (req, res) => {
   }
 };
 
-const sendOtp = async (req, res) => {
+const sendOtpOnboarding = async (req, res) => {
   try {
     const { shopId } = req.body;
 
@@ -332,6 +343,7 @@ const verifyOtp = async (req, res) => {
     const otpTimerSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
 
     shop.isVerifyPhoneNumber = true;
+    shop.onboardStep = 'completed';
     shop.otp = null;
     shop.otpExpiresAt = null;
     await shop.save();
@@ -341,6 +353,7 @@ const verifyOtp = async (req, res) => {
       message: 'Phone number verified successfully',
       shopId: normalizedShopId,
       isVerifyPhoneNumber: true,
+      onboardStep: shop.onboardStep,
       otpTimerSeconds,
     });
   } catch (error) {
@@ -375,16 +388,61 @@ const login = async (req, res) => {
       });
     }
 
+    let onboardStep = 'startOnboarding';
+    let shopLean = null;
+    let trialExpired = false;
+
+    if (user.shopId) {
+      let shop = await ShopsData.findOne({ shopId: user.shopId });
+      if (shop) {
+        shop = await completeTrialIfExpired(shop);
+        shopLean = shop.toObject();
+
+        if (shopLean.onboardStep) {
+          onboardStep = shopLean.onboardStep;
+        }
+
+        trialExpired = isTrialAccessBlocked(shopLean);
+      }
+    }
+
+    let token;
+    let tokenExpiresInSeconds = 7 * 24 * 60 * 60;
+
+    if (shopLean && isActiveTrial(shopLean)) {
+      const trialToken = await createAndSaveTrialToken(user._id, shopLean);
+      token = trialToken.token;
+      tokenExpiresInSeconds = trialToken.tokenExpiresInSeconds;
+    } else {
+      token = await createAndSaveLoginToken(user._id);
+    }
+
+    const showTrialPrompt = shouldShowTrialPrompt(user, shopLean);
+
     res.status(200).json({
       success: true,
-      _id: user._id,
-      shopId: user.shopId,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-      message: 'Login successful',
-      token: generateToken(user._id),
+      message: trialExpired
+        ? 'Login successful. Your trial has ended. Please subscribe to continue.'
+        : 'Login successful',
+      token,
+      tokenExpiresInSeconds,
+      showTrialPrompt,
+      trialExpired,
+      user: buildUserLoginState(user, onboardStep),
+      shop: buildShopLoginState(shopLean),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const logout = async (req, res) => {
+  try {
+    await clearUserToken(req.user.id);
+    res.status(200).json({
+      success: true,
+      message: 'Logged out successfully',
+      sessionEnded: true,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -394,7 +452,8 @@ const login = async (req, res) => {
 module.exports = {
   signupStaff,
   signupOnbading,
-  sendOtp,
+  sendOtp: sendOtpOnboarding,
   verifyOtp,
   login,
+  logout,
 };

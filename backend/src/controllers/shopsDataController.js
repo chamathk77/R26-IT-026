@@ -102,11 +102,13 @@ const createShopOnboarding = async (req, res) => {
       email: emailTrimmed,
       isVerifyEmail: false,
       isVerifyPhoneNumber: false,
+      onboardStep: 'shopRegistered',
     });
 
     res.status(201).json({
       success: true,
       shopId: shop.shopId,
+      onboardStep: shop.onboardStep,
       message: 'Shop onboarding saved',
     });
   } catch (error) {
@@ -251,6 +253,7 @@ const updateShopFeatures = async (req, res) => {
       isAdditionalUsersAdded: isAdditionalUsersAddedParsed.value,
       numAdditionalUsers: numAdditionalUsersValue,
       maxUsers: updatedMaxUsers,
+      onboardStep: 'featureSelected',
     };
 
     const updated = await ShopsData.findOneAndUpdate(
@@ -262,6 +265,7 @@ const updateShopFeatures = async (req, res) => {
     res.status(200).json({
       success: true,
       shopId: updated.shopId,
+      onboardStep: updated.onboardStep,
       message: 'Shop features saved',
       features: {
         manageInventory: updated.manageInventory,
