@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TextInput } from 'react-native';
 import {
   ActivityIndicator,
@@ -209,6 +209,10 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
       show_Alert('error', 'Error', message, 1, true, 'OK', () => {});
     }
   };
+
+  useEffect(() => {
+    console.log('ownerData', ownerData);
+  }, [ownerData]);
 
   return (
     <>

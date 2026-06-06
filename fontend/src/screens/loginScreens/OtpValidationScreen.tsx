@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Keyboard,
   Platform,
   ScrollView,
@@ -9,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LottieView from 'lottie-react-native';
 import { OtpInput } from 'react-native-otp-entry';
@@ -22,18 +24,44 @@ import OnboardingStepIndicator from './onboarding/OnboardingStepIndicator';
 import { onboardingStyles as s } from './onboarding/onboardingStyles';
 import { useCommonAlert } from '../../hooks/useCommonAlert';
 import CommonAlert from '../../components/CommonAlert/CommonAlert';
+import {
+  sendOtpOnboarding_Service,
+  signupOnboarding_Service,
+  verifyOtpOnboarding_Service,
+} from '../../services/ShopOnboardingService';
+import { AppDispatch, RootState } from '../../store/store';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OtpValidationScreen'>;
 
-const TIMER_DURATION_SEC = 360;
+const DEFAULT_TIMER_DURATION_SEC = 300;
 const OTP_LENGTH = 6;
 
 export default function OtpValidationScreen({ navigation, route }: Props) {
-  const { mobileNumber, shopName } = route.params;
+  const dispatch = useDispatch<AppDispatch>();
+  const {
+    mobileNumber,
+    password,
+    shopId,
+    ownerName,
+    email,
+    shopName,
+    otpTimerSeconds,
+  } = route.params;
+  const timerDuration = otpTimerSeconds ?? DEFAULT_TIMER_DURATION_SEC;
   const { paperTheme, resolvedTheme } = useTheme();
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
+  const verifyOtpLoading = useSelector(
+    (state: RootState) => state.shopOnboarding.verifyOtp.loading,
+  );
+  const signupOwnerLoading = useSelector(
+    (state: RootState) => state.shopOnboarding.signupOwner.loading,
+  );
+  const sendOtpLoading = useSelector(
+    (state: RootState) => state.shopOnboarding.sendOtp.loading,
+  );
+  const isSubmitting = verifyOtpLoading || signupOwnerLoading;
 
-  const [timer, setTimer] = useState(TIMER_DURATION_SEC);
+  const [timer, setTimer] = useState(timerDuration);
   const [forceFocus, setForceFocus] = useState(0);
   const [otpCode, setOtpCode] = useState('');
 
@@ -80,61 +108,97 @@ export default function OtpValidationScreen({ navigation, route }: Props) {
   };
 
   useEffect(() => {
-    startTimer(TIMER_DURATION_SEC);
+    startTimer(timerDuration);
     return () => {
       if (timerInterval.current) {
         clearInterval(timerInterval.current);
       }
     };
-  }, []);
+  }, [timerDuration]);
 
-  const onResend = () => {
-    if (timer > 0) {
+  const onResend = async () => {
+    if (timer > 0 || sendOtpLoading) {
       return;
     }
-    setOtpCode('');
-    setForceFocus((prev) => prev + 1);
-    startTimer(TIMER_DURATION_SEC);
-    show_Alert(
-      'success',
-      'OTP Sent',
-      `A new verification code has been sent to ${mobileNumber}.`,
-      1,
-      true,
-      'OK',
-      () => {},
-    );
+
+    try {
+      const response = await dispatch(
+        sendOtpOnboarding_Service({ shopId }),
+      ).unwrap();
+
+      setOtpCode('');
+      setForceFocus((prev) => prev + 1);
+      startTimer(response.otpTimerSeconds ?? timerDuration);
+      show_Alert(
+        'success',
+        'OTP Sent',
+        `A new verification code has been sent to ${mobileNumber}.`,
+        1,
+        false,
+        'OK',
+        () => {},
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to resend verification code.';
+      show_Alert('error', 'Error', message, 1, false, 'OK', () => {});
+    }
   };
 
-  const onVerify = () => {
+  const onVerify = async () => {
+    if (isSubmitting) {
+      return;
+    }
+
     if (otpCode.length !== OTP_LENGTH) {
       show_Alert(
         'error',
         'Validation',
         `Please enter the ${OTP_LENGTH}-digit verification code.`,
         1,
-        true,
+        false,
         'OK',
         () => {},
       );
       return;
     }
 
-    Keyboard.dismiss();
-    show_Alert(
-      'success',
-      'Onboarding complete',
-      'Your shop has been set up successfully. Please sign in to continue.',
-      1,
-      true,
-      'OK',
-      () => {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'LoginScreen' }],
-        });
-      },
-    );
+    try {
+      Keyboard.dismiss();
+      await dispatch(
+        verifyOtpOnboarding_Service({ shopId, otp: otpCode }),
+      ).unwrap();
+
+      await dispatch(
+        signupOnboarding_Service({
+          shopId,
+          name: ownerName,
+          email,
+          password,
+          role: 'owner',
+          phone: mobileNumber,
+        }),
+      ).unwrap();
+
+      show_Alert(
+        'success',
+        'Account Created',
+        'User created successfully. Please log in to continue.',
+        1,
+        false,
+        'Go to Login',
+        () => {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'LoginScreen' }],
+          });
+        },
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Verification failed. Please try again.';
+      show_Alert('error', 'Error', error.message, 1, false, 'OK', () => {});
+    }
   };
 
   return (
@@ -243,7 +307,7 @@ export default function OtpValidationScreen({ navigation, route }: Props) {
                   <Text style={[styles.resendText, { color: paperTheme.colors.onSurfaceVariant }]}>
                     I didn&apos;t receive any code.
                   </Text>
-                  <TouchableOpacity onPress={onResend} disabled={timer > 0}>
+                  <TouchableOpacity onPress={onResend} disabled={timer > 0 || sendOtpLoading}>
                     <Text
                       style={[
                         styles.resendButton,
@@ -258,13 +322,22 @@ export default function OtpValidationScreen({ navigation, route }: Props) {
               </View>
 
               <TouchableOpacity
-                style={[styles.verifyButton, { backgroundColor: paperTheme.colors.primary }]}
+                style={[
+                  styles.verifyButton,
+                  { backgroundColor: paperTheme.colors.primary },
+                  isSubmitting && styles.verifyButtonDisabled,
+                ]}
                 onPress={onVerify}
                 activeOpacity={0.9}
+                disabled={isSubmitting}
               >
-                <Text style={[styles.verifyButtonText, { color: paperTheme.colors.onPrimary }]}>
-                  Verify & continue
-                </Text>
+                {isSubmitting ? (
+                  <ActivityIndicator color={paperTheme.colors.onPrimary} />
+                ) : (
+                  <Text style={[styles.verifyButtonText, { color: paperTheme.colors.onPrimary }]}>
+                    Verify & continue
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </KeyboardAwareScrollView>
@@ -394,5 +467,8 @@ const styles = StyleSheet.create({
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 15,
     letterSpacing: 0.5,
+  },
+  verifyButtonDisabled: {
+    opacity: 0.7,
   },
 });

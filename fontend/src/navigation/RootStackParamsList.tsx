@@ -19,7 +19,12 @@ export type RootStackParamList = {
   };
   OtpValidationScreen: {
     mobileNumber: string;
+    password: string;
+    shopId: string;
+    ownerName: string;
+    email: string;
     shopName?: string;
+    otpTimerSeconds?: number;
   };
   LoginScreen: undefined;
   SignUpScreen: undefined;

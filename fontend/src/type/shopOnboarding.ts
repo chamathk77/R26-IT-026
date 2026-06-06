@@ -48,3 +48,44 @@ export interface UpdateShopFeaturesResponse {
   message: string;
   features: ShopFeaturesPayload;
 }
+
+export interface SendOtpOnboardingRequest {
+  shopId: string;
+}
+
+export interface SendOtpOnboardingResponse {
+  success: boolean;
+  message: string;
+  shopId: string;
+  mobileNumber: string;
+  otpTimerSeconds: number;
+}
+
+export interface VerifyOtpOnboardingRequest {
+  shopId: string;
+  otp: string;
+}
+
+export interface VerifyOtpOnboardingResponse {
+  success: boolean;
+  message: string;
+  shopId: string;
+  isVerifyPhoneNumber: boolean;
+  onboardStep: string;
+  otpTimerSeconds: number;
+}
+
+export interface SignupOnboardingRequest {
+  shopId: string;
+  name: string;
+  email: string;
+  password: string;
+  role: string;
+  phone: string;
+}
+
+export interface SignupOnboardingResponse {
+  success: boolean;
+  shopId: string;
+  message: string;
+}
