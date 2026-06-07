@@ -21,11 +21,12 @@ import { useFocusEffect } from '@react-navigation/native';
 import { RootStackParamList } from '../../navigation/RootStackParamsList';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { login_Service } from '../../services/AuthService';
+import { startTrial_Service } from '../../services/TrialService';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../../store/store';
 import { devLog } from '../../utils/devLog';
-import { saveToken } from '../../utils/secureStorage';
-import { setLoginSession } from '../../store/reducers/AuthReducer';
+import { clearSavedToken, saveToken } from '../../utils/secureStorage';
+import { clearLoginSession, setLoginSession } from '../../store/reducers/AuthReducer';
 import { useCommonAlert } from '../../hooks/useCommonAlert';
 import CommonAlert from '../../components/CommonAlert/CommonAlert';
 
@@ -56,6 +57,9 @@ export default function LoginScreen({ navigation }: Props) {
   const passwordInputRef = useRef<any>(null);
   const dispatch = useDispatch<AppDispatch>();
   const loginLoading = useSelector((state: RootState) => state.AuthReducer.Login.loading);
+  const userData = useSelector((state: RootState) => state.AuthReducer.Login.userData);
+  const shopData = useSelector((state: RootState) => state.AuthReducer.Login.shopData);
+  const [trialLoading, setTrialLoading] = useState(false);
 
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
   const phoneKeyboardType = Platform.OS === 'android' ? 'numeric' : 'number-pad';
@@ -87,6 +91,125 @@ export default function LoginScreen({ navigation }: Props) {
     }, []),
   );
 
+  const StartTrial = useCallback(async () => {
+    console.log('Start Trial called');
+    const shopId = shopData?.shopId || userData?.shopId;
+    if (!shopId) {
+      show_Alert(
+        'error',
+        'Error',
+        'Shop not found. Please log in again.',
+        1,
+        false,
+        'OK',
+        () => { },
+      );
+      return;
+    }
+
+    if (trialLoading) {
+      return;
+    }
+
+    setTrialLoading(true);
+    try {
+      const response = await dispatch(
+        startTrial_Service({ startTrial: true, shopId: String(shopId) }),
+      ).unwrap();
+      console.log('Start Trial response:', response);
+
+      if (response.token) {
+        await clearSavedToken();
+        await saveToken(response.token);
+      }
+
+      dispatch(
+        setLoginSession({
+          user: userData
+            ? { ...userData, isFirsttimeLogin: false }
+            : userData,
+          shop: shopData
+            ? {
+              ...shopData,
+              shopId: response.shopId,
+              status: response.status,
+              isTrailStared: response.isTrailStared,
+              isTrailCompleted: response.isTrailCompleted,
+              trailStartDate: response.trailStartDate ?? shopData.trailStartDate,
+              trailEndDate: response.trailEndDate ?? shopData.trailEndDate,
+            }
+            : shopData,
+        }),
+      );
+
+      setTimeout(() => {
+        show_Alert(
+          'success',
+          'Trial started',
+          'Your 14-day trial has started.' + ' ' + 'Trial ends on ' + response.trailEndDate,
+          1,
+          false,
+          'Continue',
+          () => {
+            navigation.reset({ index: 0, routes: [{ name: 'ModuleHub' }] });
+          },
+        );
+      }, 150);
+
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Could not start trial';
+
+      if (
+        error &&
+        typeof error === 'object' &&
+        'sessionEnded' in error &&
+        (error as { sessionEnded?: boolean }).sessionEnded
+      ) {
+        await clearSavedToken();
+        dispatch(clearLoginSession());
+      }
+
+      setTimeout(() => {
+        show_Alert('error', 'Trial failed', message, 1, false, 'OK', () => { });
+      }, 150);
+    } finally {
+      setTimeout(() => {
+        setTrialLoading(false);
+      }, 3000);
+    }
+  }, [
+    dispatch,
+    navigation,
+    shopData,
+    show_Alert,
+    trialLoading,
+    userData,
+  ]);
+
+  const showTrialPendingAlert = useCallback(() => {
+    show_Alert(
+      'pending',
+      'Trial Pending',
+      'Do you want to start the 14 days trial?',
+      2,
+      true,
+      'Continue',
+      () => {
+        void StartTrial();
+      },
+      'Cancel',
+      () => {
+        console.log('Cancel trial pressed');
+      },
+      undefined,
+      () => {
+        console.log('Skip Trial button pressed');
+      },
+      'Skip Trial',
+    );
+  }, [StartTrial, show_Alert]);
+
   const onLogin = async () => {
     if (loginLoading) {
       return;
@@ -100,7 +223,7 @@ export default function LoginScreen({ navigation }: Props) {
         1,
         false,
         'OK',
-        () => {},
+        () => { },
       );
       return;
     }
@@ -113,7 +236,7 @@ export default function LoginScreen({ navigation }: Props) {
         1,
         false,
         'OK',
-        () => {},
+        () => { },
       );
       return;
     }
@@ -124,29 +247,100 @@ export default function LoginScreen({ navigation }: Props) {
         login_Service({ phone: phone.trim(), password }),
       ).unwrap();
 
-      devLog('Login response: login screen',JSON.stringify(response)); 
-      await saveToken(response.token);
-      dispatch(
-        setLoginSession({
-          user: response.user,
-          shop: response.shop ?? null,
-        }),
-      );
+      devLog('Login response: login screen', JSON.stringify(response));
 
-      // if (response.trialExpired) {
-      //   show_Alert(
-      //     'pending',
-      //     'Trial ended',
-      //     response.message || 'Your trial has ended. Please subscribe to continue.',
-      //     1,
-      //     false,
-      //     'Continue',
-      //     () => {
-      //       // navigation.reset({ index: 0, routes: [{ name: 'ModuleHub' }] });
-      //     },
-      //   );
-      //   return;
-      // }
+      if (response.success) {
+
+        await saveToken(response.token);
+        dispatch(
+          setLoginSession({
+            user: response.user,
+            shop: response.shop ?? null,
+          }),
+        );
+
+        if (response.shop?.status === 'disabled') {
+          if (response.user.isFirsttimeLogin === true) {
+
+            if (response.shop?.isTrailStared === false) {
+              show_Alert(
+                'error',
+                'Account Pending',
+                'Your account is pending. Please contact the admin to activate your account.',
+                2,
+                false,
+                'Start Trial',
+                () => {
+                  setTimeout(() => {
+                    showTrialPendingAlert();
+                  }, 350);
+                },
+                'Contact Admin',
+                () => {
+                  console.log('Contact Admin pressed');
+                },
+              );
+            }
+
+
+
+          }
+        } else if (response.shop?.isTrailStared === true && response.shop.status === 'trial') {
+
+        } else if (response.shop?.isTrailStared === true && response.shop.status === 'trialExpired') {
+
+          show_Alert(
+            'pending',
+            'Trial ended',
+            'Your trial has ended. Please purchase a subscription to continue.',
+            1,
+            false,
+            'Continue',
+            () => {
+              // navigation.reset({ index: 0, routes: [{ name: 'ModuleHub' }] });
+            },
+          );
+          return;
+
+        } else if (response.shop?.status === 'active') {
+          navigation.reset({ index: 0, routes: [{ name: 'ModuleHub' }] });
+        } else if (response.shop?.status === 'initialPaymentPending') {
+          show_Alert(
+            'pending',
+            'Payment Pending',
+            'Your payment submitted successfully. Please wait for the admin to approve your payment.',
+            2,
+            false,
+            'OK',
+            () => { },
+            'Contact Admin',
+            () => {
+              console.log('Contact Admin pressed');
+            },
+          );
+        } else if (response.shop?.status === 'paymentPending') {
+          show_Alert(
+            'pending',
+            'Payment Pending',
+            'Your payment is pending. Please complete your payment to continue.',
+            1,
+            false,
+            'Pay Now',
+            () => {
+              console.log('Pay Now pressed');
+            },
+            'Cancel',
+            () => {
+              console.log('Cancel pressed');
+            },
+          );
+        }
+
+
+      }
+
+
+
 
     } catch (error: any) {
       devLog('Login error:', error);
@@ -157,7 +351,7 @@ export default function LoginScreen({ navigation }: Props) {
         1,
         false,
         'OK',
-        () => {},
+        () => { },
       );
     }
   };
@@ -176,150 +370,163 @@ export default function LoginScreen({ navigation }: Props) {
       />
       <SafeAreaView style={[styles.safeArea, { backgroundColor: paperTheme.colors.background }]}>
         <ScrollView
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-        contentContainerStyle={styles.scrollViewContent}
-        keyboardShouldPersistTaps="handled"
-        nestedScrollEnabled={true}
-        >
-        <KeyboardAwareScrollView
-          contentContainerStyle={styles.scrollViewContent}
-          bounces={false}
           showsVerticalScrollIndicator={false}
-          enableOnAndroid={true}
-          enableAutomaticScroll={true}
-          enableResetScrollToCoords={false}
-          extraScrollHeight={Platform.OS === 'ios' ? 30 : 60}
-          keyboardOpeningTime={0}
+          bounces={false}
+          contentContainerStyle={styles.scrollViewContent}
           keyboardShouldPersistTaps="handled"
-          resetScrollToCoords={{ x: 0, y: 0 }}
-          innerRef={(ref: any) => {
-            // Assign ref to use for scrollToFocusedInput
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            scrollRef.current = ref;
-          }}
+          nestedScrollEnabled={true}
         >
-          <View style={styles.lottieWrapper}>
-            <LottieView
-              source={require('../../../assets/Lottie/management.json')}
-              autoPlay
-              loop
-              style={styles.lottie}
-            />
-          </View>
-          <View style={[styles.container, { backgroundColor: paperTheme.colors.background }]}>
-            <View>
-              <Text style={[styles.heading, { color: paperTheme.colors.onSurface }]}>Sign In</Text>
-              <Text style={[styles.subheading, { color: paperTheme.colors.onSurfaceVariant }]}>
-                Sign in with your owner mobile number and password.
-              </Text>
+          <KeyboardAwareScrollView
+            contentContainerStyle={styles.scrollViewContent}
+            bounces={false}
+            showsVerticalScrollIndicator={false}
+            enableOnAndroid={true}
+            enableAutomaticScroll={true}
+            enableResetScrollToCoords={false}
+            extraScrollHeight={Platform.OS === 'ios' ? 30 : 60}
+            keyboardOpeningTime={0}
+            keyboardShouldPersistTaps="handled"
+            resetScrollToCoords={{ x: 0, y: 0 }}
+            innerRef={(ref: any) => {
+              // Assign ref to use for scrollToFocusedInput
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+              scrollRef.current = ref;
+            }}
+          >
+            <View style={styles.lottieWrapper}>
+              <LottieView
+                source={require('../../../assets/Lottie/management.json')}
+                autoPlay
+                loop
+                style={styles.lottie}
+              />
+            </View>
+            <View style={[styles.container, { backgroundColor: paperTheme.colors.background }]}>
+              <View>
+                <Text style={[styles.heading, { color: paperTheme.colors.onSurface }]}>Sign In</Text>
+                <Text style={[styles.subheading, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  Sign in with your owner mobile number and password.
+                </Text>
 
-              <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
-                MOBILE NUMBER
-              </Text>
-              <View style={styles.inputWrapper}>
-                <PaperTextInput
-                  ref={phoneInputRef}
-                  style={styles.input}
-                  mode="flat"
-                  underlineColor="transparent"
-                  activeUnderlineColor="transparent"
-                  contentStyle={styles.inputContent}
-                  placeholder="e.g. 0712345678"
-                  placeholderTextColor="#9b9ca5"
-                  keyboardType={phoneKeyboardType}
-                  maxLength={MOBILE_DIGIT_LENGTH}
-                  value={phone}
-                  onChangeText={(text) => setPhone(toLocalMobileNumber(text))}
-                  cursorColor="#a16207"
-                  theme={paperTheme}
-                />
-              </View>
+                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  MOBILE NUMBER
+                </Text>
+                <View style={styles.inputWrapper}>
+                  <PaperTextInput
+                    ref={phoneInputRef}
+                    style={styles.input}
+                    mode="flat"
+                    underlineColor="transparent"
+                    activeUnderlineColor="transparent"
+                    contentStyle={styles.inputContent}
+                    placeholder="e.g. 0712345678"
+                    placeholderTextColor="#9b9ca5"
+                    keyboardType={phoneKeyboardType}
+                    maxLength={MOBILE_DIGIT_LENGTH}
+                    value={phone}
+                    onChangeText={(text) => setPhone(toLocalMobileNumber(text))}
+                    cursorColor="#a16207"
+                    theme={paperTheme}
+                  />
+                </View>
 
-              <View style={styles.passwordRow}>
-                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>PASSWORD</Text>
-              </View>
+                <View style={styles.passwordRow}>
+                  <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>PASSWORD</Text>
+                </View>
 
-              <View style={[styles.inputWrapper]}>
-                <PaperTextInput
-                  ref={passwordInputRef}
-                  style={styles.input}
-                  mode="flat"
-                  underlineColor="transparent"
-                  activeUnderlineColor="transparent"
-                  contentStyle={styles.inputContent}
-                  // left={<PaperTextInput.Icon icon="lock-outline" />}
-                  right={
-                    <PaperTextInput.Icon
-                      icon={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                      onPress={() => setShowPassword((prev) => !prev)}
-                    />
-                  }
-                  placeholder="••••••••••••"
-                  placeholderTextColor="#9b9ca5"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
-                  cursorColor="#a16207"
-                  theme={paperTheme}
-                />
-              </View>
+                <View style={[styles.inputWrapper]}>
+                  <PaperTextInput
+                    ref={passwordInputRef}
+                    style={styles.input}
+                    mode="flat"
+                    underlineColor="transparent"
+                    activeUnderlineColor="transparent"
+                    contentStyle={styles.inputContent}
+                    // left={<PaperTextInput.Icon icon="lock-outline" />}
+                    right={
+                      <PaperTextInput.Icon
+                        icon={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        onPress={() => setShowPassword((prev) => !prev)}
+                      />
+                    }
+                    placeholder="••••••••••••"
+                    placeholderTextColor="#9b9ca5"
+                    secureTextEntry={!showPassword}
+                    value={password}
+                    onChangeText={setPassword}
+                    cursorColor="#a16207"
+                    theme={paperTheme}
+                  />
+                </View>
 
-              <TouchableOpacity style={styles.forgotPasswordContainer} onPress={() => navigation.navigate('EnterEmailScreen')}>
-                <Text style={[styles.forgotPassword, { color: paperTheme.colors.onSurfaceVariant, borderBottomWidth: 0.3, borderBottomColor: paperTheme.colors.onSurfaceVariant }]}>Forgot Password ?</Text>
-              </TouchableOpacity>
+                <TouchableOpacity style={styles.forgotPasswordContainer} onPress={() => navigation.navigate('EnterEmailScreen')}>
+                  <Text style={[styles.forgotPassword, { color: paperTheme.colors.onSurfaceVariant, borderBottomWidth: 0.3, borderBottomColor: paperTheme.colors.onSurfaceVariant }]}>Forgot Password ?</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.button,
-                  { backgroundColor: paperTheme.colors.primary, borderRadius: 15 },
-                  loginLoading && styles.buttonDisabled,
-                ]}
-                onPress={onLogin}
-                disabled={loginLoading}
-                activeOpacity={0.9}
-              >
-                {loginLoading ? (
-                  <ActivityIndicator color={paperTheme.colors.onPrimary} />
-                ) : (
-                  <Text style={[styles.buttonText, { color: paperTheme.colors.onPrimary, fontSize: 14 }]}>
-                    SIGN IN &gt;
-                  </Text>
-                )}
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    { backgroundColor: paperTheme.colors.primary, borderRadius: 15 },
+                    loginLoading && styles.buttonDisabled,
+                  ]}
+                  onPress={onLogin}
+                  disabled={loginLoading}
+                  activeOpacity={0.9}
+                >
+                  {loginLoading ? (
+                    <ActivityIndicator color={paperTheme.colors.onPrimary} />
+                  ) : (
+                    <Text style={[styles.buttonText, { color: paperTheme.colors.onPrimary, fontSize: 14 }]}>
+                      SIGN IN &gt;
+                    </Text>
+                  )}
+                </TouchableOpacity>
 
-              <View style={styles.dividerRow}>
-                <View style={styles.divider} />
-                <Text style={[styles.dividerText, { color: paperTheme.colors.onSurfaceVariant }]}>Or Authenticate With</Text>
-                <View style={styles.divider} />
-              </View>
+                <View style={styles.dividerRow}>
+                  <View style={styles.divider} />
+                  <Text style={[styles.dividerText, { color: paperTheme.colors.onSurfaceVariant }]}>Or Authenticate With</Text>
+                  <View style={styles.divider} />
+                </View>
 
-              {/* <TouchableOpacity onPress={onSignUp}>
+                {/* <TouchableOpacity onPress={onSignUp}>
                 <Text style={[styles.registerText, { color: paperTheme.colors.onSurfaceVariant }]}>
                   New staff ? <Text style={styles.registerLink}>Register Account</Text>
                 </Text>
               </TouchableOpacity> */}
-            </View>
+              </View>
 
-          </View>
-        </KeyboardAwareScrollView>
-        
+            </View>
+          </KeyboardAwareScrollView>
+
         </ScrollView>
 
+        {trialLoading && (
+          <View style={styles.trialLoadingOverlay}>
+            <ActivityIndicator size="large" color={paperTheme.colors.primary} />
+            <Text style={[styles.trialLoadingText, { color: paperTheme.colors.onSurface }]}>
+              Starting trial...
+            </Text>
+          </View>
+        )}
+
         {alertConfig && (
-        <CommonAlert
-          visible={visible}
-          type={alertConfig.type}
-          title={alertConfig.title}
-          message={alertConfig.message}
-          buttons={alertConfig.buttons}
-          positiveButtonText={alertConfig.positiveButtonText}
-          negativeButtonText={alertConfig.negativeButtonText}
-          onPositivePress={alertConfig.onPositivePress}
-          onNegativePress={alertConfig.onNegativePress}
-          onClose={hideAlert}
-        />
-      )}
+          <CommonAlert
+            visible={visible}
+            type={alertConfig.type}
+            title={alertConfig.title}
+            message={alertConfig.message}
+            buttons={alertConfig.buttons}
+            positiveButtonText={alertConfig.positiveButtonText}
+            negativeButtonText={alertConfig.negativeButtonText}
+            onPositivePress={alertConfig.onPositivePress}
+            onNegativePress={alertConfig.onNegativePress}
+            onClose={hideAlert}
+            MoreDetails={alertConfig.MoreDetails}
+            OtherDescirption={alertConfig.OtherDescirption}
+            OtherButtonPress={alertConfig.OtherButtonPress}
+            OtherButtonText={alertConfig.OtherButtonText}
+          />
+        )}
       </SafeAreaView>
     </>
   );
@@ -345,7 +552,7 @@ const styles = StyleSheet.create({
   },
   lottie: {
     width: '100%',
-    height:250,
+    height: 250,
   },
   heading: {
     fontFamily: fonts.PoppinsBold,
@@ -433,6 +640,19 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.7,
+  },
+  trialLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  trialLoadingText: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 14,
+    marginTop: 14,
+    letterSpacing: 0.5,
   },
   dividerRow: {
     flexDirection: 'row',
