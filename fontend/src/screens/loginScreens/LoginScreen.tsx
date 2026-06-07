@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
-  Alert,
+  ActivityIndicator,
   BackHandler,
   Keyboard,
   Platform,
@@ -21,30 +21,44 @@ import { useFocusEffect } from '@react-navigation/native';
 import { RootStackParamList } from '../../navigation/RootStackParamsList';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { login_Service } from '../../services/AuthService';
-import { useDispatch } from 'react-redux';
-import { AppDispatch } from '../../store/store';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '../../store/store';
 import { devLog } from '../../utils/devLog';
 import { saveToken } from '../../utils/secureStorage';
 import { setUserData } from '../../store/reducers/AuthReducer';
 import { useCommonAlert } from '../../hooks/useCommonAlert';
 import CommonAlert from '../../components/CommonAlert/CommonAlert';
 
-const appVersion = require('../../../package.json').version;
+const MOBILE_DIGIT_LENGTH = 10;
+const LOCAL_MOBILE_PATTERN = /^0\d{9}$/;
 
+function toLocalMobileNumber(text: string): string {
+  let digits = text.replace(/\D/g, '');
+  if (digits.length > 0 && digits[0] !== '0') {
+    digits = `0${digits}`;
+  }
+  return digits.slice(0, MOBILE_DIGIT_LENGTH);
+}
+
+function isValidLocalMobileNumber(value: string): boolean {
+  return LOCAL_MOBILE_PATTERN.test(value);
+}
 
 type Props = NativeStackScreenProps<RootStackParamList, "LoginScreen">;
 
 export default function LoginScreen({ navigation }: Props) {
-  const [email, setEmail] = useState("chamathhasarinda4321@gmail.com");
-  const [password, setPassword] = useState('123456');
+  const [phone, setPhone] = useState('0760352847');
+  const [password, setPassword] = useState('111111');
   const [showPassword, setShowPassword] = useState(false);
   const { paperTheme, resolvedTheme } = useTheme();
   const scrollRef = useRef<any>(null);
-  const emailInputRef = useRef<any>(null);
+  const phoneInputRef = useRef<any>(null);
   const passwordInputRef = useRef<any>(null);
   const dispatch = useDispatch<AppDispatch>();
+  const loginLoading = useSelector((state: RootState) => state.AuthReducer.Login.loading);
 
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
+  const phoneKeyboardType = Platform.OS === 'android' ? 'numeric' : 'number-pad';
 
   useFocusEffect(
     useCallback(() => {
@@ -74,50 +88,74 @@ export default function LoginScreen({ navigation }: Props) {
   );
 
   const onLogin = async () => {
-
-    
-
-
-
-    if (!email.trim() || !password.trim()) {
-     
-      show_Alert(
-        "error",
-        "Validation",
-        "Please enter both institutional email and password.",
-        1,
-        true,
-        "OK",
-        () => {
-            console.log("do it")
-        },
-    )
+    if (loginLoading) {
       return;
     }
-    try {
-      const response:any = await dispatch(login_Service({ email, password })).unwrap();
-      devLog('Login response:', response);
-      saveToken(response.token);
-      dispatch(setUserData(response));
-    
-      Keyboard.dismiss();
-      navigation.reset({ index: 0, routes: [{ name: 'ModuleHub' }] });
-    } catch (error) {
-     devLog('Login error:', error);
-     show_Alert(
-      "error",
-      "Error",
-       error.message || "Login failed ",
-      1,
-      true,
-      "OK",
-      () => {
-        console.log("do it")
-      },
-    )
-    }
-    
 
+    if (!phone.trim() || !password.trim()) {
+      show_Alert(
+        'error',
+        'Validation',
+        'Please enter your mobile number and password.',
+        1,
+        false,
+        'OK',
+        () => {},
+      );
+      return;
+    }
+
+    if (!isValidLocalMobileNumber(phone.trim())) {
+      show_Alert(
+        'error',
+        'Validation',
+        'Mobile number must be 10 digits and start with 0 (e.g. 0712345678).',
+        1,
+        false,
+        'OK',
+        () => {},
+      );
+      return;
+    }
+
+    try {
+      Keyboard.dismiss();
+      const response = await dispatch(
+        login_Service({ phone: phone.trim(), password }),
+      ).unwrap();
+
+      devLog('Login response: login screen',JSON.stringify(response)); 
+      await saveToken(response.token);
+      dispatch(setUserData(response));
+
+      if (response.trialExpired) {
+        show_Alert(
+          'pending',
+          'Trial ended',
+          response.message || 'Your trial has ended. Please subscribe to continue.',
+          1,
+          false,
+          'Continue',
+          () => {
+            // navigation.reset({ index: 0, routes: [{ name: 'ModuleHub' }] });
+          },
+        );
+        return;
+      }
+
+      navigation.reset({ index: 0, routes: [{ name: 'ModuleHub' }] });
+    } catch (error: any) {
+      devLog('Login error:', error);
+      show_Alert(
+        'error',
+        'Error',
+        error?.message || 'Login failed',
+        1,
+        false,
+        'OK',
+        () => {},
+      );
+    }
   };
 
   const onSignUp = () => {
@@ -168,24 +206,27 @@ export default function LoginScreen({ navigation }: Props) {
           <View style={[styles.container, { backgroundColor: paperTheme.colors.background }]}>
             <View>
               <Text style={[styles.heading, { color: paperTheme.colors.onSurface }]}>Sign In</Text>
-              <Text style={[styles.subheading, { color: paperTheme.colors.onSurfaceVariant }]}>Please provide your academic credentials.</Text>
+              <Text style={[styles.subheading, { color: paperTheme.colors.onSurfaceVariant }]}>
+                Sign in with your owner mobile number and password.
+              </Text>
 
-              <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}> EMAIL</Text>
+              <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
+                MOBILE NUMBER
+              </Text>
               <View style={styles.inputWrapper}>
                 <PaperTextInput
-                  ref={emailInputRef}
+                  ref={phoneInputRef}
                   style={styles.input}
                   mode="flat"
                   underlineColor="transparent"
                   activeUnderlineColor="transparent"
                   contentStyle={styles.inputContent}
-                  // left={<PaperTextInput.Icon icon="at" />}
-                  placeholder="Enter your email"
+                  placeholder="e.g. 0712345678"
                   placeholderTextColor="#9b9ca5"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  value={email}
-                  onChangeText={setEmail}
+                  keyboardType={phoneKeyboardType}
+                  maxLength={MOBILE_DIGIT_LENGTH}
+                  value={phone}
+                  onChangeText={(text) => setPhone(toLocalMobileNumber(text))}
                   cursorColor="#a16207"
                   theme={paperTheme}
                 />
@@ -224,8 +265,23 @@ export default function LoginScreen({ navigation }: Props) {
                 <Text style={[styles.forgotPassword, { color: paperTheme.colors.onSurfaceVariant, borderBottomWidth: 0.3, borderBottomColor: paperTheme.colors.onSurfaceVariant }]}>Forgot Password ?</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={[styles.button, { backgroundColor: paperTheme.colors.primary, borderRadius: 15 }]} onPress={onLogin}>
-                <Text style={[styles.buttonText, { color: paperTheme.colors.onPrimary, fontSize: 14 }]}>SIGN IN &gt;</Text>
+              <TouchableOpacity
+                style={[
+                  styles.button,
+                  { backgroundColor: paperTheme.colors.primary, borderRadius: 15 },
+                  loginLoading && styles.buttonDisabled,
+                ]}
+                onPress={onLogin}
+                disabled={loginLoading}
+                activeOpacity={0.9}
+              >
+                {loginLoading ? (
+                  <ActivityIndicator color={paperTheme.colors.onPrimary} />
+                ) : (
+                  <Text style={[styles.buttonText, { color: paperTheme.colors.onPrimary, fontSize: 14 }]}>
+                    SIGN IN &gt;
+                  </Text>
+                )}
               </TouchableOpacity>
 
               <View style={styles.dividerRow}>
@@ -370,6 +426,9 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     letterSpacing: 3,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   dividerRow: {
     flexDirection: 'row',

@@ -1,35 +1,46 @@
 export interface LoginRequest {
-    email: string;
-    password: string;
+  phone: string;
+  password: string;
+}
+
+export interface LoginUser {
+  _id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  role: string;
+  shopId?: string;
+  isFirsttimeLogin?: boolean;
+  isInternalUser?: boolean;
+  [key: string]: unknown;
 }
 
 export interface LoginResponse {
-    success?: boolean;
-    _id: string;
-    name: string;
-    email: string;
-    phone?: string;
-    role: string;
-    message: string;
+  success: boolean;
+  message: string;
+  token: string;
+  tokenExpiresInSeconds?: number;
+  showTrialPrompt?: boolean;
+  trialExpired?: boolean;
+  user: LoginUser;
+  shop: Record<string, unknown> | null;
 }
 
 export interface SignUpRequest {
-    name: string;
-    email: string;
-    phone: string;
-    password: string;
-    role: string;
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+  role: string;
 }
 
-export interface SignUpResponse { 
-    success: boolean;
-    _id: string;
-    name: string;
-    email: string;
-    phone: string;
-    role: string;
-    message: string;
-    token: string;
+export interface SignUpResponse {
+  success: boolean;
+  _id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  message: string;
+  token: string;
 }
-
-
