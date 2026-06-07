@@ -17,6 +17,7 @@ import CostAnalysisScreen from '../screens/cost/CostAnalysisScreen';
 import CostManagementScreen from '../screens/cost/CostManagementScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import ProfileDetailsScreen from '../screens/settings/ProfileDetailsScreen';
+import ShopDetailsScreen from '../screens/settings/ShopDetailsScreen';
 import ManageAccountScreen from '../screens/settings/ManageAccountScreen';
 import EditUserScreen from '../screens/settings/EditUserScreen';
 import ThemePreferenceScreen from '../screens/settings/ThemePreferenceScreen';
@@ -55,6 +56,7 @@ export default function AppNavigator() {
         <Stack.Screen name="CostManagementMain" component={CostManagementScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
         <Stack.Screen name="ProfileDetails" component={ProfileDetailsScreen} />
+        <Stack.Screen name="ShopDetails" component={ShopDetailsScreen} />
         <Stack.Screen name="ManageAccount" component={ManageAccountScreen} />
         <Stack.Screen name="EditUser" component={EditUserScreen} />
         <Stack.Screen name="ThemePreference" component={ThemePreferenceScreen} />

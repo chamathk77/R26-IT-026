@@ -15,6 +15,36 @@ export interface LoginUser {
   [key: string]: unknown;
 }
 
+export interface LoginShop {
+  _id?: string;
+  shopId?: string;
+  shopName?: string;
+  address?: string;
+  shopMobileNumber?: string;
+  ownerFirstName?: string;
+  ownerLastName?: string;
+  ownerMobileNumber?: string;
+  email?: string;
+  isVerifyEmail?: boolean;
+  isVerifyPhoneNumber?: boolean;
+  onboardStep?: string;
+  manageInventory?: boolean;
+  sms?: boolean;
+  kpi?: boolean;
+  analyticsModule?: boolean;
+  smsMobileNumber?: boolean;
+  customerManualOrder?: boolean;
+  costModule?: boolean;
+  marketingModule?: boolean;
+  maxUsers?: number;
+  status?: string;
+  trailStartDate?: string | null;
+  trailEndDate?: string | null;
+  isTrailStared?: boolean;
+  isTrailCompleted?: boolean;
+  [key: string]: unknown;
+}
+
 export interface LoginResponse {
   success: boolean;
   message: string;
@@ -23,7 +53,7 @@ export interface LoginResponse {
   showTrialPrompt?: boolean;
   trialExpired?: boolean;
   user: LoginUser;
-  shop: Record<string, unknown> | null;
+  shop: LoginShop | null;
 }
 
 export interface SignUpRequest {

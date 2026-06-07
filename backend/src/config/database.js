@@ -17,7 +17,7 @@ async function connectDatabase() {
     }
     throw err;
   }
-  console.log('MongoDB connected');
+  console.log(`MongoDB connected (database: ${mongoose.connection.db.databaseName})`);
 }
 
 module.exports = { connectDatabase };

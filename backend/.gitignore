@@ -10,3 +10,8 @@ uploads/products/*
 # Uploaded payment receipts
 uploads/receipts/*
 !uploads/receipts/.gitkeep
+
+
+# lock files
+package-lock.json
+yarn.lock

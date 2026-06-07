@@ -41,6 +41,7 @@ export type RootStackParamList = {
   EnterEmailScreen: undefined;
   Settings: undefined;
   ProfileDetails: undefined;
+  ShopDetails: undefined;
   ManageAccount: undefined;
   EditUser: { userId: string };
   ThemePreference: undefined;

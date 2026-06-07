@@ -25,7 +25,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../../store/store';
 import { devLog } from '../../utils/devLog';
 import { saveToken } from '../../utils/secureStorage';
-import { setUserData } from '../../store/reducers/AuthReducer';
+import { setLoginSession } from '../../store/reducers/AuthReducer';
 import { useCommonAlert } from '../../hooks/useCommonAlert';
 import CommonAlert from '../../components/CommonAlert/CommonAlert';
 
@@ -126,24 +126,28 @@ export default function LoginScreen({ navigation }: Props) {
 
       devLog('Login response: login screen',JSON.stringify(response)); 
       await saveToken(response.token);
-      dispatch(setUserData(response));
+      dispatch(
+        setLoginSession({
+          user: response.user,
+          shop: response.shop ?? null,
+        }),
+      );
 
-      if (response.trialExpired) {
-        show_Alert(
-          'pending',
-          'Trial ended',
-          response.message || 'Your trial has ended. Please subscribe to continue.',
-          1,
-          false,
-          'Continue',
-          () => {
-            // navigation.reset({ index: 0, routes: [{ name: 'ModuleHub' }] });
-          },
-        );
-        return;
-      }
+      // if (response.trialExpired) {
+      //   show_Alert(
+      //     'pending',
+      //     'Trial ended',
+      //     response.message || 'Your trial has ended. Please subscribe to continue.',
+      //     1,
+      //     false,
+      //     'Continue',
+      //     () => {
+      //       // navigation.reset({ index: 0, routes: [{ name: 'ModuleHub' }] });
+      //     },
+      //   );
+      //   return;
+      // }
 
-      navigation.reset({ index: 0, routes: [{ name: 'ModuleHub' }] });
     } catch (error: any) {
       devLog('Login error:', error);
       show_Alert(

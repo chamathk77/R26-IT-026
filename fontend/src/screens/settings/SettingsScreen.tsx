@@ -3,7 +3,6 @@ import {
   Alert,
   ScrollView,
   StatusBar,
-  StyleSheet,
   Text,
   TouchableOpacity,
   View,
@@ -12,22 +11,118 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/RootStackParamsList';
-import { fonts } from '../../constants/fonts';
+import { useDispatch, useSelector } from 'react-redux';
 import { useTheme } from '../../context/ThemeContext';
 import { useDummySession } from '../../context/DummySessionContext';
+import { AppDispatch, RootState } from '../../store/store';
+import { clearLoginSession } from '../../store/reducers/AuthReducer';
+import { clearSavedToken } from '../../utils/secureStorage';
 import CommonHeader from '../../components/CommonHeader/CommonHeader';
+import { cardShadow, settingsMenuStyles as styles } from './settingsDetailStyles';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
+type MenuItem = {
+  key: string;
+  title: string;
+  description: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconBg: string;
+  iconColor: string;
+  onPress: () => void;
+  danger?: boolean;
+};
+
+function SettingsMenuGroup({
+  label,
+  items,
+  paperTheme,
+  resolvedTheme,
+}: {
+  label: string;
+  items: MenuItem[];
+  paperTheme: ReturnType<typeof useTheme>['paperTheme'];
+  resolvedTheme: 'light' | 'dark';
+}) {
+  return (
+    <>
+      <Text
+        style={[styles.menuSectionLabel, { color: paperTheme.colors.onSurfaceVariant }]}
+      >
+        {label}
+      </Text>
+      <View
+        style={[
+          styles.menuGroup,
+          {
+            backgroundColor: paperTheme.colors.surface,
+            borderColor: paperTheme.colors.outlineVariant,
+          },
+          cardShadow(resolvedTheme),
+        ]}
+      >
+        {items.map((item, index) => (
+          <React.Fragment key={item.key}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={item.onPress}
+              activeOpacity={0.75}
+            >
+              <View style={[styles.iconCircle, { backgroundColor: item.iconBg }]}>
+                <Ionicons name={item.icon} size={20} color={item.iconColor} />
+              </View>
+              <View style={styles.cardBody}>
+                <Text
+                  style={[
+                    styles.cardTitle,
+                    {
+                      color: item.danger
+                        ? '#dc2626'
+                        : paperTheme.colors.onSurface,
+                    },
+                  ]}
+                >
+                  {item.title}
+                </Text>
+                <Text
+                  style={[styles.cardDesc, { color: paperTheme.colors.onSurfaceVariant }]}
+                >
+                  {item.description}
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={paperTheme.colors.outline}
+              />
+            </TouchableOpacity>
+            {index < items.length - 1 ? (
+              <View
+                style={[
+                  styles.menuDivider,
+                  { backgroundColor: paperTheme.colors.outlineVariant },
+                ]}
+              />
+            ) : null}
+          </React.Fragment>
+        ))}
+      </View>
+    </>
+  );
+}
+
 export default function SettingsScreen({ navigation }: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
-  const { currentUser, logoutSession } = useDummySession();
+  const dispatch = useDispatch<AppDispatch>();
+  const { logoutSession } = useDummySession();
+  const user = useSelector((state: RootState) => state.AuthReducer.Login.userData);
+  const shop = useSelector((state: RootState) => state.AuthReducer.Login.shopData);
 
-  const surface = paperTheme.colors.surface;
   const primary = paperTheme.colors.primary;
-
-  const showManage =
-    currentUser.role === 'owner' || currentUser.role === 'admin';
+  const displayName = user?.name ?? 'User';
+  const displayRole = user?.role ?? 'staff';
+  const shopLabel = shop?.shopName?.trim() || shop?.shopId || 'No shop linked';
+  const showManage = displayRole === 'owner' || displayRole === 'admin';
 
   const confirmLogout = () => {
     Alert.alert('Log out', 'Are you sure you want to log out?', [
@@ -35,7 +130,11 @@ export default function SettingsScreen({ navigation }: Props) {
       {
         text: 'Log out',
         style: 'destructive',
-        onPress: () => logoutSession(),
+        onPress: async () => {
+          await clearSavedToken();
+          dispatch(clearLoginSession());
+          logoutSession();
+        },
       },
     ]);
   };
@@ -46,6 +145,75 @@ export default function SettingsScreen({ navigation }: Props) {
       routes: [{ name: 'ModuleHub' }],
     });
   };
+
+  const accountItems: MenuItem[] = [
+    {
+      key: 'profile',
+      title: 'Profile details',
+      description: 'Your name, phone, email & role',
+      icon: 'person-outline',
+      iconBg: paperTheme.colors.secondaryContainer,
+      iconColor: paperTheme.colors.secondary,
+      onPress: () => navigation.navigate('ProfileDetails'),
+    },
+    {
+      key: 'shop',
+      title: 'Shop details',
+      description: 'Shop, owner & subscription info',
+      icon: 'storefront-outline',
+      iconBg: paperTheme.colors.primaryContainer,
+      iconColor: primary,
+      onPress: () => navigation.navigate('ShopDetails'),
+    },
+    ...(showManage
+      ? [
+          {
+            key: 'manage',
+            title: 'Manage account',
+            description:
+              displayRole === 'owner' ? 'Admins & staff' : 'Staff accounts',
+            icon: 'people-outline' as const,
+            iconBg: paperTheme.colors.tertiaryContainer,
+            iconColor: paperTheme.colors.tertiary,
+            onPress: () => navigation.navigate('ManageAccount'),
+          },
+        ]
+      : []),
+  ];
+
+  const preferenceItems: MenuItem[] = [
+    {
+      key: 'theme',
+      title: 'Change theme',
+      description: 'Light, dark, or match system',
+      icon: 'color-palette-outline',
+      iconBg: paperTheme.colors.primaryContainer,
+      iconColor: primary,
+      onPress: () => navigation.navigate('ThemePreference'),
+    },
+    {
+      key: 'module',
+      title: 'Change module',
+      description: 'Back to hub — POS or Cost Management',
+      icon: 'grid-outline',
+      iconBg: paperTheme.colors.surfaceVariant,
+      iconColor: primary,
+      onPress: goToModuleHub,
+    },
+  ];
+
+  const sessionItems: MenuItem[] = [
+    {
+      key: 'logout',
+      title: 'Log out',
+      description: 'End this session',
+      icon: 'log-out-outline',
+      iconBg: '#fee2e2',
+      iconColor: '#b91c1c',
+      onPress: confirmLogout,
+      danger: true,
+    },
+  ];
 
   return (
     <>
@@ -68,193 +236,80 @@ export default function SettingsScreen({ navigation }: Props) {
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
         >
-          <View style={[styles.profileBanner, { backgroundColor: surface }]}>
+          <View
+            style={[
+              styles.heroCard,
+              {
+                backgroundColor: paperTheme.colors.surface,
+                borderColor: paperTheme.colors.outlineVariant,
+                borderWidth: 1,
+              },
+              cardShadow(resolvedTheme),
+            ]}
+          >
             <View
-              style={[styles.avatar, { backgroundColor: paperTheme.colors.primaryContainer }]}
-            >
-              <Text style={[styles.avatarText, { color: primary }]}>
-                {currentUser.name
-                  .split(' ')
-                  .map((w) => w[0])
-                  .join('')
-                  .slice(0, 2)
-                  .toUpperCase()}
-              </Text>
-            </View>
-            <View style={styles.profileText}>
-              <Text style={[styles.displayName, { color: paperTheme.colors.onSurface }]}>
-                {currentUser.name}
-              </Text>
-              <Text style={[styles.roleHint, { color: paperTheme.colors.onSurfaceVariant }]}>
-                {currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1)}
-              </Text>
+              style={[styles.heroAccent, { backgroundColor: primary }]}
+            />
+            <View style={styles.heroRow}>
+              <View
+                style={[
+                  styles.avatar,
+                  {
+                    backgroundColor: paperTheme.colors.primaryContainer,
+                    borderColor: `${primary}44`,
+                  },
+                ]}
+              >
+                <Text style={[styles.avatarText, { color: primary }]}>
+                  {displayName
+                    .split(' ')
+                    .map((w) => w[0])
+                    .join('')
+                    .slice(0, 2)
+                    .toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.profileText}>
+                <Text style={[styles.displayName, { color: paperTheme.colors.onSurface }]}>
+                  {displayName}
+                </Text>
+                <Text style={[styles.roleHint, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  {shopLabel}
+                </Text>
+                <View
+                  style={[
+                    styles.roleBadge,
+                    { backgroundColor: paperTheme.colors.primaryContainer },
+                  ]}
+                >
+                  <Text style={[styles.roleBadgeText, { color: primary }]}>
+                    {displayRole.charAt(0).toUpperCase() + displayRole.slice(1)}
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
 
-          <TouchableOpacity
-            style={[styles.card, { backgroundColor: surface }]}
-            onPress={() => navigation.navigate('ProfileDetails')}
-            activeOpacity={0.85}
-          >
-            <View style={[styles.iconCircle, { backgroundColor: paperTheme.colors.secondaryContainer }]}>
-              <Ionicons name="person-outline" size={22} color={paperTheme.colors.secondary} />
-            </View>
-            <View style={styles.cardBody}>
-              <Text style={[styles.cardTitle, { color: paperTheme.colors.onSurface }]}>
-                Profile details
-              </Text>
-              <Text style={[styles.cardDesc, { color: paperTheme.colors.onSurfaceVariant }]}>
-                Name, phone, email & role
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={paperTheme.colors.outline} />
-          </TouchableOpacity>
-
-          {showManage ? (
-            <TouchableOpacity
-              style={[styles.card, { backgroundColor: surface }]}
-              onPress={() => navigation.navigate('ManageAccount')}
-              activeOpacity={0.85}
-            >
-              <View style={[styles.iconCircle, { backgroundColor: paperTheme.colors.tertiaryContainer }]}>
-                <Ionicons name="people-outline" size={22} color={paperTheme.colors.tertiary} />
-              </View>
-              <View style={styles.cardBody}>
-                <Text style={[styles.cardTitle, { color: paperTheme.colors.onSurface }]}>
-                  Manage account
-                </Text>
-                <Text style={[styles.cardDesc, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  {currentUser.role === 'owner'
-                    ? 'Admins & staff'
-                    : 'Staff accounts'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={paperTheme.colors.outline} />
-            </TouchableOpacity>
-          ) : null}
-
-          <TouchableOpacity
-            style={[styles.card, { backgroundColor: surface }]}
-            onPress={() => navigation.navigate('ThemePreference')}
-            activeOpacity={0.85}
-          >
-            <View style={[styles.iconCircle, { backgroundColor: paperTheme.colors.primaryContainer }]}>
-              <Ionicons name="color-palette-outline" size={22} color={primary} />
-            </View>
-            <View style={styles.cardBody}>
-              <Text style={[styles.cardTitle, { color: paperTheme.colors.onSurface }]}>
-                Change theme
-              </Text>
-              <Text style={[styles.cardDesc, { color: paperTheme.colors.onSurfaceVariant }]}>
-                Light, dark, or match system
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={paperTheme.colors.outline} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.card, { backgroundColor: surface }]}
-            onPress={goToModuleHub}
-            activeOpacity={0.85}
-          >
-            <View style={[styles.iconCircle, { backgroundColor: paperTheme.colors.surfaceVariant }]}>
-              <Ionicons name="grid-outline" size={22} color={paperTheme.colors.primary} />
-            </View>
-            <View style={styles.cardBody}>
-              <Text style={[styles.cardTitle, { color: paperTheme.colors.onSurface }]}>
-                Change module
-              </Text>
-              <Text style={[styles.cardDesc, { color: paperTheme.colors.onSurfaceVariant }]}>
-                Back to hub — POS or Cost Management
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={paperTheme.colors.outline} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.card, { backgroundColor: surface }]}
-            onPress={confirmLogout}
-            activeOpacity={0.85}
-          >
-            <View style={[styles.iconCircle, { backgroundColor: '#fee2e2' }]}>
-              <Ionicons name="log-out-outline" size={22} color="#b91c1c" />
-            </View>
-            <View style={styles.cardBody}>
-              <Text style={[styles.cardTitle, { color: paperTheme.colors.onSurface }]}>
-                Log out
-              </Text>
-              <Text style={[styles.cardDesc, { color: paperTheme.colors.onSurfaceVariant }]}>
-                End this session
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={paperTheme.colors.outline} />
-          </TouchableOpacity>
+          <SettingsMenuGroup
+            label="Account"
+            items={accountItems}
+            paperTheme={paperTheme}
+            resolvedTheme={resolvedTheme}
+          />
+          <SettingsMenuGroup
+            label="Preferences"
+            items={preferenceItems}
+            paperTheme={paperTheme}
+            resolvedTheme={resolvedTheme}
+          />
+          <SettingsMenuGroup
+            label="Session"
+            items={sessionItems}
+            paperTheme={paperTheme}
+            resolvedTheme={resolvedTheme}
+          />
         </ScrollView>
       </SafeAreaView>
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  scroll: { paddingHorizontal: 16, paddingBottom: 32 },
-  profileBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-    marginTop: 8,
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontFamily: fonts.PoppinsBold,
-    fontSize: 18,
-  },
-  profileText: {
-    marginLeft: 14,
-    flex: 1,
-  },
-  displayName: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 20,
-  },
-  roleHint: {
-    fontFamily: fonts.PoppinsRegular,
-    fontSize: 14,
-    marginTop: 2,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-  },
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  cardBody: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 16,
-  },
-  cardDesc: {
-    fontFamily: fonts.PoppinsRegular,
-    fontSize: 12,
-    marginTop: 2,
-  },
-});

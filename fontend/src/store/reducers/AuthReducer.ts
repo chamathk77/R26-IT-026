@@ -3,6 +3,7 @@ import {
   login_Service,
 } from "../../services/AuthService";
 import { devLog } from "../../utils/devLog";
+import type { LoginShop, LoginUser } from "../../type/auth";
 
 interface AuthState {
   Login: {
@@ -11,8 +12,8 @@ interface AuthState {
     success: boolean;
     data: any;
 
-    userData: any;
-
+    userData: LoginUser | null;
+    shopData: LoginShop | null;
   };
 
   ForgotPasswordEnterEmail: {
@@ -49,6 +50,7 @@ const initialState: AuthState = {
     data: null,
     //
     userData: null,
+    shopData: null,
 
 
   },
@@ -82,11 +84,20 @@ export const AuthSlice = createSlice({
   name: "Auth",
   initialState,
   reducers: {
-    setUserData: (state, action: PayloadAction<any>) => {
-      state.Login.userData = action.payload;
-      devLog("setUserData saved to reducer ", action.payload);
+    setLoginSession: (
+      state,
+      action: PayloadAction<{ user: LoginUser; shop: LoginShop | null }>,
+    ) => {
+      state.Login.userData = action.payload.user;
+      state.Login.shopData = action.payload.shop;
+      devLog("setLoginSession saved to reducer", action.payload);
     },
-
+    clearLoginSession: (state) => {
+      state.Login.userData = null;
+      state.Login.shopData = null;
+      state.Login.data = null;
+      state.Login.success = false;
+    },
   },
   extraReducers: (builder) => {
     builder.addCase(login_Service.pending, (state) => {
@@ -101,6 +112,9 @@ export const AuthSlice = createSlice({
       state.Login.success = true;
       state.Login.error = null;
       state.Login.data = action.payload;
+      state.Login.userData = action.payload.user;
+      state.Login.shopData = action.payload.shop;
+
     });
     builder.addCase(login_Service.rejected, (state, action) => {
       console.log("Login Rejected:", action.error);
@@ -115,7 +129,8 @@ export const AuthSlice = createSlice({
 });
 
 export const {
-  setUserData,
+  setLoginSession,
+  clearLoginSession,
 } = AuthSlice.actions;
 
 export default AuthSlice.reducer;
