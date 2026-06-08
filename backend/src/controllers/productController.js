@@ -97,7 +97,7 @@ const updateProduct = async (req, res) => {
     }
 
     const product = await Product.findByIdAndUpdate(id, updates, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).populate('createdBy', 'name email role');
 

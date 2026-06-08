@@ -32,7 +32,7 @@ function startBillingCron() {
 
   const task = cron.schedule(
     schedule,
-    async () => {x
+    async () => {
       console.log('[billing-cron] Running scheduled next payment check...');
       try {
         await runDailyBillingCheck();

@@ -114,7 +114,7 @@ async function createUpFrontInvoiceIfNeeded(shop) {
 const startTrail = async (req, res) => {
   try {
     const { startTrial, shopId: bodyShopId } = req.body;
-// parse start trial boolean
+    // parse start trial boolean
     const startTrialParsed = parseStartTrialBoolean(startTrial);
     // check if start trial is a boolean
     if (startTrialParsed === null) {

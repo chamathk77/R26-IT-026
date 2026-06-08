@@ -116,7 +116,7 @@ const updateCategory = async (req, res) => {
     }
 
     const category = await Category.findByIdAndUpdate(id, updates, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).populate('createdBy', 'name email role');
 

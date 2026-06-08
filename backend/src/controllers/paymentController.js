@@ -149,7 +149,7 @@ async function verifyShopAccess(req, shopId) {
 
   return { user, shop };
 }
-
+// get payments by shop
 const getPaymentsByShop = async (req, res) => {
   try {
     const shopId = normalizeShopId(req.params.shopId || req.query.shopId || req.user?.shopId || '');
@@ -192,7 +192,8 @@ const getPaymentsByShop = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
+//
+// get recent payment by shop
 const getRecentPaymentByShop = async (req, res) => {
   try {
     const shopId = normalizeShopId(req.params.shopId || req.query.shopId || req.user?.shopId || '');
@@ -242,7 +243,7 @@ const getRecentPaymentByShop = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
+// get payment by receipt number
 const getPaymentByReceiptNumber = async (req, res) => {
   try {
     const receiptNumber = String(req.params.receiptNumber || '').trim().toUpperCase();
@@ -271,6 +272,8 @@ const getPaymentByReceiptNumber = async (req, res) => {
   }
 };
 
+
+// submit payment receipt
 const submitPayment = async (req, res) => {
   let savedReceiptPath = null;
 
@@ -381,7 +384,7 @@ const submitPayment = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
+// submit up-front payment receipt
 const submitUpFrontPaymentReceipt = async (req, res) => {
   let savedReceiptPath = null;
 
@@ -469,7 +472,8 @@ const submitUpFrontPaymentReceipt = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
+ 
+// resubmit payment receipt
 const resubmitPayment = async (req, res) => {
   let savedReceiptPath = null;
 

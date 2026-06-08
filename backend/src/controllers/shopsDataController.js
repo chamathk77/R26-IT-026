@@ -259,7 +259,7 @@ const updateShopFeatures = async (req, res) => {
     const updated = await ShopsData.findOneAndUpdate(
       { shopId: normalizedShopId },
       { $set: updates },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
 
     res.status(200).json({

@@ -362,7 +362,7 @@ const updateCartSessionStatus = async (req, res) => {
     const cart = await Cart.findOneAndUpdate(
       { user: req.user.id, sessionId },
       { $set: { status: statusNormalized } },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     );
 
     if (!cart) {

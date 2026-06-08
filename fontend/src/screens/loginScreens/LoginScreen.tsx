@@ -228,29 +228,21 @@ export default function LoginScreen({ navigation }: Props) {
             );
           }
         }, 150);
-      } catch (error: unknown) {
-        const message =
-          error instanceof Error ? error.message : "Could not start trial";
-
-        if (
-          error &&
-          typeof error === "object" &&
-          "sessionEnded" in error &&
-          (error as { sessionEnded?: boolean }).sessionEnded
-        ) {
-          await clearSavedToken();
-          dispatch(clearLoginSession());
-        }
-
+      } catch (error: any) {
+        console.log('error in Start Trial', error);
+  
         setTimeout(() => {
           show_Alert(
             "error",
             "Trial failed",
-            message,
+            error.message,
             1,
             false,
             "OK",
-            () => {},
+            async () => {
+              await clearSavedToken();
+              dispatch(clearLoginSession());
+            },
           );
         }, 150);
       } finally {
