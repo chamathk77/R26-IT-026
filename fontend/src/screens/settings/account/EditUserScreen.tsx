@@ -11,12 +11,12 @@ import {
 import { TextInput as PaperTextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../navigation/RootStackParamsList';
-import { fonts } from '../../constants/fonts';
-import { useTheme } from '../../context/ThemeContext';
-import { useDummySession } from '../../context/DummySessionContext';
-import CommonHeader from '../../components/CommonHeader/CommonHeader';
-import { UserRole } from '../../data/dummyUsers';
+import { RootStackParamList } from '../../../navigation/RootStackParamsList';
+import { fonts } from '../../../constants/fonts';
+import { useTheme } from '../../../context/ThemeContext';
+import { useDummySession } from '../../../context/DummySessionContext';
+import CommonHeader from '../../../components/CommonHeader/CommonHeader';
+import { UserRole } from '../../../data/dummyUsers';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditUser'>;
 

@@ -3,18 +3,18 @@ import { ScrollView, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSelector } from 'react-redux';
-import { RootStackParamList } from '../../navigation/RootStackParamsList';
-import { useTheme } from '../../context/ThemeContext';
-import { RootState } from '../../store/store';
-import CommonHeader from '../../components/CommonHeader/CommonHeader';
-import { settingsDetailStyles as styles } from './settingsDetailStyles';
+import { RootStackParamList } from '../../../navigation/RootStackParamsList';
+import { useTheme } from '../../../context/ThemeContext';
+import { RootState } from '../../../store/store';
+import CommonHeader from '../../../components/CommonHeader/CommonHeader';
+import { settingsDetailStyles as styles } from '../shared/settingsDetailStyles';
 import {
   SettingsBadge,
   SettingsDetailRow,
   SettingsEmptyState,
   SettingsHeroCard,
   SettingsSection,
-} from './SettingsDetailComponents';
+} from '../shared/SettingsDetailComponents';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ProfileDetails'>;
 

@@ -5,6 +5,7 @@ import type {
   OnboardingUserConfig,
   ShopFeaturesState,
 } from '../type/onboarding';
+import type { PaymentRecord } from '../type/payment';
 
 export type RootStackParamList = {
   OnboardingScreen: undefined;
@@ -46,4 +47,5 @@ export type RootStackParamList = {
   EditUser: { userId: string };
   ThemePreference: undefined;
   SubscriptionPayments: undefined;
+  PayNow: { payment: PaymentRecord };
 };

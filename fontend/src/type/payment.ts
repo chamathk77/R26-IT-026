@@ -24,3 +24,13 @@ export interface GetPaymentsByShopResponse {
   count: number;
   payments: PaymentRecord[];
 }
+
+export interface SubmitPaymentReceiptResponse {
+  success: boolean;
+  message: string;
+  payment: PaymentRecord;
+  shop?: {
+    shopId: string;
+    status: string | null;
+  };
+}

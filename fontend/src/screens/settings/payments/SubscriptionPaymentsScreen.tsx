@@ -1,6 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
+  Linking,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -13,17 +15,20 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
-import { RootStackParamList } from '../../navigation/RootStackParamsList';
-import { useTheme } from '../../context/ThemeContext';
-import { RootState } from '../../store/store';
-import CommonHeader from '../../components/CommonHeader/CommonHeader';
-import { fonts } from '../../constants/fonts';
-import { fetchPaymentsByShop } from '../../services/PaymentService';
-import { PaymentRecord, PaymentStatus, PaymentType } from '../../type/payment';
-import { useCommonAlert } from '../../hooks/useCommonAlert';
-import CommonAlert from '../../components/CommonAlert/CommonAlert';
-import { cardShadow, settingsDetailStyles as styles } from './settingsDetailStyles';
-import { SettingsBadge, SettingsEmptyState } from './SettingsDetailComponents';
+import { RootStackParamList } from '../../../navigation/RootStackParamsList';
+import { useTheme } from '../../../context/ThemeContext';
+import { RootState } from '../../../store/store';
+import CommonHeader from '../../../components/CommonHeader/CommonHeader';
+import { fonts } from '../../../constants/fonts';
+import {
+  fetchPaymentsByShop,
+  getReceiptImageUrl,
+} from '../../../services/PaymentService';
+import { PaymentRecord, PaymentStatus, PaymentType } from '../../../type/payment';
+import { useCommonAlert } from '../../../hooks/useCommonAlert';
+import CommonAlert from '../../../components/CommonAlert/CommonAlert';
+import { cardShadow, settingsDetailStyles as styles } from '../shared/settingsDetailStyles';
+import { SettingsBadge, SettingsEmptyState } from '../shared/SettingsDetailComponents';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SubscriptionPayments'>;
 
@@ -77,6 +82,32 @@ function getSummaryTitle(typeFilter: PaymentTypeFilter): string {
   if (typeFilter === 'upFront') return 'Up-front payment';
   if (typeFilter === 'subscription') return 'Subscription payment';
   return 'All payments';
+}
+
+function formatPaymentType(type: PaymentType): string {
+  return type === 'upFront' ? 'Up-front' : 'Subscription';
+}
+
+function formatDateTime(isoDate: string | null): string {
+  if (!isoDate) return '—';
+  const parsed = new Date(isoDate);
+  if (Number.isNaN(parsed.getTime())) return isoDate;
+  return parsed.toLocaleString('en-LK', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function formatReceiptUploadStatus(receiptImagePath: string): string {
+  return receiptImagePath === 'pending-upload' ? 'Pending upload' : 'Uploaded';
+}
+
+function shouldShowPayNow(status: PaymentStatus): boolean {
+  return status === 'rejected' || status === 'notPaid';
 }
 
 function getStatusMeta(status: PaymentStatus) {
@@ -202,30 +233,62 @@ function FilterChipRow<T extends string>({
   );
 }
 
+function PaymentDetailRow({
+  label,
+  value,
+  paperTheme,
+}: {
+  label: string;
+  value: string;
+  paperTheme: ReturnType<typeof useTheme>['paperTheme'];
+}) {
+  return (
+    <View style={paymentStyles.detailRow}>
+      <Text style={[paymentStyles.detailLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+        {label}
+      </Text>
+      <Text style={[paymentStyles.detailValue, { color: paperTheme.colors.onSurface }]}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 function PaymentHistoryCard({
   payment,
   paperTheme,
   resolvedTheme,
+  isExpanded,
+  onToggle,
+  onPayNow,
 }: {
   payment: PaymentRecord;
   paperTheme: ReturnType<typeof useTheme>['paperTheme'];
   resolvedTheme: 'light' | 'dark';
+  isExpanded: boolean;
+  onToggle: () => void;
+  onPayNow: () => void;
 }) {
   const statusMeta = getStatusMeta(payment.status);
   const highlight = getStatusHighlight(payment.status, resolvedTheme);
+  const receiptImageUrl = getReceiptImageUrl(payment.receiptImagePath);
+  const showPayNow = isExpanded && shouldShowPayNow(payment.status);
 
   return (
     <View
       style={[
         paymentStyles.historyCard,
         {
-          backgroundColor: highlight.backgroundColor,
+          backgroundColor: isExpanded
+            ? paperTheme.colors.primaryContainer
+            : highlight.backgroundColor,
           borderColor: highlight.borderColor,
           borderLeftColor: highlight.accentColor,
         },
         cardShadow(resolvedTheme),
       ]}
     >
+      <TouchableOpacity activeOpacity={0.92} onPress={onToggle}>
       <View style={paymentStyles.historyTop}>
         <View style={paymentStyles.historyTitleBlock}>
           <Text style={[paymentStyles.monthText, { color: paperTheme.colors.onSurface }]}>
@@ -240,11 +303,18 @@ function PaymentHistoryCard({
             {payment.receiptNumber}
           </Text>
         </View>
-        <SettingsBadge
-          label={statusMeta.label}
-          tone={statusMeta.tone}
-          paperTheme={paperTheme}
-        />
+        <View style={paymentStyles.historyTopTrailing}>
+          <SettingsBadge
+            label={statusMeta.label}
+            tone={statusMeta.tone}
+            paperTheme={paperTheme}
+          />
+          <Ionicons
+            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+            size={18}
+            color={paperTheme.colors.onSurfaceVariant}
+          />
+        </View>
       </View>
 
       <View style={paymentStyles.metaRow}>
@@ -267,6 +337,68 @@ function PaymentHistoryCard({
           {formatAmount(payment.paymentAmount)}
         </Text>
       </View>
+      </TouchableOpacity>
+
+      {isExpanded ? (
+        <View style={paymentStyles.expandedSection}>
+          <PaymentDetailRow
+            label="Shop ID"
+            value={payment.shopId}
+            paperTheme={paperTheme}
+          />
+          <PaymentDetailRow
+            label="Payment type"
+            value={formatPaymentType(payment.paymentType)}
+            paperTheme={paperTheme}
+          />
+          <PaymentDetailRow
+            label="Payment month"
+            value={formatPaymentMonth(payment.paymentMonth)}
+            paperTheme={paperTheme}
+          />
+          <PaymentDetailRow
+            label="Exact payment day"
+            value={formatDateTime(payment.exactPaymentDay)}
+            paperTheme={paperTheme}
+          />
+          <PaymentDetailRow
+            label="Receipt upload"
+            value={formatReceiptUploadStatus(payment.receiptImagePath)}
+            paperTheme={paperTheme}
+          />
+          <PaymentDetailRow
+            label="Created"
+            value={formatDateTime(payment.createdAt)}
+            paperTheme={paperTheme}
+          />
+          <PaymentDetailRow
+            label="Last updated"
+            value={formatDateTime(payment.updatedAt)}
+            paperTheme={paperTheme}
+          />
+
+          {receiptImageUrl ? (
+            <TouchableOpacity
+              style={paymentStyles.receiptPreviewWrap}
+              onPress={() => void Linking.openURL(receiptImageUrl)}
+            >
+              <Image
+                source={{ uri: receiptImageUrl }}
+                style={paymentStyles.receiptPreview}
+                resizeMode="cover"
+              />
+              <Text
+                style={[
+                  paymentStyles.receiptPreviewText,
+                  { color: paperTheme.colors.primary },
+                ]}
+              >
+                View receipt image
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
 
       {payment.reason ? (
         <View
@@ -282,6 +414,21 @@ function PaymentHistoryCard({
             {payment.reason}
           </Text>
         </View>
+      ) : null}
+
+      {showPayNow ? (
+        <TouchableOpacity
+          style={[
+            paymentStyles.payNowButton,
+            { backgroundColor: paperTheme.colors.primary },
+          ]}
+          onPress={onPayNow}
+          activeOpacity={0.9}
+        >
+          <Text style={[paymentStyles.payNowButtonText, { color: paperTheme.colors.onPrimary }]}>
+            Pay now
+          </Text>
+        </TouchableOpacity>
       ) : null}
     </View>
   );
@@ -301,6 +448,7 @@ export default function SubscriptionPaymentsScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [paymentTypeFilter, setPaymentTypeFilter] = useState<PaymentTypeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [expandedPaymentId, setExpandedPaymentId] = useState<string | null>(null);
 
   const loadPayments = useCallback(async () => {
     if (!shopId) {
@@ -325,13 +473,15 @@ export default function SubscriptionPaymentsScreen({ navigation }: Props) {
     try {
       const response = await fetchPaymentsByShop(String(shopId));
       setPayments(response.payments ?? []);
-    } catch (error: any) {
-     
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Could not load payments';
+      setPayments([]);
       setTimeout(() => {
         show_Alert(
           'error',
           'Load failed',
-          error.message,
+          message,
           2,
           false,
           'Retry',
@@ -370,6 +520,17 @@ export default function SubscriptionPaymentsScreen({ navigation }: Props) {
 
   const latestPayment = filteredPayments[0] ?? null;
   const currentStatus = getStatusMeta(latestPayment?.status ?? 'notPaid');
+
+  const togglePaymentCard = useCallback((paymentId: string) => {
+    setExpandedPaymentId((current) => (current === paymentId ? null : paymentId));
+  }, []);
+
+  const navigateToPayNow = useCallback(
+    (payment: PaymentRecord) => {
+      navigation.navigate('PayNow', { payment });
+    },
+    [navigation],
+  );
 
   if (!shopId && !loading) {
     return (
@@ -573,6 +734,9 @@ export default function SubscriptionPaymentsScreen({ navigation }: Props) {
                 payment={payment}
                 paperTheme={paperTheme}
                 resolvedTheme={resolvedTheme}
+                isExpanded={expandedPaymentId === payment._id}
+                onToggle={() => togglePaymentCard(payment._id)}
+                onPayNow={() => navigateToPayNow(payment)}
               />
             ))
           )}
@@ -727,6 +891,10 @@ const paymentStyles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
+  historyTopTrailing: {
+    alignItems: 'flex-end',
+    gap: 8,
+  },
   historyTitleBlock: {
     flex: 1,
     minWidth: 0,
@@ -774,6 +942,57 @@ const paymentStyles = StyleSheet.create({
     fontFamily: fonts.PoppinsRegular,
     fontSize: 12,
     lineHeight: 18,
+  },
+  expandedSection: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#e2e8f0',
+    gap: 10,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  detailLabel: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    flex: 1,
+  },
+  detailValue: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 12,
+    flex: 1.2,
+    textAlign: 'right',
+  },
+  receiptPreviewWrap: {
+    marginTop: 4,
+    alignItems: 'center',
+    gap: 8,
+  },
+  receiptPreview: {
+    width: '100%',
+    height: 160,
+    borderRadius: 12,
+    backgroundColor: '#e2e8f0',
+  },
+  receiptPreviewText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 12,
+  },
+  payNowButton: {
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 14,
+  },
+  payNowButtonText: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 14,
+    letterSpacing: 0.8,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,

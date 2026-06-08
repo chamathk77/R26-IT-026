@@ -13,7 +13,7 @@ const {
 const router = express.Router();
 router.get('/shop/:shopId/recent', protect, getRecentPaymentByShop);
 router.get('/shop/:shopId', protect, getPaymentsByShop);
-router.get('/receipt/:receiptNumber', protect, getPaymentByReceiptNumber);
+// router.get('/receipt/:receiptNumber', protect, getPaymentByReceiptNumber);
 router.post('/submit', protect, uploadReceiptImageSingle, submitPayment);
 router.post(
   '/:paymentId/submit-upfront',

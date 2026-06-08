@@ -12,12 +12,12 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { RootStackParamList } from '../../navigation/RootStackParamsList';
-import { fonts } from '../../constants/fonts';
-import { useTheme } from '../../context/ThemeContext';
-import { useDummySession } from '../../context/DummySessionContext';
-import CommonHeader from '../../components/CommonHeader/CommonHeader';
-import { DummyUser } from '../../data/dummyUsers';
+import { RootStackParamList } from '../../../navigation/RootStackParamsList';
+import { fonts } from '../../../constants/fonts';
+import { useTheme } from '../../../context/ThemeContext';
+import { useDummySession } from '../../../context/DummySessionContext';
+import CommonHeader from '../../../components/CommonHeader/CommonHeader';
+import { DummyUser } from '../../../data/dummyUsers';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageAccount'>;
 

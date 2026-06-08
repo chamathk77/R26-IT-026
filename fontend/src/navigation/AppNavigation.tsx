@@ -15,13 +15,14 @@ import ModuleHubScreen from '../screens/hub/ModuleHubScreen';
 import CostModuleHubScreen from '../screens/cost/CostModuleHubScreen';
 import CostAnalysisScreen from '../screens/cost/CostAnalysisScreen';
 import CostManagementScreen from '../screens/cost/CostManagementScreen';
-import SettingsScreen from '../screens/settings/SettingsScreen';
-import ProfileDetailsScreen from '../screens/settings/ProfileDetailsScreen';
-import ShopDetailsScreen from '../screens/settings/ShopDetailsScreen';
-import ManageAccountScreen from '../screens/settings/ManageAccountScreen';
-import EditUserScreen from '../screens/settings/EditUserScreen';
-import ThemePreferenceScreen from '../screens/settings/ThemePreferenceScreen';
-import SubscriptionPaymentsScreen from '../screens/settings/SubscriptionPaymentsScreen';
+import SettingsScreen from '../screens/settings/hub/SettingsScreen';
+import ProfileDetailsScreen from '../screens/settings/account/ProfileDetailsScreen';
+import ShopDetailsScreen from '../screens/settings/account/ShopDetailsScreen';
+import ManageAccountScreen from '../screens/settings/account/ManageAccountScreen';
+import EditUserScreen from '../screens/settings/account/EditUserScreen';
+import ThemePreferenceScreen from '../screens/settings/preferences/ThemePreferenceScreen';
+import SubscriptionPaymentsScreen from '../screens/settings/payments/SubscriptionPaymentsScreen';
+import PayNowScreen from '../screens/settings/payments/PayNowScreen';
 import ManageCatogoryScreen from '../screens/pos/ManageCatogory/ManageCatogoryScreen';
 import CreateCatogoryScreen from '../screens/pos/ManageCatogory/CreateCatogoryScreen';
 import ManageInventoryScreen from '../screens/pos/ManageInventory/ManageInventoryScreen';
@@ -62,6 +63,7 @@ export default function AppNavigator() {
         <Stack.Screen name="EditUser" component={EditUserScreen} />
         <Stack.Screen name="ThemePreference" component={ThemePreferenceScreen} />
         <Stack.Screen name="SubscriptionPayments" component={SubscriptionPaymentsScreen} />
+        <Stack.Screen name="PayNow" component={PayNowScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

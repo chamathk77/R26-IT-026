@@ -243,34 +243,34 @@ const getRecentPaymentByShop = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-// get payment by receipt number
-const getPaymentByReceiptNumber = async (req, res) => {
-  try {
-    const receiptNumber = String(req.params.receiptNumber || '').trim().toUpperCase();
+// // get payment by receipt number
+// const getPaymentByReceiptNumber = async (req, res) => {
+//   try {
+//     const receiptNumber = String(req.params.receiptNumber || '').trim().toUpperCase();
 
-    if (!receiptNumber) {
-      return res.status(400).json({ success: false, message: 'Receipt number is required' });
-    }
+//     if (!receiptNumber) {
+//       return res.status(400).json({ success: false, message: 'Receipt number is required' });
+//     }
 
-    const payment = await Payments.findOne({ receiptNumber }).lean();
-    if (!payment) {
-      return res.status(404).json({ success: false, message: 'Payment not found' });
-    }
+//     const payment = await Payments.findOne({ receiptNumber }).lean();
+//     if (!payment) {
+//       return res.status(404).json({ success: false, message: 'Payment not found' });
+//     }
 
-    const access = await verifyShopAccess(req, payment.shopId);
-    if (access.error) {
-      return res.status(access.error.status).json(access.error.body);
-    }
+//     const access = await verifyShopAccess(req, payment.shopId);
+//     if (access.error) {
+//       return res.status(access.error.status).json(access.error.body);
+//     }
 
-    res.status(200).json({
-      success: true,
-      payment: formatPayment(payment),
-    });
-  } catch (error) {
-    console.log('error in getPaymentByReceiptNumber', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
+//     res.status(200).json({
+//       success: true,
+//       payment: formatPayment(payment),
+//     });
+//   } catch (error) {
+//     console.log('error in getPaymentByReceiptNumber', error);
+//     res.status(500).json({ success: false, message: error.message });
+//   }
+// };
 
 
 // submit payment receipt

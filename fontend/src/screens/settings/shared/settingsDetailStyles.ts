@@ -1,5 +1,5 @@
 import { Platform, StyleSheet } from 'react-native';
-import { fonts } from '../../constants/fonts';
+import { fonts } from '../../../constants/fonts';
 
 export function cardShadow(resolvedTheme: 'light' | 'dark') {
   if (Platform.OS === 'android') {

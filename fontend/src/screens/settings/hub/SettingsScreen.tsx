@@ -10,16 +10,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { RootStackParamList } from '../../navigation/RootStackParamsList';
+import { RootStackParamList } from '../../../navigation/RootStackParamsList';
 import { useDispatch, useSelector } from 'react-redux';
-import { useTheme } from '../../context/ThemeContext';
-import { useDummySession } from '../../context/DummySessionContext';
-import { AppDispatch, RootState } from '../../store/store';
-import { clearLoginSession } from '../../store/reducers/AuthReducer';
-import { clearSavedToken } from '../../utils/secureStorage';
-import CommonHeader from '../../components/CommonHeader/CommonHeader';
-import type { LoginShop } from '../../type/auth';
-import { cardShadow, settingsMenuStyles as styles } from './settingsDetailStyles';
+import { useTheme } from '../../../context/ThemeContext';
+import { useDummySession } from '../../../context/DummySessionContext';
+import { AppDispatch, RootState } from '../../../store/store';
+import { clearLoginSession } from '../../../store/reducers/AuthReducer';
+import { clearSavedToken } from '../../../utils/secureStorage';
+import CommonHeader from '../../../components/CommonHeader/CommonHeader';
+import type { LoginShop } from '../../../type/auth';
+import { cardShadow, settingsMenuStyles as styles } from '../shared/settingsDetailStyles';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
