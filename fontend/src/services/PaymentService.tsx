@@ -1,5 +1,7 @@
+import { createAsyncThunk } from '@reduxjs/toolkit';
 import { apiClient, getApiBaseUrl } from '../../config/apiConfig';
 import { ensureInternetConnection } from '../utils/checkInternetConnection';
+import { ApiErrorResponse } from '../type/common';
 import {
   GetPaymentsByShopResponse,
   SubmitPaymentReceiptResponse,
@@ -35,40 +37,54 @@ function buildReceiptFormData(imageUri: string, shopId?: string): FormData {
   return formData;
 }
 
-export async function fetchPaymentsByShop(
-  shopId: string,
-): Promise<GetPaymentsByShopResponse> {
-  await ensureInternetConnection();
+export const fetchPaymentsByShop_Service = createAsyncThunk(
+  'payment/fetchByShop',
+  async (shopId: string, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
 
-  const response = await apiClient.get<GetPaymentsByShopResponse>(
-    `/api/payments/shop/${encodeURIComponent(shopId)}`,
-  );
+      const response = await apiClient.get<GetPaymentsByShopResponse>(
+        `/api/payments/shop/${encodeURIComponent(shopId)}`,
+      );
 
-  if (isHttpSuccess(response.status) && response.data?.success) {
-    return response.data;
-  }
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
 
-  throw new Error('Could not load payments');
-}
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: 'Could not load payments',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'error' in error &&
+        'message' in error &&
+        'status' in error &&
+        'timestamp' in error
+      ) {
+        return rejectWithValue(error as ApiErrorResponse);
+      }
 
-export async function submitUpFrontPaymentReceipt(
-  paymentId: string,
-  imageUri: string,
-): Promise<SubmitPaymentReceiptResponse> {
-  await ensureInternetConnection();
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Network error. Please check your connection and try again.';
 
-  const response = await apiClient.post<SubmitPaymentReceiptResponse>(
-    `/api/payments/${encodeURIComponent(paymentId)}/submit-upfront`,
-    buildReceiptFormData(imageUri),
-    { headers: { 'Content-Type': 'multipart/form-data' } },
-  );
-
-  if (isHttpSuccess(response.status) && response.data?.success) {
-    return response.data;
-  }
-
-  throw new Error('Could not submit up-front payment receipt');
-}
+      const networkError: ApiErrorResponse = {
+        error: 'Network Error',
+        message,
+        status: 400,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(networkError);
+    }
+  },
+);
 
 export async function resubmitPaymentReceipt(
   paymentId: string,
@@ -87,25 +103,6 @@ export async function resubmitPaymentReceipt(
   }
 
   throw new Error('Could not resubmit payment receipt');
-}
-
-export async function submitSubscriptionPaymentReceipt(
-  shopId: string,
-  imageUri: string,
-): Promise<SubmitPaymentReceiptResponse> {
-  await ensureInternetConnection();
-
-  const response = await apiClient.post<SubmitPaymentReceiptResponse>(
-    '/api/payments/submit',
-    buildReceiptFormData(imageUri, shopId),
-    { headers: { 'Content-Type': 'multipart/form-data' } },
-  );
-
-  if (isHttpSuccess(response.status) && response.data?.success) {
-    return response.data;
-  }
-
-  throw new Error('Could not submit subscription payment');
 }
 
 export function getReceiptImageUrl(receiptImagePath: string | null | undefined): string | null {

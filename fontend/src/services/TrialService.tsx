@@ -10,7 +10,7 @@ function isHttpSuccess(status: number): boolean {
 
 export const startTrial_Service = createAsyncThunk(
   'trial/start',
-  async (payload: StartTrialRequest) => {
+  async (payload: StartTrialRequest, { rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
@@ -29,7 +29,7 @@ export const startTrial_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
       if (
         error &&
@@ -39,7 +39,7 @@ export const startTrial_Service = createAsyncThunk(
         'status' in error &&
         'timestamp' in error
       ) {
-        throw error as ApiErrorResponse;
+        return rejectWithValue(error as ApiErrorResponse);
       }
 
       const message =
@@ -53,7 +53,7 @@ export const startTrial_Service = createAsyncThunk(
         status: 400,
         timestamp: new Date().toISOString(),
       };
-      throw networkError;
+      return rejectWithValue(networkError);
     }
   },
 );

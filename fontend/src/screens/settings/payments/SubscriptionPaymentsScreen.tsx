@@ -14,14 +14,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { RootStackParamList } from '../../../navigation/RootStackParamsList';
 import { useTheme } from '../../../context/ThemeContext';
-import { RootState } from '../../../store/store';
+import { AppDispatch, RootState } from '../../../store/store';
 import CommonHeader from '../../../components/CommonHeader/CommonHeader';
 import { fonts } from '../../../constants/fonts';
 import {
-  fetchPaymentsByShop,
+  fetchPaymentsByShop_Service,
   getReceiptImageUrl,
 } from '../../../services/PaymentService';
 import { PaymentRecord, PaymentStatus, PaymentType } from '../../../type/payment';
@@ -436,6 +436,7 @@ function PaymentHistoryCard({
 
 export default function SubscriptionPaymentsScreen({ navigation }: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
+  const dispatch = useDispatch<AppDispatch>();
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
   const shopId = useSelector(
     (state: RootState) =>
@@ -443,17 +444,16 @@ export default function SubscriptionPaymentsScreen({ navigation }: Props) {
       state.AuthReducer.Login.userData?.shopId ||
       '',
   );
+  const { items: payments, loading } = useSelector(
+    (state: RootState) => state.PaymentReducer.shopPayments,
+  );
 
-  const [payments, setPayments] = useState<PaymentRecord[]>([]);
-  const [loading, setLoading] = useState(true);
   const [paymentTypeFilter, setPaymentTypeFilter] = useState<PaymentTypeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [expandedPaymentId, setExpandedPaymentId] = useState<string | null>(null);
 
   const loadPayments = useCallback(async () => {
     if (!shopId) {
-      setPayments([]);
-      setLoading(false);
       setTimeout(() => {
         show_Alert(
           'error',
@@ -468,15 +468,16 @@ export default function SubscriptionPaymentsScreen({ navigation }: Props) {
       return;
     }
 
-    setLoading(true);
-
     try {
-      const response = await fetchPaymentsByShop(String(shopId));
-      setPayments(response.payments ?? []);
+      await dispatch(fetchPaymentsByShop_Service(String(shopId))).unwrap();
     } catch (error: unknown) {
       const message =
-        error instanceof Error ? error.message : 'Could not load payments';
-      setPayments([]);
+        error && typeof error === 'object' && 'message' in error
+          ? String((error as { message?: string }).message)
+          : error instanceof Error
+            ? error.message
+            : 'Could not load payments';
+
       setTimeout(() => {
         show_Alert(
           'error',
@@ -492,10 +493,8 @@ export default function SubscriptionPaymentsScreen({ navigation }: Props) {
           () => {},
         );
       }, 150);
-    } finally {
-      setLoading(false);
     }
-  }, [shopId, show_Alert]);
+  }, [dispatch, shopId, show_Alert]);
 
   useFocusEffect(
     useCallback(() => {

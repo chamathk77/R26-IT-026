@@ -86,7 +86,9 @@ export default function LoginScreen({ navigation }: Props) {
   const shopData = useSelector(
     (state: RootState) => state.AuthReducer.Login.shopData,
   );
-  const [trialLoading, setTrialLoading] = useState(false);
+  const trialLoading = useSelector(
+    (state: RootState) => state.TrialReducer.startTrial.loading,
+  );
 
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
   const phoneKeyboardType =
@@ -167,7 +169,6 @@ export default function LoginScreen({ navigation }: Props) {
         return;
       }
 
-      setTrialLoading(true);
       try {
         const response = await dispatch(
           startTrial_Service({ startTrial: true, shopId: String(shopId) }),
@@ -245,8 +246,6 @@ export default function LoginScreen({ navigation }: Props) {
             },
           );
         }, 150);
-      } finally {
-        setTrialLoading(false);
       }
     },
     [dispatch, navigation, show_Alert, trialLoading],

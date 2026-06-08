@@ -110,7 +110,7 @@ async function createUpFrontInvoiceIfNeeded(shop) {
 
   return { created: true, payment: payment.toObject() };
 }
-
+// start trial
 const startTrail = async (req, res) => {
   try {
     const { startTrial, shopId: bodyShopId } = req.body;
@@ -224,7 +224,8 @@ const startTrail = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
+ 
+// skip trial
 const skipTrail = async (req, res) => {
   try {
     const { shopId: bodyShopId } = req.body;
@@ -283,7 +284,8 @@ const skipTrail = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
+  
+// finish trial
 const finishTrail = async (req, res) => {
   try {
     // check if shop id is provided

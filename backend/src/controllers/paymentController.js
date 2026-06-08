@@ -149,6 +149,8 @@ async function verifyShopAccess(req, shopId) {
 
   return { user, shop };
 }
+
+
 // get payments by shop
 const getPaymentsByShop = async (req, res) => {
   try {
@@ -243,237 +245,7 @@ const getRecentPaymentByShop = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-// // get payment by receipt number
-// const getPaymentByReceiptNumber = async (req, res) => {
-//   try {
-//     const receiptNumber = String(req.params.receiptNumber || '').trim().toUpperCase();
 
-//     if (!receiptNumber) {
-//       return res.status(400).json({ success: false, message: 'Receipt number is required' });
-//     }
-
-//     const payment = await Payments.findOne({ receiptNumber }).lean();
-//     if (!payment) {
-//       return res.status(404).json({ success: false, message: 'Payment not found' });
-//     }
-
-//     const access = await verifyShopAccess(req, payment.shopId);
-//     if (access.error) {
-//       return res.status(access.error.status).json(access.error.body);
-//     }
-
-//     res.status(200).json({
-//       success: true,
-//       payment: formatPayment(payment),
-//     });
-//   } catch (error) {
-//     console.log('error in getPaymentByReceiptNumber', error);
-//     res.status(500).json({ success: false, message: error.message });
-//   }
-// };
-
-
-// submit payment receipt
-const submitPayment = async (req, res) => {
-  let savedReceiptPath = null;
-
-  try {
-    const { shopId: bodyShopId } = req.body;
-    // check if shop id is provided
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'Receipt image is required (form field: receipt)',
-      });
-    }
-    // check if shop id is provided in the body
-    const shopId = normalizeShopId(bodyShopId || req.user?.shopId || '');
-    if (!shopId) {
-      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
-      return res.status(400).json({ success: false, message: 'Shop id is required' });
-    }
-    // check if shop id is valid
-    if (!isValidShopIdFormat(shopId)) {
-      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
-      return res.status(400).json({ success: false, message: 'Invalid shop id format' });
-    }
-    // check if shop exists
-    const shop = await ShopsData.findOne({ shopId });
-    if (!shop) {
-      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
-      return res.status(404).json({ success: false, message: 'Shop not found' });
-    }
-    // resolve payment schedule
-    const schedule = resolvePaymentSchedule(shop);
-    // check if there is an error in the payment schedule
-    if (schedule.error) {
-      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
-      return res.status(400).json({ success: false, message: schedule.error });
-    }
-    //
-
-    const { paymentMonth, submittedDate, exactPaymentDay, isFirstPayment } = schedule;
-
-    const user = await User.findById(req.user.id).select('shopId role').lean();
-    // check if user exists
-    if (!user) {
-      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
-      return res.status(401).json({ success: false, message: 'User not found' });
-    }
-  // check if user's shop id is the same as the shop id
-    if (user.shopId && normalizeShopId(user.shopId) !== shopId) {
-      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
-      return res.status(403).json({
-        success: false,
-        message: 'You can only submit payment for your own shop',
-      });
-    }
-    // check if there is a pending payment for the same month
-    const existingPending = await Payments.findOne({
-      shopId,
-      paymentMonth,
-      status: 'pending',
-    }).lean();
-    // check if there is a pending payment for the same month
-    if (existingPending) {
-      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
-      return res.status(400).json({
-        success: false,
-        message: `A pending payment already exists for ${paymentMonth}`,
-        paymentId: existingPending._id,
-      });
-    }
-    // save the receipt path
-    savedReceiptPath = publicReceiptPath(req.file.filename);
-    // generate the receipt number
-    const receiptNumber = await generateReceiptNumber(
-      paymentMonth,
-      exactPaymentDay,
-    );
-    // create the payment
-    const payment = await Payments.create({
-      shopId,
-      receiptNumber,
-      receiptImagePath: savedReceiptPath,
-      submittedDate,
-      paymentMonth,
-      status: 'pending',
-      exactPaymentDay,
-      reason: null,
-    });
-    shop.status = 'initialPaymentPending';
-    await shop.save();
-
-    res.status(201).json({
-      success: true,
-      message: 'Payment submitted successfully',
-      isFirstPayment,
-      payment: formatPayment(payment),
-      shop: {
-        shopId: shop.shopId,
-        status: shop.status,
-      },
-    });
-  } catch (error) {
-    if (savedReceiptPath) {
-      unlinkReceiptImageIfLocal(savedReceiptPath);
-    } else if (req.file) {
-      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
-    }
-    console.log('error in submitPayment', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-// submit up-front payment receipt
-const submitUpFrontPaymentReceipt = async (req, res) => {
-  let savedReceiptPath = null;
-
-  try {
-    const { paymentId } = req.params;
-
-    if (!isValidObjectId(paymentId)) {
-      if (req.file) {
-        unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
-      }
-      return res.status(400).json({ success: false, message: 'Invalid payment id' });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'Receipt image is required (form field: receipt)',
-      });
-    }
-
-    const payment = await Payments.findById(paymentId);
-    if (!payment) {
-      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
-      return res.status(404).json({ success: false, message: 'Payment not found' });
-    }
-
-    if (payment.paymentType !== 'upFront') {
-      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
-      return res.status(400).json({
-        success: false,
-        message: 'This endpoint is only for up-front payments',
-      });
-    }
-
-    if (payment.status !== 'notPaid') {
-      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
-      return res.status(400).json({
-        success: false,
-        message: 'Only notPaid up-front invoices can be submitted with a receipt',
-        currentStatus: payment.status,
-      });
-    }
-
-    const shopId = normalizeShopId(payment.shopId);
-    const access = await verifyShopAccess(req, shopId);
-    if (access.error) {
-      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
-      return res.status(access.error.status).json(access.error.body);
-    }
-
-    const previousReceiptPath = payment.receiptImagePath;
-    savedReceiptPath = publicReceiptPath(req.file.filename);
-
-    payment.receiptImagePath = savedReceiptPath;
-    payment.submittedDate = new Date();
-    payment.status = 'pending';
-    payment.reason = null;
-    await payment.save();
-
-    if (previousReceiptPath && previousReceiptPath !== 'pending-upload') {
-      unlinkReceiptImageIfLocal(previousReceiptPath);
-    }
-
-    const shop = await ShopsData.findOne({ shopId });
-    if (shop && shop.status === 'disabled') {
-      shop.status = 'initialPaymentPending';
-      await shop.save();
-    }
-
-    res.status(200).json({
-      success: true,
-      message: 'Up-front payment receipt submitted successfully',
-      payment: formatPayment(payment),
-      shop: shop
-        ? { shopId: shop.shopId, status: shop.status }
-        : { shopId, status: null },
-    });
-  } catch (error) {
-    if (savedReceiptPath) {
-      unlinkReceiptImageIfLocal(savedReceiptPath);
-    } else if (req.file) {
-      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
-    }
-    console.log('error in submitUpFrontPaymentReceipt', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
- 
-// resubmit payment receipt
 const resubmitPayment = async (req, res) => {
   let savedReceiptPath = null;
 
@@ -576,10 +348,9 @@ const resubmitPayment = async (req, res) => {
 
 
 module.exports = {
-  submitPayment,
-  submitUpFrontPaymentReceipt,
+ 
   resubmitPayment,
   getPaymentsByShop,
   getRecentPaymentByShop,
-  getPaymentByReceiptNumber,
+
 };

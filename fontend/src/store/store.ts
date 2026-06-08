@@ -7,6 +7,8 @@ import ProductReducer from '../store/reducers/ProductReducer';
 import CartReducer from '../store/reducers/CartReducer';
 import HistoryReducer from '../store/reducers/HistoryReducer';
 import ShopOnboardingReducer from '../store/reducers/ShopOnboardingReducer';
+import TrialReducer from '../store/reducers/TrialReducer';
+import PaymentReducer from '../store/reducers/PaymentReducer';
 
 export const store = configureStore({
   reducer: {
@@ -17,6 +19,8 @@ export const store = configureStore({
     CartReducer,
     HistoryReducer,
     shopOnboarding: ShopOnboardingReducer,
+    TrialReducer,
+    PaymentReducer,
   },
 });
 
