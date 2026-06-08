@@ -54,6 +54,15 @@ function isTrialPastEndDate(shop) {
   );
 }
 
+/** Trial ended — by cron (trialExpired) or end date passed (cron will finalize at midnight). */
+function isTrialEnded(shop) {
+  if (shop?.status === 'trialExpired' || shop?.isTrailCompleted) {
+    return true;
+  }
+
+  return isTrialPastEndDate(shop);
+}
+
 async function markTrialAsExpired(shopDoc) {
   if (!shopDoc) {
     return shopDoc;
@@ -100,6 +109,7 @@ module.exports = {
   isTrialAccessBlocked,
   isActiveTrial,
   isTrialPastEndDate,
+  isTrialEnded,
   getTrialSecondsRemaining,
   getTokenExpiresInSeconds,
   markTrialAsExpired,

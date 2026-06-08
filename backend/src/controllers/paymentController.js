@@ -6,6 +6,7 @@ const {
   publicReceiptPath,
   unlinkReceiptImageIfLocal,
 } = require('../middleware/uploadReceiptImage');
+const { formatPaymentRecord } = require('../utils/paymentReceiptHelper');
 
 const { PAYMENT_MONTH_CODES } = Payments;
 
@@ -116,19 +117,7 @@ async function generateReceiptNumber(paymentMonth, referenceDate = new Date()) {
 }
 
 function formatPayment(payment) {
-  return {
-    _id: payment._id,
-    shopId: payment.shopId,
-    receiptNumber: payment.receiptNumber,
-    receiptImagePath: payment.receiptImagePath,
-    submittedDate: payment.submittedDate,
-    paymentMonth: payment.paymentMonth,
-    exactPaymentDay: payment.exactPaymentDay,
-    status: payment.status,
-    reason: payment.reason,
-    createdAt: payment.createdAt,
-    updatedAt: payment.updatedAt,
-  };
+  return formatPaymentRecord(payment);
 }
 
 async function verifyShopAccess(req, shopId) {
@@ -393,6 +382,94 @@ const submitPayment = async (req, res) => {
   }
 };
 
+const submitUpFrontPaymentReceipt = async (req, res) => {
+  let savedReceiptPath = null;
+
+  try {
+    const { paymentId } = req.params;
+
+    if (!isValidObjectId(paymentId)) {
+      if (req.file) {
+        unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
+      }
+      return res.status(400).json({ success: false, message: 'Invalid payment id' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Receipt image is required (form field: receipt)',
+      });
+    }
+
+    const payment = await Payments.findById(paymentId);
+    if (!payment) {
+      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
+      return res.status(404).json({ success: false, message: 'Payment not found' });
+    }
+
+    if (payment.paymentType !== 'upFront') {
+      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
+      return res.status(400).json({
+        success: false,
+        message: 'This endpoint is only for up-front payments',
+      });
+    }
+
+    if (payment.status !== 'notPaid') {
+      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
+      return res.status(400).json({
+        success: false,
+        message: 'Only notPaid up-front invoices can be submitted with a receipt',
+        currentStatus: payment.status,
+      });
+    }
+
+    const shopId = normalizeShopId(payment.shopId);
+    const access = await verifyShopAccess(req, shopId);
+    if (access.error) {
+      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
+      return res.status(access.error.status).json(access.error.body);
+    }
+
+    const previousReceiptPath = payment.receiptImagePath;
+    savedReceiptPath = publicReceiptPath(req.file.filename);
+
+    payment.receiptImagePath = savedReceiptPath;
+    payment.submittedDate = new Date();
+    payment.status = 'pending';
+    payment.reason = null;
+    await payment.save();
+
+    if (previousReceiptPath && previousReceiptPath !== 'pending-upload') {
+      unlinkReceiptImageIfLocal(previousReceiptPath);
+    }
+
+    const shop = await ShopsData.findOne({ shopId });
+    if (shop && shop.status === 'disabled') {
+      shop.status = 'initialPaymentPending';
+      await shop.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Up-front payment receipt submitted successfully',
+      payment: formatPayment(payment),
+      shop: shop
+        ? { shopId: shop.shopId, status: shop.status }
+        : { shopId, status: null },
+    });
+  } catch (error) {
+    if (savedReceiptPath) {
+      unlinkReceiptImageIfLocal(savedReceiptPath);
+    } else if (req.file) {
+      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
+    }
+    console.log('error in submitUpFrontPaymentReceipt', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const resubmitPayment = async (req, res) => {
   let savedReceiptPath = null;
 
@@ -496,6 +573,7 @@ const resubmitPayment = async (req, res) => {
 
 module.exports = {
   submitPayment,
+  submitUpFrontPaymentReceipt,
   resubmitPayment,
   getPaymentsByShop,
   getRecentPaymentByShop,

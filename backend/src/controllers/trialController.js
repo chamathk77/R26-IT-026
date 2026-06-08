@@ -1,5 +1,11 @@
+const Payments = require('../models/payments');
 const ShopsData = require('../models/shopsData');
 const User = require('../models/user');
+const {
+  generateUpFrontReceiptNumber,
+  formatPaymentRecord,
+  UPFRONT_INVOICE_IMAGE_PLACEHOLDER,
+} = require('../utils/paymentReceiptHelper');
 const {
   createAndSaveTrialToken,
   clearUserToken,
@@ -10,8 +16,7 @@ const {
   getTrialSecondsRemaining,
   getTokenExpiresInSeconds,
   isActiveTrial,
-  isTrialPastEndDate,
-  markTrialAsExpired,
+  isTrialEnded,
   finishTrialManually,
 } = require('../utils/trialHelper');
 
@@ -22,7 +27,10 @@ function parseStartTrialBoolean(value) {
   return null;
 }
 
-function buildTrialResponse(shop, { message, token, tokenExpiresInSeconds, alreadyActive = false }) {
+function buildTrialResponse(
+  shop,
+  { message, token, tokenExpiresInSeconds, alreadyActive = false, upFrontPayment = null },
+) {
   return {
     success: true,
     message,
@@ -31,13 +39,76 @@ function buildTrialResponse(shop, { message, token, tokenExpiresInSeconds, alrea
     status: shop.status,
     isTrailStared: shop.isTrailStared,
     isTrailCompleted: shop.isTrailCompleted,
+    isOneTimePaymentGenerated: shop.isOneTimePaymentGenerated,
     trailStartDate: shop.trailStartDate,
     trailEndDate: shop.trailEndDate,
     trialDays: TRIAL_DURATION_DAYS,
     trialSecondsRemaining: getTrialSecondsRemaining(shop),
     tokenExpiresInSeconds,
     token: token ?? null,
+    upFrontPayment,
   };
+}
+
+async function findExistingUpFrontInvoice(shopId) {
+  return Payments.findOne({
+    shopId,
+    paymentType: 'upFront',
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+}
+
+/**
+ * Creates a notPaid up-front invoice when trial starts (first time only).
+ * User uploads receipt later to move status to pending.
+ */
+async function createUpFrontInvoiceIfNeeded(shop) {
+  if (shop.isOneTimePaymentGenerated) {
+    const existing = await findExistingUpFrontInvoice(shop.shopId);
+    return { created: false, payment: existing };
+  }
+
+  const existingNotPaid = await Payments.findOne({
+    shopId: shop.shopId,
+    paymentType: 'upFront',
+    status: 'notPaid',
+  }).lean();
+
+  if (existingNotPaid) {
+    shop.isOneTimePaymentGenerated = true;
+    await shop.save();
+    return { created: false, payment: existingNotPaid };
+  }
+
+  if (shop.oneTimePaymentAmount == null || shop.oneTimePaymentAmount <= 0) {
+    const error = new Error(
+      'One-time payment amount is not configured for this shop. Please contact support.',
+    );
+    error.code = 'ONE_TIME_AMOUNT_NOT_SET';
+    throw error;
+  }
+
+  const receiptNumber = await generateUpFrontReceiptNumber();
+  const submittedDate = new Date();
+
+  const payment = await Payments.create({
+    shopId: shop.shopId,
+    receiptNumber,
+    receiptImagePath: UPFRONT_INVOICE_IMAGE_PLACEHOLDER,
+    submittedDate,
+    paymentMonth: null,
+    paymentAmount: shop.oneTimePaymentAmount,
+    paymentType: 'upFront',
+    exactPaymentDay: null,
+    status: 'notPaid',
+    reason: null,
+  });
+
+  shop.isOneTimePaymentGenerated = true;
+  await shop.save();
+
+  return { created: true, payment: payment.toObject() };
 }
 
 const startTrail = async (req, res) => {
@@ -71,33 +142,16 @@ const startTrail = async (req, res) => {
       });
     }
     // check if shop exists
-    let shop = await ShopsData.findOne({ shopId });
+    const shop = await ShopsData.findOne({ shopId });
     if (!shop) {
       return res.status(404).json({ success: false, message: 'Shop not found' });
     }
-    // check if trial is past end date
-    if (isTrialPastEndDate(shop)) {
-      shop = await markTrialAsExpired(shop);
-      await clearUserToken(req.user.id);
+
+    // Trial expiration is handled by trial cron — only read current shop state here
+    if (isTrialEnded(shop)) {
       return res.status(400).json({
         success: false,
-        message: 'Your trial end date has already passed',
-        shopId: shop.shopId,
-        status: shop.status,
-        isTrailCompleted: shop.isTrailCompleted,
-        trailEndDate: shop.trailEndDate,
-        trialExpired: true,
-        sessionEnded: true,
-      });
-    }
-    // check if trial is already active
-    if (
-      shop.status === 'trialExpired' ||
-      (shop.isTrailCompleted && shop.isTrailStared)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: 'Trial has already ended for this shop',
+        message: 'Trial has already ended for this shop. Please subscribe to continue.',
         shopId: shop.shopId,
         status: shop.status,
         isTrailCompleted: shop.isTrailCompleted,
@@ -105,10 +159,25 @@ const startTrail = async (req, res) => {
         trialExpired: true,
       });
     }
-    // check if trial is already active
+
+    if (shop.status === 'active') {
+      return res.status(400).json({
+        success: false,
+        message: 'This shop already has an active subscription.',
+        shopId: shop.shopId,
+        status: shop.status,
+      });
+    }
+
     const alreadyActive = isActiveTrial(shop);
+    let upFrontInvoice = null;
 
     if (!alreadyActive) {
+      const invoiceResult = await createUpFrontInvoiceIfNeeded(shop);
+      upFrontInvoice = invoiceResult.payment
+        ? formatPaymentRecord(invoiceResult.payment)
+        : null;
+
       const trailStartDate = new Date();
       const trailEndDate = addDays(trailStartDate, TRIAL_DURATION_DAYS);
 
@@ -118,21 +187,39 @@ const startTrail = async (req, res) => {
       shop.trailEndDate = trailEndDate;
       shop.status = 'trial';
       await shop.save();
+    } else if (!shop.isOneTimePaymentGenerated) {
+      const invoiceResult = await createUpFrontInvoiceIfNeeded(shop);
+      upFrontInvoice = invoiceResult.payment
+        ? formatPaymentRecord(invoiceResult.payment)
+        : null;
+    } else {
+      const existing = await findExistingUpFrontInvoice(shop.shopId);
+      upFrontInvoice = existing ? formatPaymentRecord(existing) : null;
     }
 
     const { token, tokenExpiresInSeconds } = await createAndSaveTrialToken(req.user.id, shop);
 
     await User.findByIdAndUpdate(req.user.id, { isFirsttimeLogin: false });
 
+    const trialMessage = alreadyActive
+      ? 'Trial is already active'
+      : upFrontInvoice?.status === 'notPaid'
+        ? 'Trial started. Please pay the one-time fee and upload your receipt.'
+        : 'Trial started successfully';
+
     res.status(200).json(
       buildTrialResponse(shop, {
-        message: alreadyActive ? 'Trial is already active' : 'Trial started successfully',
+        message: trialMessage,
         token,
         tokenExpiresInSeconds,
         alreadyActive,
+        upFrontPayment: upFrontInvoice,
       }),
     );
   } catch (error) {
+    if (error.code === 'ONE_TIME_AMOUNT_NOT_SET') {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     console.log('error in startTrail', error);
     res.status(500).json({ success: false, message: error.message });
   }

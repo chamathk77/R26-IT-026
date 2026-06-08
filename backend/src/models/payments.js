@@ -35,7 +35,7 @@ const paymentsSchema = new mongoose.Schema(
     },
     receiptImagePath: {
       type: String,
-      required: true,
+      default: 'pending-upload',
       trim: true,
     },
     submittedDate: {
@@ -49,6 +49,11 @@ const paymentsSchema = new mongoose.Schema(
       enum: PAYMENT_MONTH_CODES,
       lowercase: true,
       trim: true,
+    },
+    paymentAmount: {
+      type: Number,
+      default: null,
+      min: 0,
     },
     paymentType: {
       type: String,

@@ -5,8 +5,7 @@ const generateToken = require('../utils/generateToken');
 const { createAndSaveLoginToken, createAndSaveTrialToken, clearUserToken } = require('../utils/tokenHelper');
 const {
   isActiveTrial,
-  isTrialAccessBlocked,
-  completeTrialIfExpired,
+  isTrialEnded,
 } = require('../utils/trialHelper');
 const {
   shouldShowTrialPrompt,
@@ -405,11 +404,10 @@ const login = async (req, res) => {
     let trialExpired = false;
 
     if (user.shopId) {
-      let shop = await ShopsData.findOne({ shopId: user.shopId });
+      const shop = await ShopsData.findOne({ shopId: user.shopId }).lean();
       if (shop) {
-        shop = await completeTrialIfExpired(shop);
-        shopLean = shop.toObject();
-        trialExpired = isTrialAccessBlocked(shopLean);
+        shopLean = shop;
+        trialExpired = isTrialEnded(shopLean);
       }
     }
 
