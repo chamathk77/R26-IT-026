@@ -18,9 +18,52 @@ import { AppDispatch, RootState } from '../../store/store';
 import { clearLoginSession } from '../../store/reducers/AuthReducer';
 import { clearSavedToken } from '../../utils/secureStorage';
 import CommonHeader from '../../components/CommonHeader/CommonHeader';
+import type { LoginShop } from '../../type/auth';
 import { cardShadow, settingsMenuStyles as styles } from './settingsDetailStyles';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
+
+function formatTrialEndDate(isoDate: string | null | undefined): string {
+  if (!isoDate) {
+    return '—';
+  }
+  const parsed = new Date(isoDate);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(isoDate);
+  }
+  return parsed.toLocaleString('en-LK', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function getSubscriptionBadge(shop: LoginShop | null | undefined) {
+  const status = shop?.status;
+
+  if (status === 'active') {
+    return {
+      label: 'Subscribed',
+      bg: '#dcfce7',
+      color: '#15803d',
+      showEndDate: false,
+    };
+  }
+
+  if (status === 'trial') {
+    return {
+      label: 'Trial',
+      bg: '#fef3c7',
+      color: '#b45309',
+      showEndDate: true,
+    };
+  }
+
+  return null;
+}
 
 type MenuItem = {
   key: string;
@@ -122,6 +165,7 @@ export default function SettingsScreen({ navigation }: Props) {
   const displayName = user?.name ?? 'User';
   const displayRole = user?.role ?? 'staff';
   const shopLabel = shop?.shopName?.trim() || shop?.shopId || 'No shop linked';
+  const subscriptionBadge = getSubscriptionBadge(shop);
   const showManage = displayRole === 'owner' || displayRole === 'admin';
 
   const confirmLogout = () => {
@@ -276,16 +320,76 @@ export default function SettingsScreen({ navigation }: Props) {
                 <Text style={[styles.roleHint, { color: paperTheme.colors.onSurfaceVariant }]}>
                   {shopLabel}
                 </Text>
-                <View
-                  style={[
-                    styles.roleBadge,
-                    { backgroundColor: paperTheme.colors.primaryContainer },
-                  ]}
-                >
-                  <Text style={[styles.roleBadgeText, { color: primary }]}>
-                    {displayRole.charAt(0).toUpperCase() + displayRole.slice(1)}
-                  </Text>
+                <View style={styles.badgeRow}>
+                  <View
+                    style={[
+                      styles.roleBadge,
+                      { backgroundColor: paperTheme.colors.primaryContainer },
+                    ]}
+                  >
+                    <Text style={[styles.roleBadgeText, { color: primary }]}>
+                      {displayRole.charAt(0).toUpperCase() + displayRole.slice(1)}
+                    </Text>
+                  </View>
+                  {subscriptionBadge ? (
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        { backgroundColor: subscriptionBadge.bg },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusBadgeText,
+                          { color: subscriptionBadge.color },
+                        ]}
+                      >
+                        {subscriptionBadge.label}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
+                {subscriptionBadge?.showEndDate ? (
+                  <View
+                    style={[
+                      styles.trialEndBanner,
+                      {
+                        backgroundColor:
+                          resolvedTheme === 'dark' ? '#422006' : '#fffbeb',
+                        borderColor:
+                          resolvedTheme === 'dark' ? '#f59e0b' : '#f59e0b',
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="time-outline"
+                      size={18}
+                      color={resolvedTheme === 'dark' ? '#fbbf24' : '#b45309'}
+                    />
+                    <Text
+                      style={[
+                        styles.trialEndLabel,
+                        {
+                          color:
+                            resolvedTheme === 'dark' ? '#fcd34d' : '#92400e',
+                        },
+                      ]}
+                    >
+                      Trial ends
+                    </Text>
+                    <Text
+                      style={[
+                        styles.trialEndDate,
+                        {
+                          color:
+                            resolvedTheme === 'dark' ? '#fef3c7' : '#78350f',
+                        },
+                      ]}
+                    >
+                      {formatTrialEndDate(shop?.trailEndDate)}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             </View>
           </View>

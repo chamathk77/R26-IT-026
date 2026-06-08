@@ -24,14 +24,18 @@ function resolveApiBaseUrl(): string {
     return 'http://localhost:3000';
   }
 
-  // Expo Go: Metro's host is usually your dev machine (works on a physical device).
+  // Expo Go LAN: debuggerHost is your dev machine IP (e.g. 192.168.1.10:8081).
+  // Expo --tunnel host (*.exp.direct) is Metro only — never use it for the API.
   const debuggerHost = Constants.expoGoConfig?.debuggerHost;
   if (debuggerHost) {
     const hostname = debuggerHost.split(':')[0];
+    const isTunnelHost =
+      hostname.includes('exp.direct') || hostname.includes('ngrok-free.app');
     if (
       hostname &&
       hostname !== 'localhost' &&
-      hostname !== '127.0.0.1'
+      hostname !== '127.0.0.1' &&
+      !isTunnelHost
     ) {
       return `http://${hostname}:3000`;
     }

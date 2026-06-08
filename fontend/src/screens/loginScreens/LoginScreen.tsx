@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   BackHandler,
@@ -10,32 +10,35 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { TextInput as PaperTextInput } from 'react-native-paper';
-import LottieView from 'lottie-react-native';
-import { fonts } from '../../constants/fonts';
-import { useTheme } from '../../context/ThemeContext';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { useFocusEffect } from '@react-navigation/native';
-import { RootStackParamList } from '../../navigation/RootStackParamsList';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { login_Service } from '../../services/AuthService';
-import { startTrial_Service } from '../../services/TrialService';
-import { useDispatch, useSelector } from 'react-redux';
-import { AppDispatch, RootState } from '../../store/store';
-import { devLog } from '../../utils/devLog';
-import { clearSavedToken, saveToken } from '../../utils/secureStorage';
-import { clearLoginSession, setLoginSession } from '../../store/reducers/AuthReducer';
-import { useCommonAlert } from '../../hooks/useCommonAlert';
-import CommonAlert from '../../components/CommonAlert/CommonAlert';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { TextInput as PaperTextInput } from "react-native-paper";
+import LottieView from "lottie-react-native";
+import { fonts } from "../../constants/fonts";
+import { useTheme } from "../../context/ThemeContext";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { useFocusEffect } from "@react-navigation/native";
+import { RootStackParamList } from "../../navigation/RootStackParamsList";
+import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { login_Service } from "../../services/AuthService";
+import { startTrial_Service } from "../../services/TrialService";
+import { useDispatch, useSelector } from "react-redux";
+import { AppDispatch, RootState, store } from "../../store/store";
+import { devLog } from "../../utils/devLog";
+import { clearSavedToken, saveToken } from "../../utils/secureStorage";
+import {
+  clearLoginSession,
+  setLoginSession,
+} from "../../store/reducers/AuthReducer";
+import { useCommonAlert } from "../../hooks/useCommonAlert";
+import CommonAlert from "../../components/CommonAlert/CommonAlert";
 
 const MOBILE_DIGIT_LENGTH = 10;
 const LOCAL_MOBILE_PATTERN = /^0\d{9}$/;
 
 function toLocalMobileNumber(text: string): string {
-  let digits = text.replace(/\D/g, '');
-  if (digits.length > 0 && digits[0] !== '0') {
+  let digits = text.replace(/\D/g, "");
+  if (digits.length > 0 && digits[0] !== "0") {
     digits = `0${digits}`;
   }
   return digits.slice(0, MOBILE_DIGIT_LENGTH);
@@ -45,39 +48,64 @@ function isValidLocalMobileNumber(value: string): boolean {
   return LOCAL_MOBILE_PATTERN.test(value);
 }
 
+function formatTrialEndDate(isoDate: string | null | undefined): string {
+  if (!isoDate) {
+    return "—";
+  }
+  const parsed = new Date(isoDate);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(isoDate);
+  }
+  return parsed.toLocaleString("en-LK", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
 type Props = NativeStackScreenProps<RootStackParamList, "LoginScreen">;
 
 export default function LoginScreen({ navigation }: Props) {
-  const [phone, setPhone] = useState('0760352847');
-  const [password, setPassword] = useState('111111');
+  const [phone, setPhone] = useState("0760352847");
+  const [password, setPassword] = useState("111111");
   const [showPassword, setShowPassword] = useState(false);
   const { paperTheme, resolvedTheme } = useTheme();
   const scrollRef = useRef<any>(null);
   const phoneInputRef = useRef<any>(null);
   const passwordInputRef = useRef<any>(null);
   const dispatch = useDispatch<AppDispatch>();
-  const loginLoading = useSelector((state: RootState) => state.AuthReducer.Login.loading);
-  const userData = useSelector((state: RootState) => state.AuthReducer.Login.userData);
-  const shopData = useSelector((state: RootState) => state.AuthReducer.Login.shopData);
+  const loginLoading = useSelector(
+    (state: RootState) => state.AuthReducer.Login.loading,
+  );
+  const userData = useSelector(
+    (state: RootState) => state.AuthReducer.Login.userData,
+  );
+  const shopData = useSelector(
+    (state: RootState) => state.AuthReducer.Login.shopData,
+  );
   const [trialLoading, setTrialLoading] = useState(false);
 
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
-  const phoneKeyboardType = Platform.OS === 'android' ? 'numeric' : 'number-pad';
+  const phoneKeyboardType =
+    Platform.OS === "android" ? "numeric" : "number-pad";
 
   useFocusEffect(
     useCallback(() => {
-      if (Platform.OS !== 'android') {
+      if (Platform.OS !== "android") {
         return undefined;
       }
 
       const onHardwareBack = () => {
         show_Alert(
-          'error',
-          'Exit app',
-          'Do you want to exit the app?',
+          "error",
+          "Exit app",
+          "Do you want to exit the app?",
           1,
           false,
-          'Exit app',
+          "Exit app",
           () => {
             BackHandler.exitApp();
           },
@@ -86,129 +114,177 @@ export default function LoginScreen({ navigation }: Props) {
         return true;
       };
 
-      const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
+      const sub = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onHardwareBack,
+      );
       return () => sub.remove();
     }, []),
   );
 
-  const StartTrial = useCallback(async () => {
-    console.log('Start Trial called');
-    const shopId = shopData?.shopId || userData?.shopId;
-    if (!shopId) {
-      show_Alert(
-        'error',
-        'Error',
-        'Shop not found. Please log in again.',
-        1,
-        false,
-        'OK',
-        () => { },
-      );
-      return;
-    }
+  useFocusEffect(
+    useCallback(() => {
+      devLog("shopData", shopData);
+      devLog("userData", userData);
+    }, [shopData, userData]),
+  );
 
-    if (trialLoading) {
-      return;
-    }
+  useFocusEffect(
+    useCallback(() => {
+      devLog("trialLoading", trialLoading);
+    }, [trialLoading]),
+  );
 
-    setTrialLoading(true);
-    try {
-      const response = await dispatch(
-        startTrial_Service({ startTrial: true, shopId: String(shopId) }),
-      ).unwrap();
-      console.log('Start Trial response:', response);
+  useFocusEffect(
+    useCallback(() => {
+      devLog("loginLoading", loginLoading);
+    }, [loginLoading]),
+  );
 
-      if (response.token) {
-        await clearSavedToken();
-        await saveToken(response.token);
-      }
+  const StartTrial = useCallback(
+    async (shopIdOverride?: string) => {
+      const { userData: currentUser, shopData: currentShop } =
+        store.getState().AuthReducer.Login;
+      const shopId =
+        shopIdOverride ?? currentShop?.shopId ?? currentUser?.shopId;
 
-      dispatch(
-        setLoginSession({
-          user: userData
-            ? { ...userData, isFirsttimeLogin: false }
-            : userData,
-          shop: shopData
-            ? {
-              ...shopData,
-              shopId: response.shopId,
-              status: response.status,
-              isTrailStared: response.isTrailStared,
-              isTrailCompleted: response.isTrailCompleted,
-              trailStartDate: response.trailStartDate ?? shopData.trailStartDate,
-              trailEndDate: response.trailEndDate ?? shopData.trailEndDate,
-            }
-            : shopData,
-        }),
-      );
-
-      setTimeout(() => {
+      if (!shopId) {
+        devLog("shopId not found", { currentShop, currentUser });
         show_Alert(
-          'success',
-          'Trial started',
-          'Your 14-day trial has started.' + ' ' + 'Trial ends on ' + response.trailEndDate,
+          "error",
+          "Error",
+          "Shop not found. Please log in again.",
           1,
           false,
-          'Continue',
-          () => {
-            navigation.reset({ index: 0, routes: [{ name: 'ModuleHub' }] });
-          },
+          "OK",
+          () => {},
         );
-      }, 150);
-
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'Could not start trial';
-
-      if (
-        error &&
-        typeof error === 'object' &&
-        'sessionEnded' in error &&
-        (error as { sessionEnded?: boolean }).sessionEnded
-      ) {
-        await clearSavedToken();
-        dispatch(clearLoginSession());
+        return;
       }
 
-      setTimeout(() => {
-        show_Alert('error', 'Trial failed', message, 1, false, 'OK', () => { });
-      }, 150);
-    } finally {
-      setTimeout(() => {
-        setTrialLoading(false);
-      }, 3000);
-    }
-  }, [
-    dispatch,
-    navigation,
-    shopData,
-    show_Alert,
-    trialLoading,
-    userData,
-  ]);
+      if (trialLoading) {
+        devLog("trialLoading", trialLoading);
+        return;
+      }
 
-  const showTrialPendingAlert = useCallback(() => {
-    show_Alert(
-      'pending',
-      'Trial Pending',
-      'Do you want to start the 14 days trial?',
-      2,
-      true,
-      'Continue',
-      () => {
-        void StartTrial();
-      },
-      'Cancel',
-      () => {
-        console.log('Cancel trial pressed');
-      },
-      undefined,
-      () => {
-        console.log('Skip Trial button pressed');
-      },
-      'Skip Trial',
-    );
-  }, [StartTrial, show_Alert]);
+      setTrialLoading(true);
+      try {
+        const response = await dispatch(
+          startTrial_Service({ startTrial: true, shopId: String(shopId) }),
+        ).unwrap();
+        devLog("Start Trial response:", response);
+
+        if (response.token) {
+          await clearSavedToken();
+          await saveToken(response.token);
+        }
+
+        dispatch(
+          setLoginSession({
+            user: currentUser
+              ? { ...currentUser, isFirsttimeLogin: false }
+              : currentUser,
+            shop: currentShop
+              ? {
+                  ...currentShop,
+                  shopId: response.shopId,
+                  status: response.status,
+                  isTrailStared: response.isTrailStared,
+                  isTrailCompleted: response.isTrailCompleted,
+                  trailStartDate:
+                    response.trailStartDate ?? currentShop.trailStartDate,
+                  trailEndDate:
+                    response.trailEndDate ?? currentShop.trailEndDate,
+                }
+              : currentShop,
+          }),
+        );
+
+        const goToModuleHub = () => {
+          navigation.reset({ index: 0, routes: [{ name: "ModuleHub" }] });
+        };
+        const trialEndText = formatTrialEndDate(response.trailEndDate);
+
+        setTimeout(() => {
+          if (response.alreadyActive) {
+            show_Alert(
+              "success",
+              "Trial active",
+              `Your trial is already active. Trial ends on ${trialEndText}.`,
+              1,
+              false,
+              "Continue",
+              goToModuleHub,
+            );
+          } else {
+            show_Alert(
+              "success",
+              "Trial started",
+              `Your 14-day trial has started. Trial ends on ${trialEndText}.`,
+              1,
+              false,
+              "Continue",
+              goToModuleHub,
+            );
+          }
+        }, 150);
+      } catch (error: unknown) {
+        const message =
+          error instanceof Error ? error.message : "Could not start trial";
+
+        if (
+          error &&
+          typeof error === "object" &&
+          "sessionEnded" in error &&
+          (error as { sessionEnded?: boolean }).sessionEnded
+        ) {
+          await clearSavedToken();
+          dispatch(clearLoginSession());
+        }
+
+        setTimeout(() => {
+          show_Alert(
+            "error",
+            "Trial failed",
+            message,
+            1,
+            false,
+            "OK",
+            () => {},
+          );
+        }, 150);
+      } finally {
+        setTrialLoading(false);
+      }
+    },
+    [dispatch, navigation, show_Alert, trialLoading],
+  );
+
+  const showTrialPendingAlert = useCallback(
+    (shopId?: string) => {
+      show_Alert(
+        "pending",
+        "Trial Pending",
+        "Do you want to start the 14 days trial?",
+        2,
+        true,
+        "Continue",
+        () => {
+          void StartTrial(shopId);
+        },
+        "Cancel",
+        () => {
+          console.log("Cancel trial pressed");
+        },
+        undefined,
+        () => {
+          console.log("Skip Trial button pressed");
+        },
+        "Skip Trial",
+      );
+    },
+    [StartTrial, show_Alert],
+  );
 
   const onLogin = async () => {
     if (loginLoading) {
@@ -217,26 +293,26 @@ export default function LoginScreen({ navigation }: Props) {
 
     if (!phone.trim() || !password.trim()) {
       show_Alert(
-        'error',
-        'Validation',
-        'Please enter your mobile number and password.',
+        "error",
+        "Validation",
+        "Please enter your mobile number and password.",
         1,
         false,
-        'OK',
-        () => { },
+        "OK",
+        () => {},
       );
       return;
     }
 
     if (!isValidLocalMobileNumber(phone.trim())) {
       show_Alert(
-        'error',
-        'Validation',
-        'Mobile number must be 10 digits and start with 0 (e.g. 0712345678).',
+        "error",
+        "Validation",
+        "Mobile number must be 10 digits and start with 0 (e.g. 0712345678).",
         1,
         false,
-        'OK',
-        () => { },
+        "OK",
+        () => {},
       );
       return;
     }
@@ -247,10 +323,9 @@ export default function LoginScreen({ navigation }: Props) {
         login_Service({ phone: phone.trim(), password }),
       ).unwrap();
 
-      devLog('Login response: login screen', JSON.stringify(response));
+      devLog("Login response: login screen", JSON.stringify(response));
 
       if (response.success) {
-
         await saveToken(response.token);
         dispatch(
           setLoginSession({
@@ -259,116 +334,126 @@ export default function LoginScreen({ navigation }: Props) {
           }),
         );
 
-        if (response.shop?.status === 'disabled') {
-          if (response.user.isFirsttimeLogin === true) {
+        if (response.shop?.status === "disabled") {
+          devLog("response.shop.onboardStep", response.shop.onboardStep);
+          // if (response.user.isFirsttimeLogin === true) {
 
-            if (response.shop?.isTrailStared === false) {
-              show_Alert(
-                'error',
-                'Account Pending',
-                'Your account is pending. Please contact the admin to activate your account.',
-                2,
-                false,
-                'Start Trial',
-                () => {
-                  setTimeout(() => {
-                    showTrialPendingAlert();
-                  }, 350);
-                },
-                'Contact Admin',
-                () => {
-                  console.log('Contact Admin pressed');
-                },
-              );
-            }
-
-
-
+          if (response.shop.onboardStep === "shopRegistered") {
+            navigation.navigate("SelectFeaturesScreen");
+            return;
+          } else if (response.shop.onboardStep === "featureSelected") {
+            navigation.navigate("CreatePasswordScreen");
+            return;
           }
-        } else if (response.shop?.isTrailStared === true && response.shop.status === 'trial') {
-
-        } else if (response.shop?.isTrailStared === true && response.shop.status === 'trialExpired') {
-
+          if (response.shop?.isTrailStared === false) {
+            show_Alert(
+              "error",
+              "Account Pending",
+              "Your account is pending. Please contact the admin to activate your account.",
+              2,
+              false,
+              "Start Trial",
+              () => {
+                const trialShopId =
+                  response.shop?.shopId ?? response.user?.shopId;
+                setTimeout(() => {
+                  showTrialPendingAlert(trialShopId);
+                }, 350);
+              },
+              "Contact Admin",
+              () => {
+                console.log("Contact Admin pressed");
+              },
+            );
+            // }
+          }
+        } else if (
+          response.shop?.isTrailStared === true &&
+          response.shop.status === "trial"
+        ) {
+          void StartTrial(response.shop?.shopId);
+        } else if (
+          response.shop?.isTrailStared === true &&
+          response.shop.status === "trialExpired"
+        ) {
           show_Alert(
-            'pending',
-            'Trial ended',
-            'Your trial has ended. Please purchase a subscription to continue.',
+            "pending",
+            "Trial ended",
+            "Your trial has ended. Please purchase a subscription to continue.",
             1,
             false,
-            'Continue',
+            "Continue",
             () => {
               // navigation.reset({ index: 0, routes: [{ name: 'ModuleHub' }] });
             },
           );
           return;
-
-        } else if (response.shop?.status === 'active') {
-          navigation.reset({ index: 0, routes: [{ name: 'ModuleHub' }] });
-        } else if (response.shop?.status === 'initialPaymentPending') {
+        } else if (response.shop?.status === "active") {
+          navigation.reset({ index: 0, routes: [{ name: "ModuleHub" }] });
+        } else if (response.shop?.status === "initialPaymentPending") {
           show_Alert(
-            'pending',
-            'Payment Pending',
-            'Your payment submitted successfully. Please wait for the admin to approve your payment.',
+            "pending",
+            "Payment Pending",
+            "Your payment submitted successfully. Please wait for the admin to approve your payment.",
             2,
             false,
-            'OK',
-            () => { },
-            'Contact Admin',
+            "OK",
+            () => {},
+            "Contact Admin",
             () => {
-              console.log('Contact Admin pressed');
+              console.log("Contact Admin pressed");
             },
           );
-        } else if (response.shop?.status === 'paymentPending') {
+        } else if (response.shop?.status === "paymentPending") {
           show_Alert(
-            'pending',
-            'Payment Pending',
-            'Your payment is pending. Please complete your payment to continue.',
+            "pending",
+            "Payment Pending",
+            "Your payment is pending. Please complete your payment to continue.",
             1,
             false,
-            'Pay Now',
+            "Pay Now",
             () => {
-              console.log('Pay Now pressed');
+              console.log("Pay Now pressed");
             },
-            'Cancel',
+            "Cancel",
             () => {
-              console.log('Cancel pressed');
+              console.log("Cancel pressed");
             },
           );
         }
-
-
       }
-
-
-
-
     } catch (error: any) {
-      devLog('Login error:', error);
+      devLog("Login error:", error);
       show_Alert(
-        'error',
-        'Error',
-        error?.message || 'Login failed',
+        "error",
+        "Error",
+        error?.message || "Login failed",
         1,
         false,
-        'OK',
-        () => { },
+        "OK",
+        () => {},
       );
     }
   };
 
   const onSignUp = () => {
     Keyboard.dismiss();
-    navigation.navigate('SignUpScreen');
+    navigation.navigate("SignUpScreen");
   };
 
   return (
     <>
       <StatusBar
-        barStyle={resolvedTheme === 'dark' ? 'light-content' : 'dark-content'}
+        barStyle={resolvedTheme === "dark" ? "light-content" : "dark-content"}
         backgroundColor={paperTheme.colors.background}
         translucent={false}
       />
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: paperTheme.colors.background }]}>
+      <SafeAreaView
+        style={[
+          styles.safeArea,
+          { backgroundColor: paperTheme.colors.background },
+        ]}
+      >
         <ScrollView
           showsVerticalScrollIndicator={false}
           bounces={false}
@@ -383,7 +468,7 @@ export default function LoginScreen({ navigation }: Props) {
             enableOnAndroid={true}
             enableAutomaticScroll={true}
             enableResetScrollToCoords={false}
-            extraScrollHeight={Platform.OS === 'ios' ? 30 : 60}
+            extraScrollHeight={Platform.OS === "ios" ? 30 : 60}
             keyboardOpeningTime={0}
             keyboardShouldPersistTaps="handled"
             resetScrollToCoords={{ x: 0, y: 0 }}
@@ -395,20 +480,42 @@ export default function LoginScreen({ navigation }: Props) {
           >
             <View style={styles.lottieWrapper}>
               <LottieView
-                source={require('../../../assets/Lottie/management.json')}
+                source={require("../../../assets/Lottie/management.json")}
                 autoPlay
                 loop
                 style={styles.lottie}
               />
             </View>
-            <View style={[styles.container, { backgroundColor: paperTheme.colors.background }]}>
+            <View
+              style={[
+                styles.container,
+                { backgroundColor: paperTheme.colors.background },
+              ]}
+            >
               <View>
-                <Text style={[styles.heading, { color: paperTheme.colors.onSurface }]}>Sign In</Text>
-                <Text style={[styles.subheading, { color: paperTheme.colors.onSurfaceVariant }]}>
+                <Text
+                  style={[
+                    styles.heading,
+                    { color: paperTheme.colors.onSurface },
+                  ]}
+                >
+                  Sign In
+                </Text>
+                <Text
+                  style={[
+                    styles.subheading,
+                    { color: paperTheme.colors.onSurfaceVariant },
+                  ]}
+                >
                   Sign in with your owner mobile number and password.
                 </Text>
 
-                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
+                <Text
+                  style={[
+                    styles.label,
+                    { color: paperTheme.colors.onSurfaceVariant },
+                  ]}
+                >
                   MOBILE NUMBER
                 </Text>
                 <View style={styles.inputWrapper}>
@@ -431,7 +538,14 @@ export default function LoginScreen({ navigation }: Props) {
                 </View>
 
                 <View style={styles.passwordRow}>
-                  <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>PASSWORD</Text>
+                  <Text
+                    style={[
+                      styles.label,
+                      { color: paperTheme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    PASSWORD
+                  </Text>
                 </View>
 
                 <View style={[styles.inputWrapper]}>
@@ -445,7 +559,7 @@ export default function LoginScreen({ navigation }: Props) {
                     // left={<PaperTextInput.Icon icon="lock-outline" />}
                     right={
                       <PaperTextInput.Icon
-                        icon={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        icon={showPassword ? "eye-off-outline" : "eye-outline"}
                         onPress={() => setShowPassword((prev) => !prev)}
                       />
                     }
@@ -459,14 +573,31 @@ export default function LoginScreen({ navigation }: Props) {
                   />
                 </View>
 
-                <TouchableOpacity style={styles.forgotPasswordContainer} onPress={() => navigation.navigate('EnterEmailScreen')}>
-                  <Text style={[styles.forgotPassword, { color: paperTheme.colors.onSurfaceVariant, borderBottomWidth: 0.3, borderBottomColor: paperTheme.colors.onSurfaceVariant }]}>Forgot Password ?</Text>
+                <TouchableOpacity
+                  style={styles.forgotPasswordContainer}
+                  onPress={() => navigation.navigate("EnterEmailScreen")}
+                >
+                  <Text
+                    style={[
+                      styles.forgotPassword,
+                      {
+                        color: paperTheme.colors.onSurfaceVariant,
+                        borderBottomWidth: 0.3,
+                        borderBottomColor: paperTheme.colors.onSurfaceVariant,
+                      },
+                    ]}
+                  >
+                    Forgot Password ?
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[
                     styles.button,
-                    { backgroundColor: paperTheme.colors.primary, borderRadius: 15 },
+                    {
+                      backgroundColor: paperTheme.colors.primary,
+                      borderRadius: 15,
+                    },
                     loginLoading && styles.buttonDisabled,
                   ]}
                   onPress={onLogin}
@@ -476,7 +607,12 @@ export default function LoginScreen({ navigation }: Props) {
                   {loginLoading ? (
                     <ActivityIndicator color={paperTheme.colors.onPrimary} />
                   ) : (
-                    <Text style={[styles.buttonText, { color: paperTheme.colors.onPrimary, fontSize: 14 }]}>
+                    <Text
+                      style={[
+                        styles.buttonText,
+                        { color: paperTheme.colors.onPrimary, fontSize: 14 },
+                      ]}
+                    >
                       SIGN IN &gt;
                     </Text>
                   )}
@@ -484,7 +620,14 @@ export default function LoginScreen({ navigation }: Props) {
 
                 <View style={styles.dividerRow}>
                   <View style={styles.divider} />
-                  <Text style={[styles.dividerText, { color: paperTheme.colors.onSurfaceVariant }]}>Or Authenticate With</Text>
+                  <Text
+                    style={[
+                      styles.dividerText,
+                      { color: paperTheme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    Or Authenticate With
+                  </Text>
                   <View style={styles.divider} />
                 </View>
 
@@ -494,16 +637,19 @@ export default function LoginScreen({ navigation }: Props) {
                 </Text>
               </TouchableOpacity> */}
               </View>
-
             </View>
           </KeyboardAwareScrollView>
-
         </ScrollView>
 
         {trialLoading && (
           <View style={styles.trialLoadingOverlay}>
             <ActivityIndicator size="large" color={paperTheme.colors.primary} />
-            <Text style={[styles.trialLoadingText, { color: paperTheme.colors.onSurface }]}>
+            <Text
+              style={[
+                styles.trialLoadingText,
+                { color: paperTheme.colors.onSurface },
+              ]}
+            >
               Starting trial...
             </Text>
           </View>
@@ -535,7 +681,7 @@ export default function LoginScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#eeedf5',
+    backgroundColor: "#eeedf5",
   },
   scrollViewContent: {
     flexGrow: 1,
@@ -543,90 +689,88 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 26,
-
   },
   lottieWrapper: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   lottie: {
-    width: '100%',
+    width: "100%",
     height: 250,
   },
   heading: {
     fontFamily: fonts.PoppinsBold,
     fontSize: 30,
-    color: '#171717',
+    color: "#171717",
     marginBottom: 8,
   },
   subheading: {
     fontFamily: fonts.InterRegular,
     fontSize: 15,
-    color: '#52525b',
+    color: "#52525b",
     marginBottom: 30,
   },
   label: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 12,
-    color: '#52525b',
+    color: "#52525b",
     letterSpacing: 2.1,
     marginBottom: 8,
   },
   inputWrapper: {
     height: 66,
-    backgroundColor: '#ececf1',
+    backgroundColor: "#ececf1",
     borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 14,
     marginBottom: 20,
   },
   inputIcon: {
     fontFamily: fonts.PoppinsBold,
     fontSize: 30,
-    color: '#57534e',
+    color: "#57534e",
     marginRight: 12,
     width: 26,
-    alignItems: 'center',
+    alignItems: "center",
   },
   input: {
     flex: 1,
     fontFamily: fonts.InterRegular,
     fontSize: 16,
-    color: '#18181b',
-    backgroundColor: 'transparent',
+    color: "#18181b",
+    backgroundColor: "transparent",
   },
   inputContent: {
     fontFamily: fonts.InterRegular,
     fontSize: 17,
-    color: '#18181b',
-
+    color: "#18181b",
   },
   passwordRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   forgotPassword: {
     fontFamily: fonts.PoppinsMedium,
     fontSize: 12,
-    color: '#a16207',
+    color: "#a16207",
   },
   forgotPasswordContainer: {
-    alignSelf: 'flex-end',
+    alignSelf: "flex-end",
     marginTop: -12,
     marginBottom: 8,
   },
   button: {
     height: 60,
-    backgroundColor: '#c48d00',
+    backgroundColor: "#c48d00",
     borderRadius: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 18,
     marginBottom: 26,
-    shadowColor: '#6b4f00',
+    shadowColor: "#6b4f00",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
     shadowRadius: 15,
@@ -634,7 +778,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontFamily: fonts.PoppinsBold,
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 14,
     letterSpacing: 3,
   },
@@ -643,9 +787,9 @@ const styles = StyleSheet.create({
   },
   trialLoadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    alignItems: "center",
+    justifyContent: "center",
     zIndex: 1000,
   },
   trialLoadingText: {
@@ -655,37 +799,37 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 26,
   },
   divider: {
     flex: 1,
     height: 1,
-    backgroundColor: '#e4e4e7',
+    backgroundColor: "#e4e4e7",
   },
   dividerText: {
     fontFamily: fonts.PoppinsMedium,
     fontSize: 10,
-    color: '#9a9aa4',
+    color: "#9a9aa4",
     letterSpacing: 1.2,
     marginHorizontal: 10,
   },
   registerText: {
     fontFamily: fonts.InterRegular,
     fontSize: 14,
-    color: '#3f3f46',
-    textAlign: 'center',
+    color: "#3f3f46",
+    textAlign: "center",
   },
   registerLink: {
     fontFamily: fonts.InterBold,
-    color: '#8a6500',
+    color: "#8a6500",
   },
   encryptionText: {
     fontFamily: fonts.PoppinsMedium,
     fontSize: 10,
-    color: '#9a9aa4',
-    textAlign: 'center',
+    color: "#9a9aa4",
+    textAlign: "center",
     letterSpacing: 3,
   },
 });
