@@ -1,6 +1,8 @@
 import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
+  Linking,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -16,7 +18,14 @@ import { RootStackParamList } from '../../../navigation/RootStackParamsList';
 import { useTheme } from '../../../context/ThemeContext';
 import CommonHeader from '../../../components/CommonHeader/CommonHeader';
 import { fonts } from '../../../constants/fonts';
+import { useDispatch, useSelector } from 'react-redux';
 import { PaymentRecord, PaymentStatus } from '../../../type/payment';
+import {
+  fetchPaymentsByShop_Service,
+  paymentSubmit_Service,
+} from '../../../services/PaymentService';
+import { AppDispatch, RootState } from '../../../store/store';
+import { setLoginSession } from '../../../store/reducers/AuthReducer';
 import { useCommonAlert } from '../../../hooks/useCommonAlert';
 import CommonAlert from '../../../components/CommonAlert/CommonAlert';
 import { cardShadow, settingsDetailStyles as styles } from '../shared/settingsDetailStyles';
@@ -27,6 +36,96 @@ import {
 } from '../shared/SettingsDetailComponents';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PayNow'>;
+
+type ShowAlertFn = (
+  type: 'success' | 'error' | 'pending',
+  title: string,
+  message: string,
+  buttons: 0 | 1 | 2,
+  MoreDetails?: boolean,
+  positiveButtonText?: string,
+  onPositivePress?: () => void,
+  negativeButtonText?: string,
+  onNegativePress?: () => void,
+) => void;
+
+function showPermissionDeniedAlert(
+  show_Alert: ShowAlertFn,
+  {
+    title,
+    message,
+    settingsMessage,
+    canAskAgain,
+  }: {
+    title: string;
+    message: string;
+    settingsMessage: string;
+    canAskAgain: boolean;
+  },
+) {
+  if (!canAskAgain) {
+    show_Alert(
+      'error',
+      title,
+      settingsMessage,
+      2,
+      false,
+      'Open Settings',
+      () => {
+        void Linking.openSettings();
+      },
+      'Cancel',
+      () => {},
+    );
+    return;
+  }
+
+  show_Alert('error', title, message, 1, false, 'OK', () => {});
+}
+
+async function ensureMediaLibraryPermission(show_Alert: ShowAlertFn): Promise<boolean> {
+  let permission = await ImagePicker.getMediaLibraryPermissionsAsync();
+
+  if (!permission.granted && permission.canAskAgain) {
+    permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  }
+
+  if (permission.granted) {
+    return true;
+  }
+
+  showPermissionDeniedAlert(show_Alert, {
+    title: 'Photo library access required',
+    message:
+      'Please allow photo library access when prompted so you can choose a receipt image.',
+    settingsMessage:
+      'Photo library access is turned off. Open Settings and enable Photos permission for this app.',
+    canAskAgain: permission.canAskAgain,
+  });
+  return false;
+}
+
+async function ensureCameraPermission(show_Alert: ShowAlertFn): Promise<boolean> {
+  let permission = await ImagePicker.getCameraPermissionsAsync();
+
+  if (!permission.granted && permission.canAskAgain) {
+    permission = await ImagePicker.requestCameraPermissionsAsync();
+  }
+
+  if (permission.granted) {
+    return true;
+  }
+
+  showPermissionDeniedAlert(show_Alert, {
+    title: 'Camera access required',
+    message:
+      'Please allow camera access when prompted so you can take a photo of your receipt.',
+    settingsMessage:
+      'Camera access is turned off. Open Settings and enable Camera permission for this app.',
+    canAskAgain: permission.canAskAgain,
+  });
+  return false;
+}
 
 function formatDate(isoDate: string | null): string {
   if (!isoDate) return '—';
@@ -73,24 +172,25 @@ function getStatusMeta(status: PaymentStatus) {
 export default function PayNowScreen({ navigation, route }: Props) {
   const { payment } = route.params;
   const { paperTheme, resolvedTheme } = useTheme();
+  const dispatch = useDispatch<AppDispatch>();
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
+  const submitLoading = useSelector(
+    (state: RootState) => state.PaymentReducer.submit.loading,
+  );
+  const userData = useSelector(
+    (state: RootState) => state.AuthReducer.Login.userData,
+  );
+  const shopData = useSelector(
+    (state: RootState) => state.AuthReducer.Login.shopData,
+  );
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
 
   const statusMeta = getStatusMeta(payment.status);
   const isResubmit = payment.status === 'rejected';
 
   const pickFromGallery = useCallback(async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      show_Alert(
-        'error',
-        'Permission required',
-        'Photo library access is needed to choose a receipt image.',
-        1,
-        false,
-        'OK',
-        () => {},
-      );
+    const hasPermission = await ensureMediaLibraryPermission(show_Alert);
+    if (!hasPermission) {
       return;
     }
 
@@ -107,17 +207,8 @@ export default function PayNowScreen({ navigation, route }: Props) {
   }, [show_Alert]);
 
   const takePhoto = useCallback(async () => {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      show_Alert(
-        'error',
-        'Permission required',
-        'Camera access is needed to take a photo of your receipt.',
-        1,
-        false,
-        'OK',
-        () => {},
-      );
+    const hasPermission = await ensureCameraPermission(show_Alert);
+    if (!hasPermission) {
       return;
     }
 
@@ -132,7 +223,7 @@ export default function PayNowScreen({ navigation, route }: Props) {
     }
   }, [show_Alert]);
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (!receiptUri) {
       show_Alert(
         'error',
@@ -146,16 +237,64 @@ export default function PayNowScreen({ navigation, route }: Props) {
       return;
     }
 
-    show_Alert(
-      'pending',
-      'Ready to submit',
-      'Receipt image selected. Payment submission will be connected in the next step.',
-      1,
-      false,
-      'OK',
-      () => {},
-    );
-  }, [receiptUri, show_Alert]);
+    if (submitLoading) {
+      return;
+    }
+
+    try {
+      const response = await dispatch(
+        paymentSubmit_Service({
+          paymentId: payment._id,
+          imageUri: receiptUri,
+        }),
+      ).unwrap();
+
+      if (response.shop?.status && shopData && userData) {
+        dispatch(
+          setLoginSession({
+            user: userData,
+            shop: {
+              ...shopData,
+              status: response.shop.status,
+            },
+          }),
+        );
+      }
+
+      if (payment.shopId) {
+        await dispatch(fetchPaymentsByShop_Service(payment.shopId)).unwrap();
+      }
+
+      setTimeout(() => {
+        show_Alert(
+          'success',
+          'Payment submitted',
+          response.message || 'Your payment receipt was submitted successfully.',
+          1,
+          false,
+          'OK',
+          () => {
+            navigation.goBack();
+          },
+        );
+      }, 150);
+    } catch (error: any) {
+      console.log('error in handleSubmit', error);
+      setTimeout(() => {
+        show_Alert('error', 'Submission failed', error.message, 1, false, 'OK', () => {});
+      }, 150);
+    }
+  }, [
+    dispatch,
+    navigation,
+    payment._id,
+    payment.shopId,
+    receiptUri,
+    shopData,
+    show_Alert,
+    submitLoading,
+    userData,
+  ]);
 
   return (
     <>
@@ -412,33 +551,60 @@ export default function PayNowScreen({ navigation, route }: Props) {
             style={[
               screenStyles.submitButton,
               {
-                backgroundColor: receiptUri
-                  ? paperTheme.colors.primary
-                  : paperTheme.colors.surfaceVariant,
+                backgroundColor:
+                  receiptUri && !submitLoading
+                    ? paperTheme.colors.primary
+                    : paperTheme.colors.surfaceVariant,
               },
+              submitLoading && screenStyles.submitButtonDisabled,
             ]}
-            onPress={handleSubmit}
+            onPress={() => void handleSubmit()}
+            disabled={!receiptUri || submitLoading}
             activeOpacity={0.9}
           >
-            <Ionicons
-              name="cloud-upload-outline"
-              size={20}
-              color={receiptUri ? paperTheme.colors.onPrimary : paperTheme.colors.onSurfaceVariant}
-            />
-            <Text
-              style={[
-                screenStyles.submitButtonText,
-                {
-                  color: receiptUri
-                    ? paperTheme.colors.onPrimary
-                    : paperTheme.colors.onSurfaceVariant,
-                },
-              ]}
-            >
-              {isResubmit ? 'Resubmit payment' : 'Submit payment'}
-            </Text>
+            {submitLoading ? (
+              <ActivityIndicator color={paperTheme.colors.onPrimary} />
+            ) : (
+              <>
+                <Ionicons
+                  name="cloud-upload-outline"
+                  size={20}
+                  color={
+                    receiptUri
+                      ? paperTheme.colors.onPrimary
+                      : paperTheme.colors.onSurfaceVariant
+                  }
+                />
+                <Text
+                  style={[
+                    screenStyles.submitButtonText,
+                    {
+                      color: receiptUri
+                        ? paperTheme.colors.onPrimary
+                        : paperTheme.colors.onSurfaceVariant,
+                    },
+                  ]}
+                >
+                  {isResubmit ? 'Resubmit payment' : 'Submit payment'}
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
         </ScrollView>
+
+        {submitLoading && (
+          <View style={screenStyles.loadingOverlay}>
+            <ActivityIndicator size="large" color={paperTheme.colors.primary} />
+            <Text
+              style={[
+                screenStyles.loadingText,
+                { color: paperTheme.colors.onSurface },
+              ]}
+            >
+              Submitting payment...
+            </Text>
+          </View>
+        )}
 
         {alertConfig && (
           <CommonAlert
@@ -586,6 +752,7 @@ const screenStyles = StyleSheet.create({
   uploadActions: {
     flexDirection: 'row',
     gap: 12,
+    marginTop: 12,
   },
   uploadActionBtn: {
     flex: 1,
@@ -612,6 +779,22 @@ const screenStyles = StyleSheet.create({
   submitButtonText: {
     fontFamily: fonts.PoppinsBold,
     fontSize: 15,
+    letterSpacing: 0.5,
+  },
+  submitButtonDisabled: {
+    opacity: 0.7,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  loadingText: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 14,
+    marginTop: 14,
     letterSpacing: 0.5,
   },
 });

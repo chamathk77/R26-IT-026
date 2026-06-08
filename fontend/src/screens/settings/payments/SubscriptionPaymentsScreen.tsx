@@ -469,20 +469,16 @@ export default function SubscriptionPaymentsScreen({ navigation }: Props) {
     }
 
     try {
-      await dispatch(fetchPaymentsByShop_Service(String(shopId))).unwrap();
-    } catch (error: unknown) {
-      const message =
-        error && typeof error === 'object' && 'message' in error
-          ? String((error as { message?: string }).message)
-          : error instanceof Error
-            ? error.message
-            : 'Could not load payments';
+      const response = await dispatch(fetchPaymentsByShop_Service(String(shopId))).unwrap();
+      console.log('response in loadPayments', response);
+    } catch (error: any) {
+      console.log('error in loadPayments', error);
 
       setTimeout(() => {
         show_Alert(
           'error',
           'Load failed',
-          message,
+          error.message,
           2,
           false,
           'Retry',
@@ -524,11 +520,39 @@ export default function SubscriptionPaymentsScreen({ navigation }: Props) {
     setExpandedPaymentId((current) => (current === paymentId ? null : paymentId));
   }, []);
 
-  const navigateToPayNow = useCallback(
+  const showPayOnlineComingSoonAlert = useCallback(() => {
+    setTimeout(() => {
+      show_Alert(
+        'pending',
+        'Coming soon',
+        'Pay online is still under development. Please use bank transfer and upload your receipt for now.',
+        1,
+        false,
+        'OK',
+        () => {},
+      );
+    }, 350);
+  }, [show_Alert]);
+
+  const showPaymentMethodAlert = useCallback(
     (payment: PaymentRecord) => {
-      navigation.navigate('PayNow', { payment });
+      show_Alert(
+        'pending',
+        'How would you like to pay?',
+        'Choose your preferred payment method. Bank transfer lets you pay via your bank and upload the receipt. Pay online will be available soon.',
+        2,
+        false,
+        'Bank transfer',
+        () => {
+          setTimeout(() => {
+            navigation.navigate('PayNow', { payment });
+          }, 350);
+        },
+        'Pay online',
+        showPayOnlineComingSoonAlert,
+      );
     },
-    [navigation],
+    [navigation, show_Alert, showPayOnlineComingSoonAlert],
   );
 
   if (!shopId && !loading) {
@@ -735,7 +759,7 @@ export default function SubscriptionPaymentsScreen({ navigation }: Props) {
                 resolvedTheme={resolvedTheme}
                 isExpanded={expandedPaymentId === payment._id}
                 onToggle={() => togglePaymentCard(payment._id)}
-                onPayNow={() => navigateToPayNow(payment)}
+                onPayNow={() => showPaymentMethodAlert(payment)}
               />
             ))
           )}

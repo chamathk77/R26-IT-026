@@ -246,11 +246,21 @@ const getRecentPaymentByShop = async (req, res) => {
   }
 };
 
-const resubmitPayment = async (req, res) => {
+const SUBMITTABLE_PAYMENT_STATUSES = ['notPaid', 'rejected'];
+
+/** Submit receipt image for a payment (notPaid or rejected → pending). */
+const paymentSubmit = async (req, res) => {
   let savedReceiptPath = null;
 
   try {
-    const { paymentId } = req.params;
+    const paymentId = String(req.params.paymentId || req.body.paymentId || '').trim();
+
+    if (!paymentId) {
+      if (req.file) {
+        unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
+      }
+      return res.status(400).json({ success: false, message: 'Payment id is required' });
+    }
 
     if (!isValidObjectId(paymentId)) {
       if (req.file) {
@@ -272,11 +282,11 @@ const resubmitPayment = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Payment not found' });
     }
 
-    if (payment.status !== 'rejected') {
+    if (!SUBMITTABLE_PAYMENT_STATUSES.includes(payment.status)) {
       unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
       return res.status(400).json({
         success: false,
-        message: 'Only rejected payments can be resubmitted',
+        message: 'Only not paid or rejected payments can be submitted',
         currentStatus: payment.status,
       });
     }
@@ -298,24 +308,26 @@ const resubmitPayment = async (req, res) => {
       unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
       return res.status(403).json({
         success: false,
-        message: 'You can only resubmit payment for your own shop',
+        message: 'You can only submit payment for your own shop',
       });
     }
 
-    const existingPending = await Payments.findOne({
-      shopId,
-      paymentMonth: payment.paymentMonth,
-      status: 'pending',
-      _id: { $ne: payment._id },
-    }).lean();
+    if (payment.paymentMonth) {
+      const existingPending = await Payments.findOne({
+        shopId,
+        paymentMonth: payment.paymentMonth,
+        status: 'pending',
+        _id: { $ne: payment._id },
+      }).lean();
 
-    if (existingPending) {
-      unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
-      return res.status(400).json({
-        success: false,
-        message: `A pending payment already exists for ${payment.paymentMonth}`,
-        paymentId: existingPending._id,
-      });
+      if (existingPending) {
+        unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
+        return res.status(400).json({
+          success: false,
+          message: `A pending payment already exists for ${payment.paymentMonth}`,
+          paymentId: existingPending._id,
+        });
+      }
     }
 
     const previousReceiptPath = payment.receiptImagePath;
@@ -327,12 +339,27 @@ const resubmitPayment = async (req, res) => {
     payment.reason = null;
     await payment.save();
 
-    unlinkReceiptImageIfLocal(previousReceiptPath);
+    if (
+      previousReceiptPath &&
+      previousReceiptPath !== 'pending-upload' &&
+      previousReceiptPath !== savedReceiptPath
+    ) {
+      unlinkReceiptImageIfLocal(previousReceiptPath);
+    }
+
+    const shop = await ShopsData.findOne({ shopId });
+    if (shop) {
+      shop.status = 'initialPaymentPending';
+      await shop.save();
+    }
 
     res.status(200).json({
       success: true,
-      message: 'Payment resubmitted successfully',
+      message: 'Payment submitted successfully',
       payment: formatPayment(payment),
+      shop: shop
+        ? { shopId: shop.shopId, status: shop.status }
+        : { shopId, status: null },
     });
   } catch (error) {
     if (savedReceiptPath) {
@@ -340,7 +367,7 @@ const resubmitPayment = async (req, res) => {
     } else if (req.file) {
       unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
     }
-    console.log('error in resubmitPayment', error);
+    console.log('error in paymentSubmit', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -348,9 +375,7 @@ const resubmitPayment = async (req, res) => {
 
 
 module.exports = {
- 
-  resubmitPayment,
+  paymentSubmit,
   getPaymentsByShop,
   getRecentPaymentByShop,
-
 };

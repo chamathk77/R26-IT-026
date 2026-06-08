@@ -4,6 +4,7 @@ import { ensureInternetConnection } from '../utils/checkInternetConnection';
 import { ApiErrorResponse } from '../type/common';
 import {
   GetPaymentsByShopResponse,
+  PaymentSubmitRequest,
   SubmitPaymentReceiptResponse,
 } from '../type/payment';
 
@@ -86,24 +87,59 @@ export const fetchPaymentsByShop_Service = createAsyncThunk(
   },
 );
 
-export async function resubmitPaymentReceipt(
-  paymentId: string,
-  imageUri: string,
-): Promise<SubmitPaymentReceiptResponse> {
-  await ensureInternetConnection();
+export const paymentSubmit_Service = createAsyncThunk(
+  'payment/submit',
+  async ({ paymentId, imageUri }: PaymentSubmitRequest, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
 
-  const response = await apiClient.post<SubmitPaymentReceiptResponse>(
-    `/api/payments/${encodeURIComponent(paymentId)}/resubmit`,
-    buildReceiptFormData(imageUri),
-    { headers: { 'Content-Type': 'multipart/form-data' } },
-  );
+      const formData = buildReceiptFormData(imageUri);
+      formData.append('paymentId', paymentId);
 
-  if (isHttpSuccess(response.status) && response.data?.success) {
-    return response.data;
-  }
+      const response = await apiClient.post<SubmitPaymentReceiptResponse>(
+        `/api/payments/${encodeURIComponent(paymentId)}/submit`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      );
 
-  throw new Error('Could not resubmit payment receipt');
-}
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: 'Could not submit payment receipt',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'error' in error &&
+        'message' in error &&
+        'status' in error &&
+        'timestamp' in error
+      ) {
+        return rejectWithValue(error as ApiErrorResponse);
+      }
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Network error. Please check your connection and try again.';
+
+      const networkError: ApiErrorResponse = {
+        error: 'Network Error',
+        message,
+        status: 400,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(networkError);
+    }
+  },
+);
 
 export function getReceiptImageUrl(receiptImagePath: string | null | undefined): string | null {
   if (!receiptImagePath || receiptImagePath === 'pending-upload') {

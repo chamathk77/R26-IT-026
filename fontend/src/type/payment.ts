@@ -34,3 +34,8 @@ export interface SubmitPaymentReceiptResponse {
     status: string | null;
   };
 }
+
+export interface PaymentSubmitRequest {
+  paymentId: string;
+  imageUri: string;
+}
