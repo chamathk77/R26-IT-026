@@ -209,6 +209,15 @@ export default function SettingsScreen({ navigation }: Props) {
       iconColor: primary,
       onPress: () => navigation.navigate('ShopDetails'),
     },
+    {
+      key: 'payments',
+      title: 'Subscription payments',
+      description: 'Payment history & current status',
+      icon: 'card-outline',
+      iconBg: '#dbeafe',
+      iconColor: '#1d4ed8',
+      onPress: () => navigation.navigate('SubscriptionPayments'),
+    },
     ...(showManage
       ? [
           {

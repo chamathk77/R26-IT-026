@@ -45,4 +45,5 @@ export type RootStackParamList = {
   ManageAccount: undefined;
   EditUser: { userId: string };
   ThemePreference: undefined;
+  SubscriptionPayments: undefined;
 };

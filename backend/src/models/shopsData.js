@@ -151,6 +151,20 @@ const shopsDataSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    subsAmount: {
+      type: Number,
+      default: null,
+      min: 0,
+    },
+    oneTimePaymentAmount: {
+      type: Number,
+      default: null,
+      min: 0,
+    },
+    isOneTimePaymentDone: {
+      type: Boolean,
+      default: false,
+    },
     trailStartDate: {
       type: Date,
       default: null,
@@ -262,6 +276,9 @@ module.exports = ShopsData;
   // subscriptionStartDate: date
   // currentPaymentDoneDate: date
   // nextPaymentDate: date
+  // subAmount: number | 
+  // oneTimePaymentAmount: number | null
+  // isOneTimePaymentDone: boolean
   // dueDays: number
   // beforeSevenDaysNotification: boolean
   // onDateNotification: boolean

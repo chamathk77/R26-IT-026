@@ -1,5 +1,5 @@
 const express = require('express');
-const { createProtect } = require('../middleware/authMiddleware');
+const { protect } = require('../middleware/authMiddleware');
 const { uploadReceiptImageSingle } = require('../middleware/uploadReceiptImage');
 const {
   submitPayment,
@@ -10,12 +10,10 @@ const {
 } = require('../controllers/paymentController');
 
 const router = express.Router();
-const paymentAuth = createProtect({ allowWhenTrialExpired: true });
-
-router.get('/shop/:shopId/recent', paymentAuth, getRecentPaymentByShop);
-router.get('/shop/:shopId', paymentAuth, getPaymentsByShop);
-router.get('/receipt/:receiptNumber', paymentAuth, getPaymentByReceiptNumber);
-router.post('/submit', paymentAuth, uploadReceiptImageSingle, submitPayment);
-router.post('/:paymentId/resubmit', paymentAuth, uploadReceiptImageSingle, resubmitPayment);
+router.get('/shop/:shopId/recent', protect, getRecentPaymentByShop);
+router.get('/shop/:shopId', protect, getPaymentsByShop);
+router.get('/receipt/:receiptNumber', protect, getPaymentByReceiptNumber);
+router.post('/submit', protect, uploadReceiptImageSingle, submitPayment);
+router.post('/:paymentId/resubmit', protect, uploadReceiptImageSingle, resubmitPayment);
 
 module.exports = router;

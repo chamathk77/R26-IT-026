@@ -1,45 +1,5 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
-const ShopsData = require("../models/shopsData");
-const {
-  completeTrialIfExpired,
-  isTrialAccessBlocked,
-} = require("../utils/trialHelper");
-
-async function enforceTrialAccess(userId) {
-  const user = await User.findById(userId).select("shopId").lean();
-  if (!user?.shopId) {
-    return null;
-  }
-
-  let shop = await ShopsData.findOne({
-    shopId: user.shopId.trim().toUpperCase(),
-  });
-
-  // check if shop exists
-  if (!shop) {
-    return null;
-  }
-// complete trial if expired
-  shop = await completeTrialIfExpired(shop);
-
-  // check if trial is access blocked
-  if (isTrialAccessBlocked(shop)) {
-    return {
-      expired: true,
-      message:
-        shop.status === "trialExpired"
-          ? "Your trial end date has already passed. Please subscribe to continue."
-          : "Trial period has ended. Please subscribe to continue.",
-      trailEndDate: shop.trailEndDate,
-      isTrailCompleted: shop.isTrailCompleted,
-      status: shop.status,
-      shop,
-    };
-  }
-
-  return { expired: false, shop };
-}
 
 async function validateStoredToken(userId, bearerToken) {
   const user = await User.findById(userId).select("token shopId").lean();
@@ -73,9 +33,7 @@ async function validateStoredToken(userId, bearerToken) {
   return { valid: true, user };
 }
 
-function createProtect(options = {}) {
-  const { allowWhenTrialExpired = false } = options;
-
+function createProtect() {
   return async (req, res, next) => {
     let bearerToken;
 
@@ -132,7 +90,7 @@ function createProtect(options = {}) {
 
     try {
       const sessionUser = await User.findById(decoded.id)
-        .select('isInternalUser')
+        .select('isInternalUser shopId')
         .lean();
 
       if (sessionUser?.isInternalUser) {
@@ -146,26 +104,8 @@ function createProtect(options = {}) {
         });
       }
 
-      // check if trial is expired
-      const trialCheck = await enforceTrialAccess(decoded.id);
-
-      if (trialCheck?.expired && !allowWhenTrialExpired) {
-        await User.findByIdAndUpdate(decoded.id, { token: null });
-        return res.status(401).json({
-          success: false,
-          message: trialCheck.message,
-          trialExpired: true,
-          sessionEnded: true,
-          trailEndDate: trialCheck.trailEndDate,
-          status: trialCheck.status,
-          code: "TRIAL_ENDED",
-        });
-      }
-
-      if (trialCheck?.shop) {
-        req.user.shopId = trialCheck.shop.shopId;
-        req.user.shopStatus = trialCheck.shop.status;
-        req.user.trialExpired = Boolean(trialCheck.expired);
+      if (sessionUser?.shopId) {
+        req.user.shopId = String(sessionUser.shopId).trim().toUpperCase();
       }
 
       next();

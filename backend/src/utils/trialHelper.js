@@ -59,6 +59,10 @@ async function markTrialAsExpired(shopDoc) {
     return shopDoc;
   }
 
+  if (shopDoc.isTrailCompleted) {
+    return shopDoc;
+  }
+
   shopDoc.isTrailCompleted = true;
   shopDoc.status = 'trialExpired';
   await shopDoc.save();
