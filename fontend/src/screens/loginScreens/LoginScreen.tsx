@@ -159,7 +159,7 @@ export default function LoginScreen({ navigation }: Props) {
           1,
           false,
           "OK",
-          () => {},
+          () => { },
         );
         return;
       }
@@ -187,16 +187,16 @@ export default function LoginScreen({ navigation }: Props) {
               : currentUser,
             shop: currentShop
               ? {
-                  ...currentShop,
-                  shopId: response.shopId,
-                  status: response.status,
-                  isTrailStared: response.isTrailStared,
-                  isTrailCompleted: response.isTrailCompleted,
-                  trailStartDate:
-                    response.trailStartDate ?? currentShop.trailStartDate,
-                  trailEndDate:
-                    response.trailEndDate ?? currentShop.trailEndDate,
-                }
+                ...currentShop,
+                shopId: response.shopId,
+                status: response.status,
+                isTrailStared: response.isTrailStared,
+                isTrailCompleted: response.isTrailCompleted,
+                trailStartDate:
+                  response.trailStartDate ?? currentShop.trailStartDate,
+                trailEndDate:
+                  response.trailEndDate ?? currentShop.trailEndDate,
+              }
               : currentShop,
           }),
         );
@@ -231,7 +231,7 @@ export default function LoginScreen({ navigation }: Props) {
         }, 150);
       } catch (error: any) {
         console.log('error in Start Trial', error);
-  
+
         setTimeout(() => {
           show_Alert(
             "error",
@@ -290,7 +290,7 @@ export default function LoginScreen({ navigation }: Props) {
         1,
         false,
         "OK",
-        () => {},
+        () => { },
       );
       return;
     }
@@ -303,7 +303,7 @@ export default function LoginScreen({ navigation }: Props) {
         1,
         false,
         "OK",
-        () => {},
+        () => { },
       );
       return;
     }
@@ -332,11 +332,12 @@ export default function LoginScreen({ navigation }: Props) {
           if (response.shop.onboardStep === "shopRegistered") {
             navigation.navigate("SelectFeaturesScreen");
             return;
-          } else if (response.shop.onboardStep === "featureSelected") {
+          } 
+          if (response.shop.onboardStep === "featureSelected") {
             navigation.navigate("CreatePasswordScreen");
             return;
           }
-          if (response.shop?.isTrailStared === false) {
+          if (response.shop?.isTrailStared === false && response.shop.onboardStep === "completed") {
             show_Alert(
               "error",
               "Account Pending",
@@ -358,15 +359,23 @@ export default function LoginScreen({ navigation }: Props) {
             );
             // }
           }
-        } else if (
-          response.shop?.isTrailStared === true &&
-          response.shop.status === "trial"
-        ) {
+        }
+
+        if (response.shop?.isTrailStared === true && response.shop.status === "trial") {
           void StartTrial(response.shop?.shopId);
-        } else if (
-          response.shop?.isTrailStared === true &&
-          response.shop.status === "trialExpired"
-        ) {
+
+        }
+
+        if (response.shop?.isTrailStared === true && response.shop.status === "initialPaymentPending" && 
+          response.shop.isTrailCompleted === false) {
+          void StartTrial(response.shop?.shopId);
+
+        }
+
+        
+
+
+        if ( response.shop?.isTrailStared === true && response.shop.status === "trialExpired") {
           show_Alert(
             "pending",
             "Trial ended",
@@ -379,9 +388,14 @@ export default function LoginScreen({ navigation }: Props) {
             },
           );
           return;
-        } else if (response.shop?.status === "active") {
+        }
+
+        if (response.shop?.status === "active") {
           navigation.reset({ index: 0, routes: [{ name: "ModuleHub" }] });
-        } else if (response.shop?.status === "initialPaymentPending") {
+        }
+
+
+        if (response.shop?.status === "initialPaymentPending" && response.shop.isTrailCompleted === true) {
           show_Alert(
             "pending",
             "Payment Pending",
@@ -389,13 +403,15 @@ export default function LoginScreen({ navigation }: Props) {
             2,
             false,
             "OK",
-            () => {},
+            () => { },
             "Contact Admin",
             () => {
               console.log("Contact Admin pressed");
             },
           );
-        } else if (response.shop?.status === "paymentPending") {
+        }  
+        
+        if (response.shop?.status === "paymentPending") {
           show_Alert(
             "pending",
             "Payment Pending",
@@ -422,7 +438,7 @@ export default function LoginScreen({ navigation }: Props) {
         1,
         false,
         "OK",
-        () => {},
+        () => { },
       );
     }
   };

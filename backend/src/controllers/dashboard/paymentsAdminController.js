@@ -6,6 +6,8 @@ const {
   formatShopSummary,
   findShopByShopId,
 } = require('../../utils/paymentResponseHelper');
+const { addDays } = require('../../utils/trialHelper');
+const { clearShopUserTokens } = require('../../services/trialExpirationService');
 
 const { PAYMENT_STATUS } = Payments;
 const REVIEWABLE_STATUS = 'pending';
@@ -102,93 +104,72 @@ const getPaymentDetails = async (req, res) => {
   }
 };
 
-async function applyShopUpdatesOnApprove(shop, payment) {
-  const doneDate = startOfDay(
-    payment.exactPaymentDay || payment.submittedDate || new Date(),
-  );
 
-  if (!shop.subscriptionStartDate) {
-    shop.subscriptionStartDate = doneDate;
+
+async function applyShopUpdatesOnUpfrontApprove(shop) {
+  if (!shop.trailStartDate) {
+    throw new Error('Shop trial start date is required to approve upfront payment');
   }
 
-  shop.currentPaymentDoneDate = doneDate;
-  shop.nextPaymentDate = addOneMonth(doneDate);
+  const trialStart = startOfDay(shop.trailStartDate);
+
+  shop.isOneTimePaymentDone = true;
+  shop.subscriptionStartDate = trialStart;
+  shop.nextPaymentDate = startOfDay(addDays(trialStart, 30));
   shop.status = 'active';
   await shop.save();
 }
 
-async function applyShopUpdatesOnReject(shop) {
-  if (shop.status === 'initialPaymentPending') {
-    shop.status = 'paymentPending';
-    await shop.save();
-  }
-}
-
-const updatePaymentStatus = async (req, res) => {
+const rejectUpfrontPayment = async (req, res) => {
   try {
     const { paymentId } = req.params;
-    const { status, reason } = req.body;
-    // check if payment id is valid
+    const { reason } = req.body;
+
     if (!isValidObjectId(paymentId)) {
       return res.status(400).json({ success: false, message: 'Invalid payment id' });
     }
-    // check if status is valid
-    const statusNormalized = status != null ? String(status).trim() : '';
-    if (!ADMIN_SETTABLE_STATUSES.includes(statusNormalized)) {
-      return res.status(400).json({
-        success: false,
-        message: `status must be one of: ${ADMIN_SETTABLE_STATUSES.join(', ')}`,
-      });
-    }
-    // check if payment exists
-    const payment = await Payments.findById(paymentId);
-    if (!payment) {
-      return res.status(404).json({ success: false, message: 'Payment not found' });
-    }
-    // check if payment is reviewable
-    if (payment.status !== REVIEWABLE_STATUS) {
-      return res.status(400).json({
-        success: false,
-        message: `Only payments with status "${REVIEWABLE_STATUS}" can be updated`,
-        currentStatus: payment.status,
-      });
-    }
-    // check if reason is provided when rejecting a payment
+
     const reasonTrimmed = reason != null ? String(reason).trim() : '';
-    if (statusNormalized === 'rejected' && !reasonTrimmed) {
+    if (!reasonTrimmed) {
       return res.status(400).json({
         success: false,
         message: 'Reason is required when rejecting a payment',
       });
     }
-// check if shop exists
+
+    const payment = await Payments.findById(paymentId);
+    if (!payment) {
+      return res.status(404).json({ success: false, message: 'Payment not found' });
+    }
+
+    if (payment.paymentType !== 'upFront') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only upfront payments can be rejected with this action',
+        paymentType: payment.paymentType,
+      });
+    }
+
+    if (payment.status !== REVIEWABLE_STATUS) {
+      return res.status(400).json({
+        success: false,
+        message: `Only payments with status "${REVIEWABLE_STATUS}" can be rejected`,
+        currentStatus: payment.status,
+      });
+    }
+
     const shop = await ShopsData.findOne({ shopId: payment.shopId });
     if (!shop) {
       return res.status(404).json({ success: false, message: 'Shop not found for this payment' });
     }
-    // update payment status
-    payment.status = statusNormalized;
-    payment.reason = statusNormalized === 'rejected' ? reasonTrimmed : null;
-    // update shop status
-    if (statusNormalized === 'approve') {
-      if (!payment.exactPaymentDay) {
-        payment.exactPaymentDay = startOfDay(
-          payment.submittedDate || new Date(),
-        );
-      }
-      await applyShopUpdatesOnApprove(shop, payment);
-    } else {
-      await applyShopUpdatesOnReject(shop);
-    }
 
+    payment.status = 'rejected';
+    payment.reason = reasonTrimmed;
     await payment.save();
 
     res.status(200).json({
       success: true,
-      message:
-        statusNormalized === 'approve'
-          ? 'Payment approved and shop subscription updated'
-          : 'Payment rejected',
+      message: 'Upfront payment rejected',
       payment: formatPaymentRecord(payment.toObject(), req),
       shop: formatShopSummary(shop.toObject()),
     });
@@ -196,13 +177,84 @@ const updatePaymentStatus = async (req, res) => {
     if (error.name === 'ValidationError') {
       return res.status(400).json({ success: false, message: error.message });
     }
-    console.log('error in updatePaymentStatus', error);
+    console.log('error in rejectUpfrontPayment', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
+const approveUpfrontPayment = async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+
+    if (!isValidObjectId(paymentId)) {
+      return res.status(400).json({ success: false, message: 'Invalid payment id' });
+    }
+
+    const payment = await Payments.findById(paymentId);
+    if (!payment) {
+      return res.status(404).json({ success: false, message: 'Payment not found' });
+    }
+
+    if (payment.paymentType !== 'upFront') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only upfront payments can be approved with this action',
+        paymentType: payment.paymentType,
+      });
+    }
+
+    if (payment.status !== REVIEWABLE_STATUS) {
+      return res.status(400).json({
+        success: false,
+        message: `Only payments with status "${REVIEWABLE_STATUS}" can be approved`,
+        currentStatus: payment.status,
+      });
+    }
+
+    const shop = await ShopsData.findOne({ shopId: payment.shopId });
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found for this payment' });
+    }
+
+    if (!shop.trailStartDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Shop trial start date is required before approving upfront payment',
+      });
+    }
+
+    payment.status = 'approve';
+    payment.reason = null;
+    if (!payment.exactPaymentDay) {
+      payment.exactPaymentDay = startOfDay(payment.submittedDate || new Date());
+    }
+
+    await applyShopUpdatesOnUpfrontApprove(shop);
+    await payment.save();
+
+    const usersLoggedOut = await clearShopUserTokens(shop.shopId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Upfront payment approved and shop subscription updated',
+      usersLoggedOut,
+      payment: formatPaymentRecord(payment.toObject(), req),
+      shop: formatShopSummary(shop.toObject()),
+    });
+  } catch (error) {
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    console.log('error in approveUpfrontPayment', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
+
 module.exports = {
   listPendingPayments,
   getPaymentDetails,
-  updatePaymentStatus,
+  approveUpfrontPayment,
+  rejectUpfrontPayment,
 };

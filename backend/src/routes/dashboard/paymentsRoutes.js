@@ -3,13 +3,15 @@ const { protectDashboard } = require('../../middleware/dashboardAuthMiddleware')
 const {
   listPendingPayments,
   getPaymentDetails,
-  updatePaymentStatus,
+  approveUpfrontPayment,
+  rejectUpfrontPayment,
 } = require('../../controllers/dashboard/paymentsAdminController');
 
 const router = express.Router();
 
 router.get('/pending', protectDashboard, listPendingPayments);
 router.get('/:paymentId', protectDashboard, getPaymentDetails);
-router.post('/:paymentId/status', protectDashboard, updatePaymentStatus);
+router.post('/:paymentId/approve-upfront', protectDashboard, approveUpfrontPayment);
+router.post('/:paymentId/reject-upfront', protectDashboard, rejectUpfrontPayment);
 
 module.exports = router;
