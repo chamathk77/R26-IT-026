@@ -1,6 +1,7 @@
 import { apiClient } from '../../config/apiConfig';
 import { ensureInternetConnection } from '../utils/checkInternetConnection';
 import { ApiErrorResponse } from '../type/common';
+import { toApiErrorResponse } from '../utils/apiErrorAlert';
 import { NextMonthForecast, NextMonthForecastResponse, MonthlySeriesPoint } from '../type/forecast';
 
 function isHttpSuccess(status: number): boolean {
@@ -57,23 +58,8 @@ export async function fetchNextMonthForecast_Service(): Promise<NextMonthForecas
       timestamp: new Date().toISOString(),
     };
     throw apiError;
-  } catch (error: any) {
-    if (error.error && error.message && error.status && error.timestamp) {
-      throw error as ApiErrorResponse;
-    }
-
-    const msg =
-      typeof error?.message === 'string' && error.message.trim()
-        ? error.message
-        : 'Network error. Please check your connection and try again.';
-
-    const networkError: ApiErrorResponse = {
-      error: 'Network Error',
-      message: msg,
-      status: 0,
-      timestamp: new Date().toISOString(),
-    };
-    throw networkError;
+  } catch (error: unknown) {
+    throw toApiErrorResponse(error);
   }
 }
 
@@ -107,22 +93,7 @@ export async function fetchMonthlySeries_Service(limit: number = 1): Promise<Mon
     }
 
     return rows;
-  } catch (error: any) {
-    if (error.error && error.message && error.status && error.timestamp) {
-      throw error as ApiErrorResponse;
-    }
-
-    const msg =
-      typeof error?.message === 'string' && error.message.trim()
-        ? error.message
-        : 'Network error. Please check your connection and try again.';
-
-    const networkError: ApiErrorResponse = {
-      error: 'Network Error',
-      message: msg,
-      status: 0,
-      timestamp: new Date().toISOString(),
-    };
-    throw networkError;
+  } catch (error: unknown) {
+    throw toApiErrorResponse(error);
   }
 }

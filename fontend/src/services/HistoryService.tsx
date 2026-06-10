@@ -2,6 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { apiClient } from '../../config/apiConfig';
 import { ensureInternetConnection } from '../utils/checkInternetConnection';
 import { ApiErrorResponse } from '../type/common';
+import { toApiErrorResponse } from '../utils/apiErrorAlert';
 import { GetHistoryResponse, HistoryScope } from '../type/history';
 
 function isHttpSuccess(status: number): boolean {
@@ -30,21 +31,8 @@ export const fetchHistory_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
-      console.log('Fetch history error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+    } catch (error: unknown) {
+      throw toApiErrorResponse(error);
     }
   },
 );

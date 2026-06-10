@@ -2,6 +2,7 @@ import { createAsyncThunk } from "@reduxjs/toolkit";
 import { apiClient } from "../../config/apiConfig";
 import { ensureInternetConnection } from "../utils/checkInternetConnection";
 import { ApiErrorResponse } from "../type/common";
+import { toApiErrorResponse } from "../utils/apiErrorAlert";
 import {
   CreateShopOnboardingRequest,
   CreateShopOnboardingResponse,
@@ -43,21 +44,8 @@ export const createShopOnboarding_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
-      console.log("Create shop onboarding error:---", error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: "Network Error",
-        message:
-          error.message ||
-          "Network error. Please check your connection and try again.",
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+    } catch (error: unknown) {
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -86,21 +74,8 @@ export const updateShopFeatures_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
-      console.log("Update shop features error:---", error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: "Network Error",
-        message:
-          error.message ||
-          "Network error. Please check your connection and try again.",
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+    } catch (error: unknown) {
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -129,21 +104,8 @@ export const sendOtpOnboarding_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
-      console.log("Send OTP onboarding error:---", error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: "Network Error",
-        message:
-          error.message ||
-          "Network error. Please check your connection and try again.",
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+    } catch (error: unknown) {
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -172,21 +134,8 @@ export const verifyOtpOnboarding_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
-      console.log("Verify OTP onboarding error:---", error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: "Network Error",
-        message:
-          error.message ||
-          "Network error. Please check your connection and try again.",
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+    } catch (error: unknown) {
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -215,21 +164,8 @@ export const signupOnboarding_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
-      console.log("Signup onboarding error:---", error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: "Network Error",
-        message:
-          error.message ||
-          "Network error. Please check your connection and try again.",
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+    } catch (error: unknown) {
+      throw toApiErrorResponse(error);
     }
   },
 );

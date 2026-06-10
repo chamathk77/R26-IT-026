@@ -27,6 +27,7 @@ import {
 import { AppDispatch, RootState } from '../../../store/store';
 import { setLoginSession } from '../../../store/reducers/AuthReducer';
 import { useCommonAlert } from '../../../hooks/useCommonAlert';
+import { handleSessionExpiredApiError } from '../../../utils/apiErrorAlert';
 import CommonAlert from '../../../components/CommonAlert/CommonAlert';
 import { cardShadow, settingsDetailStyles as styles } from '../shared/settingsDetailStyles';
 import {
@@ -278,10 +279,18 @@ export default function PayNowScreen({ navigation, route }: Props) {
           },
         );
       }, 150);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('error in handleSubmit', error);
+
+      const handled = await handleSessionExpiredApiError(error, show_Alert);
+      if (handled) return;
+
       setTimeout(() => {
-        show_Alert('error', 'Submission failed', error.message, 1, false, 'OK', () => {});
+        const message =
+          error && typeof error === 'object' && 'message' in error
+            ? String((error as { message?: string }).message)
+            : 'Could not submit payment. Please try again.';
+        show_Alert('error', 'Submission failed', message, 1, false, 'OK', () => {});
       }, 150);
     }
   }, [

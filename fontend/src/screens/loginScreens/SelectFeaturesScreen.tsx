@@ -42,6 +42,7 @@ import {
 } from '../../type/onboarding';
 import { updateShopFeatures_Service } from '../../services/ShopOnboardingService';
 import { AppDispatch, RootState } from '../../store/store';
+import { getApiErrorMessage, parseApiError } from '../../utils/apiErrorAlert';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SelectFeaturesScreen'>;
 
@@ -201,12 +202,17 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
           numAdditionalUsers: response.features.numAdditionalUsers,
         },
       });
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Could not save shop features. Please try again.';
-      show_Alert('error', 'Error', message, 1, true, 'OK', () => {});
+    } catch (error: unknown) {
+      console.log('error in select features screen', parseApiError(error));
+      show_Alert(
+        'error',
+        'Error',
+        getApiErrorMessage(error, 'Could not save shop features. Please try again.'),
+        1,
+        true,
+        'OK',
+        () => {},
+      );
     }
   };
 

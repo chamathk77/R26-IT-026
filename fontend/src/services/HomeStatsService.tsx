@@ -1,6 +1,7 @@
 import { apiClient } from '../../config/apiConfig';
 import { ensureInternetConnection } from '../utils/checkInternetConnection';
 import { ApiErrorResponse } from '../type/common';
+import { toApiErrorResponse } from '../utils/apiErrorAlert';
 import { GetTodayHomeStatsResponse, TodayHomeStats } from '../type/dashboard';
 
 function isHttpSuccess(status: number): boolean {
@@ -56,18 +57,7 @@ export async function fetchTodayHomeStats_Service(): Promise<TodayHomeStats> {
       timestamp: new Date().toISOString(),
     };
     throw apiError;
-  } catch (error: any) {
-    if (error.error && error.message && error.status && error.timestamp) {
-      throw error as ApiErrorResponse;
-    }
-
-    const networkError: ApiErrorResponse = {
-      error: 'Network Error',
-      message:
-        error.message || 'Network error. Please check your connection and try again.',
-      status: 0,
-      timestamp: new Date().toISOString(),
-    };
-    throw networkError;
+  } catch (error: unknown) {
+    throw toApiErrorResponse(error);
   }
 }

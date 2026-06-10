@@ -2,6 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { apiClient } from '../../config/apiConfig';
 import { ensureInternetConnection } from '../utils/checkInternetConnection';
 import { ApiErrorResponse } from '../type/common';
+import { toApiErrorResponse } from '../utils/apiErrorAlert';
 import {
   CreateCategoryRequest,
   CreateCategoryResponse,
@@ -40,21 +41,9 @@ export const createCategory_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Create category error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -85,21 +74,9 @@ export const updateCategory_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Update category error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -125,21 +102,9 @@ export const deleteCategory_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Delete category error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -163,21 +128,9 @@ export const fetchCategories_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Fetch categories error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );

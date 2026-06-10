@@ -30,6 +30,7 @@ import {
   verifyOtpOnboarding_Service,
 } from '../../services/ShopOnboardingService';
 import { AppDispatch, RootState } from '../../store/store';
+import { getApiErrorMessage, parseApiError } from '../../utils/apiErrorAlert';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OtpValidationScreen'>;
 
@@ -138,10 +139,17 @@ export default function OtpValidationScreen({ navigation, route }: Props) {
         'OK',
         () => {},
       );
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to resend verification code.';
-      show_Alert('error', 'Error', message, 1, false, 'OK', () => {});
+    } catch (error: unknown) {
+      console.log('error in resend OTP', parseApiError(error));
+      show_Alert(
+        'error',
+        'Error',
+        getApiErrorMessage(error, 'Failed to resend verification code.'),
+        1,
+        false,
+        'OK',
+        () => {},
+      );
     }
   };
 
@@ -194,10 +202,17 @@ export default function OtpValidationScreen({ navigation, route }: Props) {
           });
         },
       );
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Verification failed. Please try again.';
-      show_Alert('error', 'Error', error.message, 1, false, 'OK', () => {});
+    } catch (error: unknown) {
+      console.log('error in verify OTP', parseApiError(error));
+      show_Alert(
+        'error',
+        'Error',
+        getApiErrorMessage(error, 'Verification failed. Please try again.'),
+        1,
+        false,
+        'OK',
+        () => {},
+      );
     }
   };
 

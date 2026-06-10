@@ -24,6 +24,7 @@ import { onboardingStyles as s } from "./onboarding/onboardingStyles";
 import { useCommonAlert } from "../../hooks/useCommonAlert";
 import CommonAlert from "../../components/CommonAlert/CommonAlert";
 import { createShopOnboarding_Service } from "../../services/ShopOnboardingService";
+import { getApiErrorMessage, parseApiError } from "../../utils/apiErrorAlert";
 import { AppDispatch, RootState } from "../../store/store";
 
 type Props = NativeStackScreenProps<RootStackParamList, "OnboardOwnerScreen">;
@@ -185,12 +186,17 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
           shopId: response.shopId,
         },
       });
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Could not save shop details. Please try again.";
-      show_Alert("error", "Error", message, 1, true, "OK", () => {});
+    } catch (error: unknown) {
+      console.log("error in onboard owner screen", parseApiError(error));
+      show_Alert(
+        "error",
+        "Error",
+        getApiErrorMessage(error, "Could not save shop details. Please try again."),
+        1,
+        true,
+        "OK",
+        () => {},
+      );
     }
   };
 

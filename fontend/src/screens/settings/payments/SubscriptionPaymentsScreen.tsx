@@ -26,6 +26,7 @@ import {
 } from '../../../services/PaymentService';
 import { PaymentRecord, PaymentStatus, PaymentType } from '../../../type/payment';
 import { useCommonAlert } from '../../../hooks/useCommonAlert';
+import { handleSessionExpiredApiError } from '../../../utils/apiErrorAlert';
 import CommonAlert from '../../../components/CommonAlert/CommonAlert';
 import { cardShadow, settingsDetailStyles as styles } from '../shared/settingsDetailStyles';
 import { SettingsBadge, SettingsEmptyState } from '../shared/SettingsDetailComponents';
@@ -471,14 +472,21 @@ export default function SubscriptionPaymentsScreen({ navigation }: Props) {
     try {
       const response = await dispatch(fetchPaymentsByShop_Service(String(shopId))).unwrap();
       console.log('response in loadPayments', response);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('error in loadPayments', error);
 
+      const handled = await handleSessionExpiredApiError(error, show_Alert);
+      if (handled) return;
+
       setTimeout(() => {
+        const message =
+          error && typeof error === 'object' && 'message' in error
+            ? String((error as { message?: string }).message)
+            : 'Could not load payments. Please try again.';
         show_Alert(
           'error',
           'Load failed',
-          error.message,
+          message,
           2,
           false,
           'Retry',

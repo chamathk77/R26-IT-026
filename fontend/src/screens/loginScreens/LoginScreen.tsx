@@ -31,6 +31,7 @@ import {
   setLoginSession,
 } from "../../store/reducers/AuthReducer";
 import { useCommonAlert } from "../../hooks/useCommonAlert";
+import { getApiErrorMessage, parseApiError } from "../../utils/apiErrorAlert";
 import CommonAlert from "../../components/CommonAlert/CommonAlert";
 
 const MOBILE_DIGIT_LENGTH = 10;
@@ -229,14 +230,15 @@ export default function LoginScreen({ navigation }: Props) {
             );
           }
         }, 150);
-      } catch (error: any) {
-        console.log('error in Start Trial', error);
+      } catch (error: unknown) {
+        const parsed = parseApiError(error);
+        console.log("error in Start Trial", parsed);
 
         setTimeout(() => {
           show_Alert(
             "error",
             "Trial failed",
-            error.message,
+            getApiErrorMessage(error, "Could not start trial. Please try again."),
             1,
             false,
             "OK",
@@ -429,12 +431,13 @@ export default function LoginScreen({ navigation }: Props) {
           );
         }
       }
-    } catch (error: any) {
-      devLog("Login error:", error);
+    } catch (error: unknown) {
+      const parsed = parseApiError(error);
+      devLog("Login error:", parsed);
       show_Alert(
         "error",
         "Error",
-        error?.message || "Login failed",
+        getApiErrorMessage(error, "Login failed"),
         1,
         false,
         "OK",

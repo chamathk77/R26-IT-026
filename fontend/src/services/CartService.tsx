@@ -2,6 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { apiClient } from '../../config/apiConfig';
 import { ensureInternetConnection } from '../utils/checkInternetConnection';
 import { ApiErrorResponse } from '../type/common';
+import { toApiErrorResponse } from '../utils/apiErrorAlert';
 import {
   AddCartItemRequest,
   AddCartItemResponse,
@@ -45,21 +46,9 @@ export const fetchPendingCartSessions_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Fetch pending cart sessions error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -86,21 +75,9 @@ export const fetchAddedCartSessions_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Fetch added cart sessions error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -134,21 +111,9 @@ export const fetchCartItems_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Fetch cart items error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -175,21 +140,9 @@ export const createCartSession_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Create cart session error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -219,21 +172,9 @@ export const addCartItem_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Add cart item error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -271,21 +212,9 @@ export const addProductToPendingCart_Service = createAsyncThunk(
         cartNumber: resolvedCartNumber,
         item: item.data,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Add product to pending cart error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -317,21 +246,9 @@ export const revertAddedCartToPending_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Revert added cart to pending error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -362,21 +279,9 @@ export const deleteAddedCartSession_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Delete added cart session error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -416,21 +321,9 @@ export const updateAddedCartItemQuantity_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Update added cart item error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -466,21 +359,9 @@ export const removeAddedCartItem_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Remove added cart item error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -514,21 +395,9 @@ export const checkoutCartSession_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Checkout cart session error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -566,21 +435,9 @@ export const proceedCartSession_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Proceed cart session error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );

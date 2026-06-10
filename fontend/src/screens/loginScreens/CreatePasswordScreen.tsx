@@ -21,6 +21,7 @@ import { onboardingStyles as s } from './onboarding/onboardingStyles';
 import { useCommonAlert } from '../../hooks/useCommonAlert';
 import CommonAlert from '../../components/CommonAlert/CommonAlert';
 import { sendOtpOnboarding_Service } from '../../services/ShopOnboardingService';
+import { getApiErrorMessage, parseApiError } from '../../utils/apiErrorAlert';
 import { AppDispatch, RootState } from '../../store/store';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreatePasswordScreen'>;
@@ -114,13 +115,19 @@ export default function CreatePasswordScreen({ navigation, route }: Props) {
           });
         },
       );
-    } catch (error) {
-      console.log('error in create password screen', error);
-      const message =
-        error instanceof Error ? error.message : 'Failed to send verification code. Please try again.';
-      show_Alert('error', 'Error', error.message, 1, true, 'OK', () => {
-        console.log('do it');
-      });
+    } catch (error: unknown) {
+      console.log('error in create password screen', parseApiError(error));
+      show_Alert(
+        'error',
+        'Error',
+        getApiErrorMessage(error, 'Failed to send verification code. Please try again.'),
+        1,
+        true,
+        'OK',
+        () => {
+          console.log('do it');
+        },
+      );
     }
   };
 

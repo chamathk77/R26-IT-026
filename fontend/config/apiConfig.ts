@@ -86,6 +86,37 @@ function redactForLog(data: unknown): unknown {
   return data;
 }
 
+export class ApiClientError extends Error {
+  status?: number;
+  code?: string;
+  sessionEnded?: boolean;
+  tokenExpired?: boolean;
+  tokenInvalid?: boolean;
+  trialExpired?: boolean;
+
+  constructor(
+    message: string,
+    options?: {
+      status?: number;
+      code?: string;
+      sessionEnded?: boolean;
+      tokenExpired?: boolean;
+      tokenInvalid?: boolean;
+      trialExpired?: boolean;
+    },
+  ) {
+    super(message);
+    this.name = 'ApiClientError';
+    this.status = options?.status;
+    this.code = options?.code;
+    this.sessionEnded = options?.sessionEnded;
+    this.tokenExpired = options?.tokenExpired;
+    this.tokenInvalid = options?.tokenInvalid;
+    this.trialExpired = options?.trialExpired;
+    Object.setPrototypeOf(this, ApiClientError.prototype);
+  }
+}
+
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
@@ -145,11 +176,29 @@ apiClient.interceptors.response.use(
         console.log('[API]   error body:', error.response.data);
       }
     }
+    const errorData = (error.response?.data as {
+      message?: string;
+      code?: string;
+      sessionEnded?: boolean;
+      tokenExpired?: boolean;
+      tokenInvalid?: boolean;
+      trialExpired?: boolean;
+    } | undefined) ?? {};
+
     const message =
-      (error.response?.data as { message?: string } | undefined)?.message ||
+      errorData.message ||
       error.message ||
       'Something went wrong while calling API.';
 
-    return Promise.reject(new Error(message));
+    return Promise.reject(
+      new ApiClientError(message, {
+        status: error.response?.status,
+        code: errorData.code,
+        sessionEnded: errorData.sessionEnded,
+        tokenExpired: errorData.tokenExpired,
+        tokenInvalid: errorData.tokenInvalid,
+        trialExpired: errorData.trialExpired,
+      }),
+    );
   },
 );

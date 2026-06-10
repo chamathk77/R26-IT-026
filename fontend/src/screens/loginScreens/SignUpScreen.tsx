@@ -12,6 +12,7 @@ import { useDispatch } from 'react-redux';
 import { AppDispatch } from '../../store/store';
 import { devLog } from '../../utils/devLog';
 import { useCommonAlert } from '../../hooks/useCommonAlert';
+import { getApiErrorMessage, parseApiError } from '../../utils/apiErrorAlert';
 import CommonAlert from '../../components/CommonAlert/CommonAlert';
 import CommonHeader from '../../components/CommonHeader/CommonHeader';
 
@@ -114,13 +115,14 @@ export default function SignUpScreen({ navigation }: Props) {
       setShowConfirmPassword(false);
       setIsRoleMenuOpen(false);
 
-    } catch (error) {
+    } catch (error: unknown) {
       Keyboard.dismiss();
-      devLog('Signup error:', error);
+      const parsed = parseApiError(error);
+      devLog('Signup error:', parsed);
       show_Alert(
         "error",
         "Error",
-        error.message || "Signup failed",
+        getApiErrorMessage(error, "Signup failed"),
         1,
         true,
         "OK",

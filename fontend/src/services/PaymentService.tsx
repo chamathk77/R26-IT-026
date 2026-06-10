@@ -2,6 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { apiClient, getApiBaseUrl } from '../../config/apiConfig';
 import { ensureInternetConnection } from '../utils/checkInternetConnection';
 import { ApiErrorResponse } from '../type/common';
+import { toApiErrorResponse } from '../utils/apiErrorAlert';
 import {
   GetPaymentsByShopResponse,
   PaymentSubmitRequest,
@@ -60,29 +61,9 @@ export const fetchPaymentsByShop_Service = createAsyncThunk(
       };
       return rejectWithValue(apiError);
     } catch (error: unknown) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'error' in error &&
-        'message' in error &&
-        'status' in error &&
-        'timestamp' in error
-      ) {
-        return rejectWithValue(error as ApiErrorResponse);
-      }
-
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Network error. Please check your connection and try again.';
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message,
-        status: 400,
-        timestamp: new Date().toISOString(),
-      };
-      return rejectWithValue(networkError);
+      const apiError = toApiErrorResponse(error);
+      console.log('error in fetchPaymentsByShop_Service', apiError);
+      return rejectWithValue(apiError);
     }
   },
 );
@@ -114,29 +95,7 @@ export const paymentSubmit_Service = createAsyncThunk(
       };
       return rejectWithValue(apiError);
     } catch (error: unknown) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'error' in error &&
-        'message' in error &&
-        'status' in error &&
-        'timestamp' in error
-      ) {
-        return rejectWithValue(error as ApiErrorResponse);
-      }
-
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Network error. Please check your connection and try again.';
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message,
-        status: 400,
-        timestamp: new Date().toISOString(),
-      };
-      return rejectWithValue(networkError);
+      return rejectWithValue(toApiErrorResponse(error));
     }
   },
 );

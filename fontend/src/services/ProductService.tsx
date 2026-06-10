@@ -2,6 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { apiClient } from '../../config/apiConfig';
 import { ensureInternetConnection } from '../utils/checkInternetConnection';
 import { ApiErrorResponse } from '../type/common';
+import { toApiErrorResponse } from '../utils/apiErrorAlert';
 import {
   CreateProductRequest,
   CreateProductResponse,
@@ -69,21 +70,9 @@ export const createProduct_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Create product error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -107,21 +96,9 @@ export const fetchProducts_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Fetch products error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -147,21 +124,9 @@ export const deleteProduct_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Delete product error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
@@ -199,21 +164,9 @@ export const updateProduct_Service = createAsyncThunk(
         timestamp: new Date().toISOString(),
       };
       throw apiError;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('Update product error:---', error);
-      if (error.error && error.message && error.status && error.timestamp) {
-        throw error as ApiErrorResponse;
-      }
-
-      const networkError: ApiErrorResponse = {
-        error: 'Network Error',
-        message:
-          error.message ||
-          'Network error. Please check your connection and try again.',
-        status: 0,
-        timestamp: new Date().toISOString(),
-      };
-      throw networkError;
+      throw toApiErrorResponse(error);
     }
   },
 );
