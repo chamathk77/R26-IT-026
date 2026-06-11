@@ -22,59 +22,243 @@ import { RootStackParamList } from '../../../navigation/RootStackParamsList';
 import { fonts } from '../../../constants/fonts';
 import { useTheme } from '../../../context/ThemeContext';
 import { AppDispatch, RootState } from '../../../store/store';
+import CommonHeader from '../../../components/CommonHeader/CommonHeader';
 import { fetchCategories_Service } from '../../../services/CategoryService';
 import { deleteProduct_Service, fetchProducts_Service } from '../../../services/ProductService';
-import { Product } from '../../../type/product';
+import { Category } from '../../../type/category';
+import { getProductCategoryId, Product } from '../../../type/product';
 import { useCommonAlert } from '../../../hooks/useCommonAlert';
-import { devLog } from '../../../utils/devLog';
+import { handleSessionExpiredApiError } from '../../../utils/apiErrorAlert';
 import { resolveProductImageUri } from '../../../utils/productImage';
 import CommonAlert from '../../../components/CommonAlert/CommonAlert';
-
-function thunkErrorMessage(err: unknown, fallback: string): string {
-  if (err && typeof err === 'object' && 'message' in err) {
-    const m = (err as { message: unknown }).message;
-    if (typeof m === 'string' && m.trim()) return m;
-  }
-  if (err instanceof Error && err.message.trim()) return err.message;
-  return fallback;
-}
+import { cardShadow, settingsDetailStyles as sharedStyles } from '../../settings/shared/settingsDetailStyles';
+import { SettingsEmptyState } from '../../settings/shared/SettingsDetailComponents';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageInventory'>;
+
+type CategoryFilter = 'all' | string;
+
+const ALL_CATEGORY_OPTION = { key: 'all' as const, label: 'All' };
+
+function formatAmount(amount: number | null): string {
+  if (amount == null) return '—';
+  return `Rs. ${amount.toLocaleString('en-LK')}`;
+}
+
+function getCategoryColor(categories: Category[], product: Product): string {
+  const categoryId = getProductCategoryId(product);
+  return categories.find((c) => c._id === categoryId)?.colorCode ?? '#64748b';
+}
+
+function FilterChipRow({
+  options,
+  selected,
+  onSelect,
+  paperTheme,
+}: {
+  options: { key: CategoryFilter; label: string; colorCode?: string }[];
+  selected: CategoryFilter;
+  onSelect: (value: CategoryFilter) => void;
+  paperTheme: ReturnType<typeof useTheme>['paperTheme'];
+}) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={inventoryStyles.filterRow}
+    >
+      {options.map((option) => {
+        const isActive = selected === option.key;
+        return (
+          <TouchableOpacity
+            key={option.key}
+            onPress={() => onSelect(option.key)}
+            style={[
+              inventoryStyles.filterChip,
+              {
+                backgroundColor: isActive ? paperTheme.colors.primary : paperTheme.colors.surface,
+                borderColor: isActive ? paperTheme.colors.primary : paperTheme.colors.outlineVariant,
+              },
+            ]}
+          >
+            {option.colorCode ? (
+              <View style={[inventoryStyles.filterDot, { backgroundColor: option.colorCode }]} />
+            ) : null}
+            <Text
+              style={[
+                inventoryStyles.filterChipText,
+                { color: isActive ? paperTheme.colors.onPrimary : paperTheme.colors.onSurface },
+              ]}
+              numberOfLines={1}
+            >
+              {option.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+function ProductCard({
+  product,
+  categories,
+  paperTheme,
+  resolvedTheme,
+  onEdit,
+  onDelete,
+  swipeableRef,
+}: {
+  product: Product;
+  categories: Category[];
+  paperTheme: ReturnType<typeof useTheme>['paperTheme'];
+  resolvedTheme: 'light' | 'dark';
+  onEdit: () => void;
+  onDelete: () => void;
+  swipeableRef: (ref: Swipeable | null) => void;
+}) {
+  const imageUri = resolveProductImageUri(product.image);
+  const categoryColor = getCategoryColor(categories, product);
+
+  return (
+    <Swipeable
+      ref={swipeableRef}
+      friction={2}
+      overshootRight={false}
+      renderRightActions={() => (
+        <View style={inventoryStyles.swipeDeleteWrap}>
+          <TouchableOpacity style={inventoryStyles.swipeDeleteBtn} onPress={onDelete} activeOpacity={0.85}>
+            <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      )}
+    >
+      <TouchableOpacity
+        activeOpacity={0.92}
+        onPress={onEdit}
+        style={[
+          inventoryStyles.productCard,
+          {
+            backgroundColor: paperTheme.colors.surface,
+            borderColor: paperTheme.colors.outlineVariant,
+          },
+          cardShadow(resolvedTheme),
+        ]}
+      >
+        <View style={[inventoryStyles.categoryAccent, { backgroundColor: categoryColor }]} />
+
+        <View style={inventoryStyles.productRow}>
+          <View style={inventoryStyles.thumbWrap}>
+            {imageUri ? (
+              <Image source={{ uri: imageUri }} style={inventoryStyles.thumb} resizeMode="cover" />
+            ) : (
+              <View
+                style={[
+                  inventoryStyles.thumbPlaceholder,
+                  { backgroundColor: paperTheme.colors.surfaceVariant },
+                ]}
+              >
+                <Ionicons name="cube-outline" size={20} color={paperTheme.colors.onSurfaceVariant} />
+              </View>
+            )}
+          </View>
+
+          <View style={inventoryStyles.productBody}>
+            <Text
+              style={[inventoryStyles.productName, { color: paperTheme.colors.onSurface }]}
+              numberOfLines={1}
+            >
+              {product.productName}
+            </Text>
+            <Text
+              style={[inventoryStyles.categoryLabel, { color: paperTheme.colors.onSurfaceVariant }]}
+              numberOfLines={1}
+            >
+              {product.categoryName}
+            </Text>
+            <View style={inventoryStyles.metaChipRow}>
+              <View
+                style={[
+                  inventoryStyles.metaChip,
+                  { backgroundColor: paperTheme.colors.surfaceVariant },
+                ]}
+              >
+                <Text style={[inventoryStyles.metaChipText, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  {product.type === 'service' ? 'Service' : 'Product'}
+                </Text>
+              </View>
+              {product.isInventoryAvailable ? (
+                <View style={[inventoryStyles.metaChip, inventoryStyles.qtyChip]}>
+                  <Text style={inventoryStyles.qtyChipText}>Qty {product.qty ?? 0}</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+
+          <View style={inventoryStyles.priceColumn}>
+            <Text style={[inventoryStyles.amountText, { color: paperTheme.colors.primary }]}>
+              {formatAmount(product.amount)}
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={paperTheme.colors.onSurfaceVariant} />
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Swipeable>
+  );
+}
 
 export default function ManageInventoryScreen({ navigation }: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
   const dispatch = useDispatch<AppDispatch>();
-  const {
-    items: categories,
-    loading: categoriesLoading,
-    error: categoriesError,
-  } = useSelector((state: RootState) => state.CategoryReducer.list);
-  const {
-    items: products,
-    loading: productsLoading,
-    error: productsError,
-  } = useSelector((state: RootState) => state.ProductReducer.list);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
+  const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
+
+  const { items: categories, loading: categoriesLoading } = useSelector(
+    (state: RootState) => state.CategoryReducer.list,
+  );
+  const { items: products, loading: productsLoading, count: productCount } = useSelector(
+    (state: RootState) => state.ProductReducer.list,
+  );
+
+  const [refreshing, setRefreshing] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const loading = categoriesLoading || productsLoading;
+
+  const categoryFilterOptions = useMemo(
+    () => [
+      ALL_CATEGORY_OPTION,
+      ...categories.map((category) => ({
+        key: category._id,
+        label: category.name,
+        colorCode: category.colorCode,
+      })),
+    ],
+    [categories],
+  );
 
   const filteredProducts = useMemo(() => {
     let list = products;
-    if (selectedCategoryId !== null) {
-      list = list.filter((product) => product.category === selectedCategoryId);
+
+    if (categoryFilter !== 'all') {
+      list = list.filter((product) => getProductCategoryId(product) === categoryFilter);
     }
-    const q = searchQuery.trim().toLowerCase();
-    if (q) {
+
+    const query = searchQuery.trim().toLowerCase();
+    if (query) {
       list = list.filter((product) => {
-        const cat = categories.find((c) => c._id === product.category);
-        const catName = cat?.name.toLowerCase() ?? '';
-        return product.name.toLowerCase().includes(q) || catName.includes(q);
+        const categoryName = product.categoryName.toLowerCase();
+        return (
+          product.productName.toLowerCase().includes(query) ||
+          categoryName.includes(query) ||
+          (product.barcode?.toLowerCase().includes(query) ?? false)
+        );
       });
     }
+
     return list;
-  }, [products, selectedCategoryId, searchQuery, categories]);
+  }, [products, categoryFilter, searchQuery]);
 
   const loadInventory = useCallback(async () => {
     try {
@@ -82,9 +266,29 @@ export default function ManageInventoryScreen({ navigation }: Props) {
         dispatch(fetchCategories_Service()).unwrap(),
         dispatch(fetchProducts_Service()).unwrap(),
       ]);
-    } catch (err: unknown) {
-      devLog('Manage inventory load:', err);
-      show_Alert('error', 'Error', thunkErrorMessage(err, 'Failed to load inventory'), 1, true, 'OK');
+    } catch (error: unknown) {
+      const handled = await handleSessionExpiredApiError(error, show_Alert);
+      if (handled) return;
+
+      setTimeout(() => {
+        const message =
+          error && typeof error === 'object' && 'message' in error
+            ? String((error as { message?: string }).message)
+            : 'Could not load inventory. Please try again.';
+        show_Alert(
+          'error',
+          'Load failed',
+          message,
+          2,
+          false,
+          'Retry',
+          () => {
+            void loadInventory();
+          },
+          'Cancel',
+          () => {},
+        );
+      }, 150);
     }
   }, [dispatch, show_Alert]);
 
@@ -110,7 +314,7 @@ export default function ManageInventoryScreen({ navigation }: Props) {
       show_Alert(
         'error',
         'Delete product?',
-        `Are you sure you want to delete "${item.name}"? This cannot be undone.`,
+        `Are you sure you want to delete "${item.productName}"? This cannot be undone.`,
         2,
         false,
         'Yes',
@@ -119,8 +323,14 @@ export default function ManageInventoryScreen({ navigation }: Props) {
             await dispatch(deleteProduct_Service(item._id)).unwrap();
             swipeableRefs.current.get(item._id)?.close();
             await loadInventory();
-          } catch (err: unknown) {
-            show_Alert('error', 'Error', thunkErrorMessage(err, 'Could not delete product'), 1, true, 'OK');
+          } catch (error: unknown) {
+            const handled = await handleSessionExpiredApiError(error, show_Alert);
+            if (handled) return;
+            const message =
+              error && typeof error === 'object' && 'message' in error
+                ? String((error as { message?: string }).message)
+                : 'Could not delete product';
+            show_Alert('error', 'Error', message, 1, true, 'OK');
           }
         },
         'Cancel',
@@ -130,88 +340,82 @@ export default function ManageInventoryScreen({ navigation }: Props) {
     [dispatch, show_Alert, loadInventory],
   );
 
-  const isAllSelected = selectedCategoryId === null;
-
-  const renderProductRow = ({ item }: { item: Product }) => {
-    const cat = categories.find((c) => c._id === item.category);
-    const imageUri = resolveProductImageUri(item.image);
-    return (
-      <Swipeable
-        ref={(ref) => {
-          if (ref) swipeableRefs.current.set(item._id, ref);
-          else swipeableRefs.current.delete(item._id);
-        }}
-        friction={2}
-        overshootRight={false}
-        renderRightActions={() => (
-          <View style={styles.swipeDeleteWrap}>
-            <TouchableOpacity
-              style={styles.swipeDeleteBtn}
-              activeOpacity={0.85}
-              onPress={() => confirmDeleteProduct(item)}
-              accessibilityRole="button"
-              accessibilityLabel={`Delete ${item.name}`}
-            >
-              <Ionicons name="trash-outline" size={22} color="#FFFFFF" />
-              <Text style={styles.swipeDeleteText}>Delete</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      >
-        <View style={[styles.productRow, { backgroundColor: paperTheme.colors.surface }]}>
-          <View style={styles.productThumbWrap}>
-            {imageUri ? (
-              <Image source={{ uri: imageUri }} style={styles.productThumb} resizeMode="cover" />
-            ) : (
-              <View
-                style={[
-                  styles.productThumbPlaceholder,
-                  { backgroundColor: paperTheme.colors.surfaceVariant },
-                ]}
-              >
-                <Ionicons name="image-outline" size={22} color={paperTheme.colors.onSurfaceVariant} />
-              </View>
-            )}
-            <View
-              style={[
-                styles.categoryColorBadge,
-                { backgroundColor: cat?.colorCode ?? paperTheme.colors.outline },
-              ]}
-            />
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={[styles.productName, { color: paperTheme.colors.onSurface }]} numberOfLines={2}>
-              {item.name}
-            </Text>
-            <Text style={[styles.productMeta, { color: paperTheme.colors.onSurfaceVariant }]}>
-              {cat?.name ?? 'Uncategorized'}
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={[styles.editBtn, { backgroundColor: paperTheme.colors.primaryContainer }]}
-            onPress={() =>
-              navigation.navigate('EditProduct', {
-                id: item._id,
-                name: item.name,
-                categoryId: item.category,
-                unitPrice: item.price,
-                image: item.image,
-              })
-            }
-            accessibilityRole="button"
-            accessibilityLabel={`Edit ${item.name}`}
-          >
-            <Ionicons name="create-outline" size={20} color={paperTheme.colors.primary} />
-          </TouchableOpacity>
-          <View style={styles.productRight}>
-            <Text style={[styles.price, { color: paperTheme.colors.primary }]}>
-              ${item.price.toFixed(2)}
-            </Text>
-          </View>
+  const renderListHeader = () => (
+    <View style={inventoryStyles.headerContent}>
+      <View style={inventoryStyles.statsRow}>
+        <View style={inventoryStyles.statsTextBlock}>
+          <Text style={[inventoryStyles.statsTitle, { color: paperTheme.colors.onSurface }]}>
+            Catalog
+          </Text>
+          <Text style={[inventoryStyles.statsSubtitle, { color: paperTheme.colors.onSurfaceVariant }]}>
+            {filteredProducts.length} shown · {productCount} total
+          </Text>
         </View>
-      </Swipeable>
-    );
-  };
+        <TouchableOpacity
+          style={[inventoryStyles.addProductBtn, { backgroundColor: paperTheme.colors.primary }]}
+          onPress={() => navigation.navigate('AddProduct')}
+          activeOpacity={0.9}
+        >
+          <Ionicons name="add" size={20} color={paperTheme.colors.onPrimary} />
+          <Text style={[inventoryStyles.addProductBtnText, { color: paperTheme.colors.onPrimary }]}>
+            Add
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View
+        style={[
+          inventoryStyles.filtersCard,
+          {
+            backgroundColor: paperTheme.colors.surface,
+            borderColor: paperTheme.colors.outlineVariant,
+          },
+          cardShadow(resolvedTheme),
+        ]}
+      >
+        <View
+          style={[
+            inventoryStyles.searchWrap,
+            {
+              backgroundColor: paperTheme.colors.background,
+              borderColor: paperTheme.colors.outlineVariant,
+            },
+          ]}
+        >
+          <Ionicons name="search-outline" size={18} color={paperTheme.colors.onSurfaceVariant} />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search products…"
+            placeholderTextColor={paperTheme.colors.onSurfaceVariant}
+            style={[inventoryStyles.searchInput, { color: paperTheme.colors.onSurface }]}
+            autoCorrect={false}
+            autoCapitalize="none"
+            clearButtonMode="while-editing"
+          />
+          {searchQuery.length > 0 ? (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={20} color={paperTheme.colors.onSurfaceVariant} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        <Text style={[inventoryStyles.filterSectionLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+          Category
+        </Text>
+        <FilterChipRow
+          options={categoryFilterOptions}
+          selected={categoryFilter}
+          onSelect={setCategoryFilter}
+          paperTheme={paperTheme}
+        />
+      </View>
+
+      <Text style={[inventoryStyles.sectionLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+        Products
+      </Text>
+    </View>
+  );
 
   return (
     <>
@@ -219,182 +423,86 @@ export default function ManageInventoryScreen({ navigation }: Props) {
         barStyle={resolvedTheme === 'dark' ? 'light-content' : 'dark-content'}
         backgroundColor={paperTheme.colors.background}
       />
-      <SafeAreaView style={[styles.safe, { backgroundColor: paperTheme.colors.background }]} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={[styles.backBtn, { backgroundColor: paperTheme.colors.surface }]}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={20} color={paperTheme.colors.primary} />
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.title, { color: paperTheme.colors.onBackground }]}>Manage Inventory</Text>
-            <Text style={[styles.subtitle, { color: paperTheme.colors.onSurfaceVariant }]}>
-              Products from your catalog — tap a category to filter
-            </Text>
-          </View>
-        </View>
+      <SafeAreaView
+        style={[sharedStyles.safe, inventoryStyles.screen, { backgroundColor: paperTheme.colors.background }]}
+        edges={['top']}
+      >
+        <CommonHeader
+          title="Manage Inventory"
+          titleColor={paperTheme.colors.onBackground}
+          iconColor={paperTheme.colors.onBackground}
+          onPressLeftBtn={() => navigation.goBack()}
+        />
 
-        {categoriesError ? (
-          <Text style={[styles.errorText, { color: paperTheme.colors.error }]}>{categoriesError}</Text>
-        ) : null}
-        {productsError ? (
-          <Text style={[styles.errorText, { color: paperTheme.colors.error }]}>{productsError}</Text>
-        ) : null}
-
-        <TouchableOpacity
-          style={[styles.addProductBtn, { backgroundColor: paperTheme.colors.secondaryContainer }]}
-          onPress={() => navigation.navigate('AddProduct')}
-          activeOpacity={0.9}
-        >
-          <Ionicons name="add-circle-outline" size={22} color={paperTheme.colors.onSecondaryContainer} />
-          <Text style={[styles.addProductBtnText, { color: paperTheme.colors.onSecondaryContainer }]}>
-            Add new product
-          </Text>
-        </TouchableOpacity>
-
-        <Text style={[styles.sectionLabel, { color: paperTheme.colors.onSurfaceVariant }]}>Categories</Text>
-
-        {categoriesLoading && !refreshing && categories.length === 0 ? (
-          <View style={styles.categoriesLoading}>
-            <ActivityIndicator size="small" color={paperTheme.colors.primary} />
-          </View>
-        ) : (
-          <View style={styles.chipsOuter}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chipsRow}
-              bounces={false}
-            >
-            <TouchableOpacity
-              onPress={() => setSelectedCategoryId(null)}
-              style={[
-                styles.chip,
-                styles.chipTouchable,
-                {
-                  backgroundColor: isAllSelected ? paperTheme.colors.primary : paperTheme.colors.surface,
-                  borderColor: paperTheme.colors.outline,
-                },
-              ]}
-            >
-              <Ionicons
-                name="grid-outline"
-                size={16}
-                color={isAllSelected ? paperTheme.colors.onPrimary : paperTheme.colors.primary}
-              />
-              <Text
-                style={[
-                  styles.chipName,
-                  { color: isAllSelected ? paperTheme.colors.onPrimary : paperTheme.colors.onSurface },
-                ]}
-                numberOfLines={1}
-              >
-                All products
-              </Text>
-            </TouchableOpacity>
-
-            {categories.length === 0 && !categoriesLoading ? (
-              <Text style={[styles.emptyCategories, { color: paperTheme.colors.onSurfaceVariant }]}>
-                No categories yet.
-              </Text>
-            ) : (
-              categories.map((item) => {
-                const selected = selectedCategoryId === item._id;
-                return (
-                  <TouchableOpacity
-                    key={item._id}
-                    onPress={() => setSelectedCategoryId(item._id)}
-                    style={[
-                      styles.chip,
-                      styles.chipTouchable,
-                      {
-                        backgroundColor: selected ? paperTheme.colors.primary : paperTheme.colors.surface,
-                        borderColor: paperTheme.colors.outline,
-                      },
-                    ]}
-                  >
-                    <View style={[styles.chipDot, { backgroundColor: item.colorCode }]} />
-                    <Text
-                      style={[
-                        styles.chipName,
-                        {
-                          color: selected ? paperTheme.colors.onPrimary : paperTheme.colors.onSurface,
-                        },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {item.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })
-            )}
-            </ScrollView>
-          </View>
-        )}
-
-        <View
-          style={[
-            styles.searchWrap,
-            { backgroundColor: paperTheme.colors.surface, borderColor: paperTheme.colors.outline },
-          ]}
-        >
-          <Ionicons name="search-outline" size={20} color={paperTheme.colors.onSurfaceVariant} />
-          <TextInput
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search name or category…"
-            placeholderTextColor={paperTheme.colors.onSurfaceVariant}
-            style={[styles.searchInput, { color: paperTheme.colors.onSurface }]}
-            autoCorrect={false}
-            autoCapitalize="none"
-            clearButtonMode="while-editing"
-          />
-          {searchQuery.length > 0 ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={22} color={paperTheme.colors.onSurfaceVariant} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
-        <Text style={[styles.listHeader, { color: paperTheme.colors.onSurfaceVariant }]}>
-          {isAllSelected ? 'All products' : 'This category only'} · {filteredProducts.length} shown
-        </Text>
-
-        {productsLoading && !refreshing && products.length === 0 ? (
-          <View style={styles.productsLoading}>
-            <ActivityIndicator size="small" color={paperTheme.colors.primary} />
-          </View>
-        ) : (
         <FlatList
-          style={styles.productList}
           data={filteredProducts}
           keyExtractor={(item) => item._id}
-          renderItem={renderProductRow}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={inventoryStyles.listContent}
+          showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={paperTheme.colors.primary}
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={paperTheme.colors.primary} />
           }
+          ListHeaderComponent={renderListHeader}
+          renderItem={({ item }) => (
+            <ProductCard
+              product={item}
+              categories={categories}
+              paperTheme={paperTheme}
+              resolvedTheme={resolvedTheme}
+              onEdit={() =>
+                navigation.navigate('EditProduct', {
+                  id: item._id,
+                  productName: item.productName,
+                  categoryId: getProductCategoryId(item),
+                  categoryName: item.categoryName,
+                  type: item.type,
+                  amount: item.amount,
+                  cost: item.cost,
+                  isInventoryAvailable: item.isInventoryAvailable,
+                  barcode: item.barcode,
+                  qty: item.qty,
+                  image: item.image,
+                })
+              }
+              onDelete={() => confirmDeleteProduct(item)}
+              swipeableRef={(ref) => {
+                if (ref) swipeableRefs.current.set(item._id, ref);
+                else swipeableRefs.current.delete(item._id);
+              }}
+            />
+          )}
           ListEmptyComponent={
-            <View style={styles.emptyList}>
-              <Ionicons name="cube-outline" size={40} color={paperTheme.colors.outline} />
-              <Text style={[styles.emptyListTitle, { color: paperTheme.colors.onSurface }]}>
-                No products match
-              </Text>
-              <Text style={[styles.emptyListBody, { color: paperTheme.colors.onSurfaceVariant }]}>
-                {products.length === 0
-                  ? 'Add a product to start building your inventory.'
-                  : 'Try another category or clear the search.'}
-              </Text>
-            </View>
+            !loading ? (
+              <SettingsEmptyState
+                icon="cube-outline"
+                title="No products found"
+                description={
+                  products.length === 0
+                    ? 'Add your first product to start managing inventory.'
+                    : 'Try another category or clear your search.'
+                }
+                paperTheme={paperTheme}
+              />
+            ) : null
           }
           ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         />
+
+        {loading && (
+          <View
+            style={[
+              inventoryStyles.loadingOverlay,
+              {
+                backgroundColor:
+                  resolvedTheme === 'dark' ? 'rgba(15,23,42,0.78)' : 'rgba(255,255,255,0.78)',
+              },
+            ]}
+          >
+            <ActivityIndicator size="large" color={paperTheme.colors.primary} />
+            <Text style={[inventoryStyles.loadingText, { color: paperTheme.colors.onSurface }]}>
+              Loading inventory...
+            </Text>
+          </View>
         )}
 
         {alertConfig && (
@@ -416,54 +524,87 @@ export default function ManageInventoryScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, paddingHorizontal: 16 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12, marginTop: 8 },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+const inventoryStyles = StyleSheet.create({
+  screen: {
+    paddingHorizontal: 20,
   },
-  title: { fontSize: 22, fontFamily: fonts.PoppinsBold },
-  subtitle: { fontSize: 13, fontFamily: fonts.PoppinsRegular, marginTop: 2 },
-  errorText: { fontFamily: fonts.PoppinsRegular, fontSize: 13, marginBottom: 8 },
+  headerContent: {
+    paddingTop: 8,
+    paddingBottom: 12,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+    marginBottom: 20,
+  },
+  statsTextBlock: {
+    flex: 1,
+  },
+  statsTitle: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 20,
+    lineHeight: 26,
+  },
+  statsSubtitle: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 13,
+    marginTop: 4,
+    lineHeight: 18,
+  },
   addProductBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    borderRadius: 14,
-    paddingVertical: 14,
-    marginBottom: 16,
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
   },
-  addProductBtnText: { fontFamily: fonts.PoppinsSemiBold, fontSize: 15 },
-  sectionLabel: {
+  addProductBtnText: {
     fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 13,
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontSize: 14,
   },
-  categoriesLoading: { minHeight: 44, justifyContent: 'center', alignItems: 'flex-start', marginBottom: 6 },
-  /** Horizontal ScrollView can grow vertically in flex layouts; cap height to chip row. */
-  chipsOuter: { maxHeight: 52, marginBottom: 8 },
-  chipsRow: { gap: 10, paddingBottom: 0, alignItems: 'center' },
-  chip: {
+  filtersCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 20,
+  },
+  filterSectionLabel: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  filterRow: {
+    gap: 8,
+    paddingBottom: 2,
+    paddingRight: 2,
+  },
+  filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    maxWidth: 220,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
     borderWidth: 1,
+    maxWidth: 160,
   },
-  chipTouchable: { alignSelf: 'flex-start' },
-  chipDot: { width: 10, height: 10, borderRadius: 5 },
-  chipName: { fontFamily: fonts.PoppinsSemiBold, fontSize: 14, flexShrink: 1 },
-  emptyCategories: { fontFamily: fonts.PoppinsRegular, fontSize: 14, paddingVertical: 8, alignSelf: 'center' },
+  filterDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  filterChipText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 12,
+    flexShrink: 1,
+  },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -471,88 +612,133 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginTop: 0,
-    marginBottom: 10,
+    paddingVertical: 11,
+    marginBottom: 4,
   },
   searchInput: {
     flex: 1,
     fontFamily: fonts.PoppinsRegular,
-    fontSize: 15,
+    fontSize: 14,
     paddingVertical: 0,
   },
-  listHeader: {
-    fontFamily: fonts.PoppinsMedium,
-    fontSize: 12,
-    marginBottom: 8,
+  sectionLabel: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 12,
   },
-  productList: { flex: 1 },
-  listContent: { paddingBottom: 24, flexGrow: 1 },
+  listContent: {
+    paddingBottom: 32,
+    flexGrow: 1,
+  },
+  productCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  categoryAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+  },
   productRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    borderRadius: 14,
+    gap: 12,
     paddingVertical: 12,
-    paddingHorizontal: 10,
+    paddingHorizontal: 16,
+    paddingLeft: 18,
   },
-  editBtn: {
-    width: 40,
-    height: 40,
+  thumbWrap: {
+    width: 52,
+    height: 52,
+  },
+  thumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+  },
+  thumbPlaceholder: {
+    width: 52,
+    height: 52,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  productThumbWrap: {
-    position: 'relative',
+  productBody: {
+    flex: 1,
+    minWidth: 0,
   },
-  productThumb: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
+  productName: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 15,
+    lineHeight: 20,
   },
-  productThumbPlaceholder: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    alignItems: 'center',
+  categoryLabel: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  metaChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+  },
+  metaChip: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  metaChipText: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 10,
+  },
+  qtyChip: {
+    backgroundColor: '#dcfce7',
+  },
+  qtyChipText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 10,
+    color: '#15803d',
+  },
+  priceColumn: {
+    alignItems: 'flex-end',
     justifyContent: 'center',
+    gap: 4,
+    minWidth: 72,
   },
-  categoryColorBadge: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+  amountText: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 14,
+    textAlign: 'right',
   },
-  productName: { fontFamily: fonts.PoppinsSemiBold, fontSize: 15 },
-  productMeta: { fontFamily: fonts.PoppinsRegular, fontSize: 12, marginTop: 2 },
-  productsLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  productRight: { alignItems: 'flex-end', minWidth: 64 },
-  price: { fontSize: 16, fontFamily: fonts.PoppinsBold },
   swipeDeleteWrap: {
     justifyContent: 'center',
     alignItems: 'flex-end',
+    paddingLeft: 8,
   },
   swipeDeleteBtn: {
     backgroundColor: '#DC2626',
     justifyContent: 'center',
     alignItems: 'center',
-    width: 88,
-    flex: 1,
-    borderRadius: 14,
-    paddingVertical: 14,
-    gap: 4,
+    width: 64,
+    height: '100%',
+    borderRadius: 18,
   },
-  swipeDeleteText: {
-    color: '#FFFFFF',
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 12,
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
   },
-  emptyList: { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 },
-  emptyListTitle: { fontFamily: fonts.PoppinsSemiBold, fontSize: 16, marginTop: 12 },
-  emptyListBody: { fontFamily: fonts.PoppinsRegular, fontSize: 14, textAlign: 'center', marginTop: 6 },
+  loadingText: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 15,
+  },
 });

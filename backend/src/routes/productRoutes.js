@@ -12,7 +12,7 @@ const router = express.Router();
 
 router.post('/', protect, uploadProductImageSingle, createProduct);
 router.get('/', protect, getProducts);
-router.put('/:id', protect, uploadProductImageSingle, updateProduct);
+router.post('/:id/update', protect, uploadProductImageSingle, updateProduct);
 router.delete('/:id', protect, deleteProduct);
 
 module.exports = router;

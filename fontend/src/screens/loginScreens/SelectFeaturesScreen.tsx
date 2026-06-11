@@ -178,7 +178,6 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
       const response = await dispatch(
         updateShopFeatures_Service({
           shopId: ownerData.shopId,
-          manageInventory: features.manageInventory,
           sms: features.sms,
           kpi: features.kpi,
           analyticsModule: features.analyticsModule,

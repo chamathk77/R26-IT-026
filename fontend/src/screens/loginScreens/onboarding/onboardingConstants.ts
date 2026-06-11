@@ -16,12 +16,6 @@ export type FeatureOption = {
 
 export const FEATURE_OPTIONS: FeatureOption[] = [
   {
-    key: 'manageInventory',
-    title: 'Manage Inventory',
-    description: 'Track stock levels, products, and warehouse movements in real time.',
-    icon: 'cube-outline',
-  },
-  {
     key: 'sms',
     title: 'SMS Sending to Users',
     description:

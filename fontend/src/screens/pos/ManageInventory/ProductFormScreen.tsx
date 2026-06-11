@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -18,24 +18,37 @@ import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootStackParamList } from '../../../navigation/RootStackParamsList';
 import { fonts } from '../../../constants/fonts';
 import { useTheme } from '../../../context/ThemeContext';
 import { AppDispatch, RootState } from '../../../store/store';
-import { createProduct_Service, updateProduct_Service } from '../../../services/ProductService';
+import {
+  createProduct_Service,
+  deleteProduct_Service,
+  updateProduct_Service,
+} from '../../../services/ProductService';
+import { fetchCategories_Service } from '../../../services/CategoryService';
 import { Category } from '../../../type/category';
 import { InventoryProductFormParams } from '../../../type/inventory';
 import { resolveProductImageUri } from '../../../utils/productImage';
 import { useCommonAlert } from '../../../hooks/useCommonAlert';
+import { handleSessionExpiredApiError } from '../../../utils/apiErrorAlert';
 import CommonAlert from '../../../components/CommonAlert';
+import BarcodeScannerModal from './BarcodeScannerModal';
 
 type FormMode = 'add' | 'edit';
 
 type EditSnapshot = {
-  name: string;
+  productName: string;
   categoryId: string;
-  price: string;
+  type: 'product' | 'service';
+  amount: string;
+  cost: string;
+  isInventoryAvailable: boolean;
+  barcode: string;
+  qty: string;
   imageUri: string | null;
 };
 
@@ -43,11 +56,47 @@ function isLocalImageUri(uri: string): boolean {
   return /^(file|content|ph|assets-library):\/\//i.test(uri);
 }
 
-type ProductFormContentProps = {
-  navigation: NativeStackNavigationProp<RootStackParamList>;
-  mode: FormMode;
-  initial?: InventoryProductFormParams;
-};
+async function ensureMediaLibraryPermission(
+  show_Alert: ReturnType<typeof useCommonAlert>['show_Alert'],
+): Promise<boolean> {
+  let permission = await ImagePicker.getMediaLibraryPermissionsAsync();
+  if (!permission.granted && permission.canAskAgain) {
+    permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  }
+  if (permission.granted) return true;
+  show_Alert(
+    'error',
+    'Photo library access required',
+    permission.canAskAgain
+      ? 'Please allow photo library access to choose a product image.'
+      : 'Photo library access is turned off. Enable Photos permission for this app in Settings.',
+    1,
+    true,
+    'OK',
+  );
+  return false;
+}
+
+async function ensureCameraPermission(
+  show_Alert: ReturnType<typeof useCommonAlert>['show_Alert'],
+): Promise<boolean> {
+  let permission = await ImagePicker.getCameraPermissionsAsync();
+  if (!permission.granted && permission.canAskAgain) {
+    permission = await ImagePicker.requestCameraPermissionsAsync();
+  }
+  if (permission.granted) return true;
+  show_Alert(
+    'error',
+    'Camera access required',
+    permission.canAskAgain
+      ? 'Please allow camera access to take a product photo.'
+      : 'Camera access is turned off. Enable Camera permission for this app in Settings.',
+    1,
+    true,
+    'OK',
+  );
+  return false;
+}
 
 function thunkErrorMessage(err: unknown, fallback: string): string {
   if (err && typeof err === 'object' && 'message' in err) {
@@ -58,43 +107,100 @@ function thunkErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
+type ProductFormContentProps = {
+  navigation: NativeStackNavigationProp<RootStackParamList>;
+  mode: FormMode;
+  initial?: InventoryProductFormParams;
+};
+
 function ProductFormContent({ navigation, mode, initial }: ProductFormContentProps) {
   const { paperTheme, resolvedTheme } = useTheme();
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
   const dispatch = useDispatch<AppDispatch>();
   const categories = useSelector((state: RootState) => state.CategoryReducer.list.items);
 
-
-  const [name, setName] = useState('');
-  const [categoryId, setCategoryId] = useState<string>('');
-  const [price, setPrice] = useState('');
+  const [productName, setProductName] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [productType, setProductType] = useState<'product' | 'service'>('product');
+  const [amount, setAmount] = useState('');
+  const [cost, setCost] = useState('');
+  const [isInventoryAvailable, setIsInventoryAvailable] = useState(false);
+  const [barcode, setBarcode] = useState('');
+  const [qty, setQty] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [barcodeScannerVisible, setBarcodeScannerVisible] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState<EditSnapshot | null>(null);
+
+  const loadCategories = useCallback(async () => {
+    try {
+      await dispatch(fetchCategories_Service()).unwrap();
+    } catch {
+      // Categories may already be loaded from Manage Inventory
+    }
+  }, [dispatch]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadCategories();
+    }, [loadCategories]),
+  );
 
   useEffect(() => {
     if (mode === 'edit' && initial) {
-      const resolvedImage = resolveProductImageUri(initial.image);
-      const nextPrice = String(initial.unitPrice);
-      setName(initial.name);
+      const resolvedImage = resolveProductImageUri(initial.image) ?? null;
+      const nextAmount = initial.amount != null ? String(initial.amount) : '';
+      const nextCost = initial.cost != null ? String(initial.cost) : '';
+      const nextBarcode = initial.barcode ?? '';
+      const nextQty = initial.qty != null ? String(initial.qty) : '';
+
+      setProductName(initial.productName);
       setCategoryId(initial.categoryId);
-      setPrice(nextPrice);
+      setProductType(initial.type);
+      setAmount(nextAmount);
+      setCost(nextCost);
+      setIsInventoryAvailable(initial.isInventoryAvailable);
+      setBarcode(nextBarcode);
+      setQty(nextQty);
       setImageUri(resolvedImage);
       setInitialSnapshot({
-        name: initial.name.trim(),
+        productName: initial.productName.trim(),
         categoryId: initial.categoryId,
-        price: nextPrice,
+        type: initial.type,
+        amount: nextAmount,
+        cost: nextCost,
+        isInventoryAvailable: initial.isInventoryAvailable,
+        barcode: nextBarcode,
+        qty: nextQty,
         imageUri: resolvedImage,
       });
     } else {
-      setName('');
+      setProductName('');
       setCategoryId('');
-      setPrice('');
+      setProductType('product');
+      setAmount('');
+      setCost('');
+      setIsInventoryAvailable(false);
+      setBarcode('');
+      setQty('');
       setImageUri(null);
       setInitialSnapshot(null);
     }
-  }, [mode, initial?.id, initial?.name, initial?.categoryId, initial?.unitPrice, initial?.image]);
+  }, [
+    mode,
+    initial?.id,
+    initial?.productName,
+    initial?.categoryId,
+    initial?.type,
+    initial?.amount,
+    initial?.cost,
+    initial?.isInventoryAvailable,
+    initial?.barcode,
+    initial?.qty,
+    initial?.image,
+  ]);
 
   const selectedCategory = useMemo(
     () => categories.find((c) => c._id === categoryId),
@@ -104,46 +210,96 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
   const isDirty = useMemo(() => {
     if (mode !== 'edit' || !initialSnapshot) return true;
     return (
-      name.trim() !== initialSnapshot.name ||
+      productName.trim() !== initialSnapshot.productName ||
       categoryId !== initialSnapshot.categoryId ||
-      price !== initialSnapshot.price ||
+      productType !== initialSnapshot.type ||
+      amount !== initialSnapshot.amount ||
+      cost !== initialSnapshot.cost ||
+      isInventoryAvailable !== initialSnapshot.isInventoryAvailable ||
+      barcode !== initialSnapshot.barcode ||
+      qty !== initialSnapshot.qty ||
       imageUri !== initialSnapshot.imageUri
     );
-  }, [mode, initialSnapshot, name, categoryId, price, imageUri]);
+  }, [
+    mode,
+    initialSnapshot,
+    productName,
+    categoryId,
+    productType,
+    amount,
+    cost,
+    isInventoryAvailable,
+    barcode,
+    qty,
+    imageUri,
+  ]);
 
-  const canSave = useMemo(() => {
-    if (mode === 'edit') return isDirty;
-    return true;
-  }, [mode, isDirty]);
+  const canSave = mode === 'add' || isDirty;
+
+  const buildPayload = () => {
+    const trimmedName = productName.trim();
+    const categoryName = selectedCategory?.name ?? initial?.categoryName ?? '';
+
+    const base = {
+      productName: trimmedName,
+      categoryId,
+      categoryName,
+      type: productType,
+      imageUri: imageUri && isLocalImageUri(imageUri) ? imageUri : null,
+    };
+
+    if (productType === 'service') {
+      return base;
+    }
+
+    const amountNum = Number(amount);
+    const costTrimmed = cost.trim();
+    const costValue =
+      costTrimmed === '' ? null : Number.isNaN(Number(costTrimmed)) ? null : Number(costTrimmed);
+
+    return {
+      ...base,
+      amount: amountNum,
+      cost: costValue,
+      isInventoryAvailable,
+      barcode: barcode.trim() || null,
+      qty: isInventoryAvailable ? Number(qty) : null,
+    };
+  };
+
+  const validateForm = (): string | null => {
+    if (!productName.trim()) return 'Product name is required';
+    if (!categoryId) return 'Category is required';
+    if (!selectedCategory?.name && !initial?.categoryName) return 'Category is required';
+
+    if (productType === 'product') {
+      const amountNum = Number(amount);
+      if (amount.trim() === '' || Number.isNaN(amountNum) || amountNum < 0) {
+        return 'Valid amount is required for products';
+      }
+      if (cost.trim() !== '') {
+        const costNum = Number(cost);
+        if (Number.isNaN(costNum) || costNum < 0) return 'Cost must be a valid non-negative number';
+      }
+      if (isInventoryAvailable) {
+        const qtyNum = Number(qty);
+        if (qty.trim() === '' || Number.isNaN(qtyNum) || qtyNum < 0) {
+          return 'Quantity is required when inventory tracking is enabled';
+        }
+      }
+    }
+
+    return null;
+  };
 
   const onSave = async () => {
     if (!canSave || saving) return;
 
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      show_Alert
-      ('error', 'Error', 'Missing name', 1, true, 'OK');
+    const validationError = validateForm();
+    if (validationError) {
+      show_Alert('error', 'Error', validationError, 1, true, 'OK');
       return;
     }
-    if (!categoryId) {
-      show_Alert
-      ('error', 'Error', 'Missing category', 1, true, 'OK');
-      return;
-    }
-
-    const priceNum = Number(price);
-    if (price.trim() === '' || Number.isNaN(priceNum) || priceNum < 0) {
-      show_Alert
-      ('error', 'Error', 'Invalid price', 1, true, 'OK');
-      return;
-    }
-
-    const payload = {
-      name: trimmedName,
-      category: categoryId,
-      price: priceNum,
-      imageUri: imageUri && isLocalImageUri(imageUri) ? imageUri : null,
-    };
 
     setSaving(true);
     try {
@@ -151,33 +307,68 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
         await dispatch(
           updateProduct_Service({
             id: initial.id,
-            ...payload,
+            ...buildPayload(),
           }),
         ).unwrap();
-    show_Alert
-    ('success', 'Success', 'Product updated successfully.', 1, true, 'OK');
-
-
+        show_Alert('success', 'Success', 'Product updated successfully.', 1, true, 'OK', () => {
+          navigation.goBack();
+        });
       } else {
-        await dispatch(createProduct_Service(payload)).unwrap();
-    show_Alert
-    ('success', 'Success', 'Product saved successfully.', 1, true, 'OK');
+        await dispatch(createProduct_Service(buildPayload())).unwrap();
+        show_Alert('success', 'Success', 'Product saved successfully.', 1, true, 'OK', () => {
+          navigation.goBack();
+        });
       }
-    } catch (error: any) {
-    show_Alert
-    ('error', 'Error', error.message, 1, true, 'OK');
+    } catch (error: unknown) {
+      const handled = await handleSessionExpiredApiError(error, show_Alert);
+      if (handled) return;
+      show_Alert('error', 'Error', thunkErrorMessage(error, 'Could not save product'), 1, true, 'OK');
     } finally {
       setSaving(false);
     }
   };
 
-  const pickImage = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      show_Alert
-      ('error', 'Error', 'Photo access needed', 1, true, 'OK');
-      return;
-    }
+  const onDelete = () => {
+    if (!initial?.id || deleting) return;
+
+    show_Alert(
+      'error',
+      'Delete product?',
+      `Are you sure you want to delete "${initial.productName}"? This cannot be undone.`,
+      2,
+      false,
+      'Delete',
+      async () => {
+        setDeleting(true);
+        try {
+          await dispatch(deleteProduct_Service(initial.id)).unwrap();
+          show_Alert('success', 'Deleted', 'Product removed.', 1, true, 'OK', () => {
+            navigation.goBack();
+          });
+        } catch (error: unknown) {
+          const handled = await handleSessionExpiredApiError(error, show_Alert);
+          if (handled) return;
+          show_Alert(
+            'error',
+            'Error',
+            thunkErrorMessage(error, 'Could not delete product'),
+            1,
+            true,
+            'OK',
+          );
+        } finally {
+          setDeleting(false);
+        }
+      },
+      'Cancel',
+      () => {},
+    );
+  };
+
+  const pickFromGallery = useCallback(async () => {
+    Keyboard.dismiss();
+    const hasPermission = await ensureMediaLibraryPermission(show_Alert);
+    if (!hasPermission) return;
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -189,7 +380,37 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
     if (!result.canceled && result.assets[0]?.uri) {
       setImageUri(result.assets[0].uri);
     }
-  };
+  }, [show_Alert]);
+
+  const takePhoto = useCallback(async () => {
+    Keyboard.dismiss();
+    const hasPermission = await ensureCameraPermission(show_Alert);
+    if (!hasPermission) return;
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.85,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      setImageUri(result.assets[0].uri);
+    }
+  }, [show_Alert]);
+
+  const onSelectImagePress = useCallback(() => {
+    Keyboard.dismiss();
+  }, []);
+
+  const openBarcodeScanner = useCallback(() => {
+    Keyboard.dismiss();
+    setBarcodeScannerVisible(true);
+  }, []);
+
+  const handleBarcodeScanned = useCallback((code: string) => {
+    setBarcode(code);
+    setBarcodeScannerVisible(false);
+  }, []);
 
   return (
     <>
@@ -215,29 +436,22 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
                 {mode === 'add' ? 'Add product' : 'Edit product'}
               </Text>
               <Text style={[styles.subtitle, { color: paperTheme.colors.onSurfaceVariant }]}>
-                Name, category, price, and product image
+                Product details, pricing, and inventory
               </Text>
             </View>
           </View>
-
-          {mode === 'edit' && initial ? (
-            <View style={[styles.metaBanner, { backgroundColor: paperTheme.colors.surfaceVariant }]}>
-              <Text style={[styles.metaText, { color: paperTheme.colors.onSurfaceVariant }]}>
-                Product ID {initial.id}
-              </Text>
-            </View>
-          ) : null}
 
           <ScrollView
             style={styles.flex}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}
           >
             <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>Name</Text>
             <TextInput
-              value={name}
-              onChangeText={setName}
+              value={productName}
+              onChangeText={setProductName}
               placeholder="Product name"
               placeholderTextColor={paperTheme.colors.onSurfaceVariant}
               style={[
@@ -271,54 +485,289 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
               <Ionicons name="chevron-down" size={20} color={paperTheme.colors.onSurfaceVariant} />
             </TouchableOpacity>
 
-            <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>Price</Text>
-            <TextInput
-              value={price}
-              onChangeText={setPrice}
-              placeholder="0.00"
-              placeholderTextColor={paperTheme.colors.onSurfaceVariant}
-              keyboardType="decimal-pad"
-              style={[
-                styles.input,
-                { color: paperTheme.colors.onSurface, backgroundColor: paperTheme.colors.surface },
-              ]}
-            />
+            <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>Type</Text>
+            <View style={styles.typeRow}>
+              {(['product', 'service'] as const).map((typeOption) => {
+                const active = productType === typeOption;
+                return (
+                  <TouchableOpacity
+                    key={typeOption}
+                    style={[
+                      styles.typeChip,
+                      {
+                        backgroundColor: active
+                          ? paperTheme.colors.primary
+                          : paperTheme.colors.surface,
+                        borderColor: active ? paperTheme.colors.primary : paperTheme.colors.outline,
+                      },
+                    ]}
+                    onPress={() => setProductType(typeOption)}
+                    activeOpacity={0.85}
+                  >
+                    <Text
+                      style={[
+                        styles.typeChipText,
+                        { color: active ? paperTheme.colors.onPrimary : paperTheme.colors.onSurface },
+                      ]}
+                    >
+                      {typeOption === 'product' ? 'Product' : 'Service'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {productType === 'product' ? (
+              <>
+                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>Amount</Text>
+                <TextInput
+                  value={amount}
+                  onChangeText={setAmount}
+                  placeholder="0.00"
+                  placeholderTextColor={paperTheme.colors.onSurfaceVariant}
+                  keyboardType="decimal-pad"
+                  style={[
+                    styles.input,
+                    { color: paperTheme.colors.onSurface, backgroundColor: paperTheme.colors.surface },
+                  ]}
+                />
+
+                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  Cost (optional)
+                </Text>
+                <TextInput
+                  value={cost}
+                  onChangeText={setCost}
+                  placeholder="0.00"
+                  placeholderTextColor={paperTheme.colors.onSurfaceVariant}
+                  keyboardType="decimal-pad"
+                  style={[
+                    styles.input,
+                    { color: paperTheme.colors.onSurface, backgroundColor: paperTheme.colors.surface },
+                  ]}
+                />
+
+                <TouchableOpacity
+                  style={[
+                    styles.inventoryCard,
+                    {
+                      backgroundColor: isInventoryAvailable
+                        ? paperTheme.colors.primaryContainer
+                        : paperTheme.colors.surface,
+                      borderColor: isInventoryAvailable
+                        ? paperTheme.colors.primary
+                        : paperTheme.colors.outlineVariant,
+                    },
+                  ]}
+                  onPress={() => setIsInventoryAvailable((prev) => !prev)}
+                  activeOpacity={0.88}
+                >
+                  <View
+                    style={[
+                      styles.inventoryIconWrap,
+                      {
+                        backgroundColor: isInventoryAvailable
+                          ? paperTheme.colors.primary
+                          : paperTheme.colors.surfaceVariant,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="layers-outline"
+                      size={22}
+                      color={
+                        isInventoryAvailable
+                          ? paperTheme.colors.onPrimary
+                          : paperTheme.colors.onSurfaceVariant
+                      }
+                    />
+                  </View>
+                  <View style={styles.inventoryTextBlock}>
+                    <Text style={[styles.inventoryTitle, { color: paperTheme.colors.onSurface }]}>
+                      Track inventory
+                    </Text>
+                    <Text style={[styles.inventoryHint, { color: paperTheme.colors.onSurfaceVariant }]}>
+                      Enable quantity tracking for stock levels
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.inventoryStatusBadge,
+                      {
+                        backgroundColor: isInventoryAvailable
+                          ? paperTheme.colors.primary
+                          : paperTheme.colors.surfaceVariant,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.inventoryStatusText,
+                        {
+                          color: isInventoryAvailable
+                            ? paperTheme.colors.onPrimary
+                            : paperTheme.colors.onSurfaceVariant,
+                        },
+                      ]}
+                    >
+                      {isInventoryAvailable ? 'ON' : 'OFF'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                {isInventoryAvailable ? (
+                  <>
+                    <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
+                      Quantity
+                    </Text>
+                    <TextInput
+                      value={qty}
+                      onChangeText={setQty}
+                      placeholder="0"
+                      placeholderTextColor={paperTheme.colors.onSurfaceVariant}
+                      keyboardType="number-pad"
+                      style={[
+                        styles.input,
+                        { color: paperTheme.colors.onSurface, backgroundColor: paperTheme.colors.surface },
+                      ]}
+                    />
+                  </>
+                ) : null}
+
+                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  Barcode (optional)
+                </Text>
+                <View style={styles.barcodeRow}>
+                  <TextInput
+                    value={barcode}
+                    onChangeText={setBarcode}
+                    placeholder="Scan or enter barcode"
+                    placeholderTextColor={paperTheme.colors.onSurfaceVariant}
+                    autoCapitalize="characters"
+                    style={[
+                      styles.input,
+                      styles.barcodeInput,
+                      { color: paperTheme.colors.onSurface, backgroundColor: paperTheme.colors.surface },
+                    ]}
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.scanBarcodeBtn,
+                      {
+                        backgroundColor: paperTheme.colors.primaryContainer,
+                        borderColor: paperTheme.colors.primary,
+                      },
+                    ]}
+                    onPress={openBarcodeScanner}
+                    activeOpacity={0.9}
+                  >
+                    <Ionicons name="scan-outline" size={22} color={paperTheme.colors.primary} />
+                    <Text style={[styles.scanBarcodeBtnText, { color: paperTheme.colors.primary }]}>
+                      Scan
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : null}
 
             <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>Image</Text>
-            <TouchableOpacity
+            <View
               style={[
-                styles.imageBox,
-                imageUri && styles.imageBoxFilled,
+                styles.imageSection,
                 {
-                  borderColor: paperTheme.colors.outline,
+                  borderColor: paperTheme.colors.outlineVariant,
                   backgroundColor: paperTheme.colors.surface,
                 },
               ]}
-              onPress={pickImage}
-              activeOpacity={0.85}
             >
               {imageUri ? (
-                <>
+                <View style={styles.imagePreviewWrap}>
                   <Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="cover" />
-                  <View style={styles.imageOverlay}>
-                    <Ionicons name="images-outline" size={22} color={paperTheme.colors.onPrimary} />
-                    <Text style={[styles.imageOverlayText, { color: paperTheme.colors.onPrimary }]}>
-                      Tap to change photo
+                  <TouchableOpacity
+                    style={styles.removeImageBadge}
+                    onPress={() => setImageUri(null)}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="close" size={16} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View
+                  style={[
+                    styles.imagePlaceholder,
+                    { backgroundColor: paperTheme.colors.surfaceVariant },
+                  ]}
+                >
+                  <Ionicons name="image-outline" size={40} color={paperTheme.colors.onSurfaceVariant} />
+                  <Text style={[styles.imagePlaceholderTitle, { color: paperTheme.colors.onSurface }]}>
+                    No product image
+                  </Text>
+                  <Text
+                    style={[styles.imagePlaceholderHint, { color: paperTheme.colors.onSurfaceVariant }]}
+                  >
+                    Take a photo or choose one from your gallery
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.imageActionColumn}>
+                <TouchableOpacity
+                  style={[
+                    styles.imageActionBtn,
+                    styles.imageActionBtnPrimary,
+                    { backgroundColor: paperTheme.colors.primary },
+                  ]}
+                  onPress={() => void takePhoto()}
+                  onPressIn={onSelectImagePress}
+                  activeOpacity={0.88}
+                >
+                  <View style={styles.imageActionIconCircle}>
+                    <Ionicons name="camera" size={24} color={paperTheme.colors.primary} />
+                  </View>
+                  <View style={styles.imageActionLabelBlock}>
+                    <Text style={[styles.imageActionBtnTitle, { color: paperTheme.colors.onPrimary }]}>
+                      Take photo
+                    </Text>
+                    <Text style={[styles.imageActionBtnSub, { color: 'rgba(255,255,255,0.85)' }]}>
+                      Open camera
                     </Text>
                   </View>
-                </>
-              ) : (
-                <>
-                  <Ionicons name="image-outline" size={36} color={paperTheme.colors.primary} />
-                  <Text style={[styles.imageBoxTitle, { color: paperTheme.colors.onSurface }]}>
-                    Add product image
-                  </Text>
-                  <Text style={[styles.imageBoxHint, { color: paperTheme.colors.onSurfaceVariant }]}>
-                    Choose a photo from your device
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
+                  <Ionicons name="chevron-forward" size={20} color={paperTheme.colors.onPrimary} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.imageActionBtn,
+                    styles.imageActionBtnSecondary,
+                    {
+                      backgroundColor: paperTheme.colors.surface,
+                      borderColor: paperTheme.colors.primary,
+                    },
+                  ]}
+                  onPress={() => void pickFromGallery()}
+                  onPressIn={onSelectImagePress}
+                  activeOpacity={0.88}
+                >
+                  <View
+                    style={[
+                      styles.imageActionIconCircle,
+                      { backgroundColor: paperTheme.colors.primaryContainer },
+                    ]}
+                  >
+                    <Ionicons name="images" size={24} color={paperTheme.colors.primary} />
+                  </View>
+                  <View style={styles.imageActionLabelBlock}>
+                    <Text style={[styles.imageActionBtnTitle, { color: paperTheme.colors.onSurface }]}>
+                      Choose gallery
+                    </Text>
+                    <Text style={[styles.imageActionBtnSub, { color: paperTheme.colors.onSurfaceVariant }]}>
+                      Pick from device
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={paperTheme.colors.primary} />
+                </TouchableOpacity>
+              </View>
+            </View>
             {imageUri ? (
               <TouchableOpacity
                 style={styles.removeImageBtn}
@@ -335,11 +784,11 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
                 style={[
                   styles.saveBtn,
                   { backgroundColor: paperTheme.colors.primary },
-                  saving && styles.saveBtnDisabled,
+                  saving && styles.btnDisabled,
                 ]}
                 onPress={onSave}
                 activeOpacity={0.9}
-                disabled={saving}
+                disabled={saving || deleting}
               >
                 {saving ? (
                   <ActivityIndicator size="small" color={paperTheme.colors.onPrimary} />
@@ -348,6 +797,28 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
                 )}
                 <Text style={[styles.saveBtnText, { color: paperTheme.colors.onPrimary }]}>
                   {saving ? 'Saving...' : mode === 'add' ? 'Save product' : 'Save changes'}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+
+            {mode === 'edit' && initial ? (
+              <TouchableOpacity
+                style={[
+                  styles.deleteBtn,
+                  { borderColor: paperTheme.colors.error },
+                  (saving || deleting) && styles.btnDisabled,
+                ]}
+                onPress={onDelete}
+                activeOpacity={0.9}
+                disabled={saving || deleting}
+              >
+                {deleting ? (
+                  <ActivityIndicator size="small" color={paperTheme.colors.error} />
+                ) : (
+                  <Ionicons name="trash-outline" size={20} color={paperTheme.colors.error} />
+                )}
+                <Text style={[styles.deleteBtnText, { color: paperTheme.colors.error }]}>
+                  {deleting ? 'Deleting...' : 'Delete product'}
                 </Text>
               </TouchableOpacity>
             ) : null}
@@ -372,7 +843,7 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
                 <ScrollView style={styles.modalList} keyboardShouldPersistTaps="handled">
                   {categories.length === 0 ? (
                     <Text style={[styles.modalEmpty, { color: paperTheme.colors.onSurfaceVariant }]}>
-                      No categories loaded. Pull to refresh on Manage Inventory first.
+                      No categories loaded. Add categories first from Manage Categories.
                     </Text>
                   ) : (
                     categories.map((cat: Category) => {
@@ -413,8 +884,14 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
               </View>
             </TouchableOpacity>
           </Modal>
-        </KeyboardAvoidingView>
 
+          <BarcodeScannerModal
+            visible={barcodeScannerVisible}
+            onClose={() => setBarcodeScannerVisible(false)}
+            onScanned={handleBarcodeScanned}
+            paperTheme={paperTheme}
+          />
+        </KeyboardAvoidingView>
 
         {alertConfig && (
           <CommonAlert
@@ -429,7 +906,7 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
             onNegativePress={alertConfig.onNegativePress}
             onClose={hideAlert}
           />
-        )}s
+        )}
       </SafeAreaView>
     </>
   );
@@ -466,14 +943,6 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 22, fontFamily: fonts.PoppinsBold },
   subtitle: { fontSize: 13, fontFamily: fonts.PoppinsRegular, marginTop: 2 },
-  metaBanner: {
-    marginHorizontal: 16,
-    marginBottom: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-  },
-  metaText: { fontFamily: fonts.PoppinsMedium, fontSize: 12 },
   scrollContent: { paddingHorizontal: 16, paddingBottom: 32 },
   label: {
     fontFamily: fonts.PoppinsSemiBold,
@@ -499,39 +968,181 @@ const styles = StyleSheet.create({
   selectText: { fontFamily: fonts.PoppinsRegular, fontSize: 16, flex: 1 },
   selectPlaceholder: { fontFamily: fonts.PoppinsRegular, fontSize: 16, flex: 1 },
   catDot: { width: 12, height: 12, borderRadius: 6 },
-  imageBox: {
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderRadius: 16,
-    paddingVertical: 28,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    gap: 8,
+  typeRow: {
+    flexDirection: 'row',
+    gap: 10,
     marginBottom: 8,
-    overflow: 'hidden',
   },
-  imageBoxFilled: {
-    paddingVertical: 0,
-    paddingHorizontal: 0,
-    borderStyle: 'solid',
+  typeChip: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  typeChipText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
+  },
+  inventoryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 2,
+  },
+  inventoryIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inventoryTextBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  inventoryTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 15,
+  },
+  inventoryHint: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  inventoryStatusBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minWidth: 44,
+    alignItems: 'center',
+  },
+  inventoryStatusText: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 12,
+    letterSpacing: 0.5,
+  },
+  barcodeRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 10,
+    marginBottom: 4,
+  },
+  barcodeInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  scanBarcodeBtn: {
+    minWidth: 76,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 14 : 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  scanBarcodeBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
+  },
+  imageSection: {
+    borderWidth: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  imagePreviewWrap: {
+    position: 'relative',
   },
   imagePreview: {
     width: '100%',
     height: 220,
   },
-  imageOverlay: {
-    ...StyleSheet.absoluteFillObject,
+  removeImageBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.35)',
   },
-  imageOverlayText: {
-    fontFamily: fonts.PoppinsMedium,
-    fontSize: 14,
+  imagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 32,
+    paddingHorizontal: 20,
   },
-  imageBoxTitle: { fontFamily: fonts.PoppinsSemiBold, fontSize: 16 },
-  imageBoxHint: { fontFamily: fonts.PoppinsRegular, fontSize: 13, textAlign: 'center' },
+  imagePlaceholderTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 16,
+    marginTop: 4,
+  },
+  imagePlaceholderHint: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  imageActionColumn: {
+    gap: 10,
+    padding: 12,
+    paddingTop: 4,
+  },
+  imageActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    minHeight: 64,
+  },
+  imageActionBtnPrimary: {
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+  },
+  imageActionBtnSecondary: {
+    borderWidth: 2,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+  },
+  imageActionIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageActionLabelBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  imageActionBtnTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 15,
+  },
+  imageActionBtnSub: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    marginTop: 2,
+  },
   removeImageBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -550,7 +1161,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  saveBtnDisabled: {
+  deleteBtn: {
+    marginTop: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  deleteBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 16,
+  },
+  btnDisabled: {
     opacity: 0.75,
   },
   saveBtnText: { fontFamily: fonts.PoppinsSemiBold, fontSize: 16 },

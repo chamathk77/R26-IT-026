@@ -141,7 +141,6 @@ export default function ShopDetailsScreen({ navigation }: Props) {
       : []),
   ];
   const modules = [
-    { key: 'inventory', label: 'Inventory', icon: 'cube-outline' as const, enabled: shop.manageInventory },
     { key: 'sms', label: 'SMS', icon: 'chatbubble-outline' as const, enabled: shop.sms },
     { key: 'kpi', label: 'KPI', icon: 'stats-chart-outline' as const, enabled: shop.kpi },
     { key: 'analytics', label: 'Analytics', icon: 'analytics-outline' as const, enabled: shop.analyticsModule },

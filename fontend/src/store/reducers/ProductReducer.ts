@@ -6,11 +6,14 @@ import {
   updateProduct_Service,
 } from '../../services/ProductService';
 import { Product } from '../../type/product';
+import { ApiErrorResponse } from '../../type/common';
 
 interface ProductState {
   list: {
     loading: boolean;
     error: string | null;
+    success: boolean;
+    count: number;
     items: Product[];
   };
   create: {
@@ -36,6 +39,8 @@ const initialState: ProductState = {
   list: {
     loading: false,
     error: null,
+    success: false,
+    count: 0,
     items: [],
   },
   create: {
@@ -67,15 +72,21 @@ export const ProductSlice = createSlice({
     builder.addCase(fetchProducts_Service.pending, (state) => {
       state.list.loading = true;
       state.list.error = null;
+      state.list.success = false;
     });
     builder.addCase(fetchProducts_Service.fulfilled, (state, action) => {
       state.list.loading = false;
       state.list.error = null;
+      state.list.success = true;
+      state.list.count = action.payload.count ?? 0;
       state.list.items = Array.isArray(action.payload?.data) ? action.payload.data : [];
     });
     builder.addCase(fetchProducts_Service.rejected, (state, action) => {
       state.list.loading = false;
-      const payload = action.payload as { message?: string } | undefined;
+      state.list.success = false;
+      state.list.count = 0;
+      state.list.items = [];
+      const payload = action.payload as ApiErrorResponse | undefined;
       state.list.error =
         payload?.message ||
         action.error.message ||
@@ -141,6 +152,7 @@ export const ProductSlice = createSlice({
     builder.addCase(deleteProduct_Service.fulfilled, (state, action) => {
       const id = String(action.payload);
       state.list.items = state.list.items.filter((product) => String(product._id) !== id);
+      state.list.count = Math.max(0, state.list.count - 1);
     });
   },
 });

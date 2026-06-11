@@ -26,8 +26,10 @@ const productSchema = new mongoose.Schema(
     amount: { type: Number, default: null, min: 0 },
     // Optional unit cost (e.g. for margin tracking). May be null.
     cost: { type: Number, default: null, min: 0 },
+    isInventoryAvailable: { type: Boolean, default: false },
     barcode: { type: String, default: null, trim: true },
-    qty: { type: Number, default: 0, min: 0 },
+    qty: { type: Number, default: null, min: 0 },
+    image: { type: String, default: '', trim: true },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -43,7 +45,13 @@ productSchema.pre('validate', function normalizeProductFields() {
   }
 
   if (this.type === 'service') {
+    this.isInventoryAvailable = false;
     this.amount = null;
+    this.qty = null;
+    this.barcode = null;
+    this.cost = null;
+  } else if (!this.isInventoryAvailable) {
+    this.qty = null;
   }
 
   if (this.cost === undefined || this.cost === '' || Number.isNaN(Number(this.cost))) {

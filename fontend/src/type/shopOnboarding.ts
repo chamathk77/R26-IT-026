@@ -17,7 +17,6 @@ export interface CreateShopOnboardingResponse {
 
 export interface UpdateShopFeaturesRequest {
   shopId: string;
-  manageInventory: boolean;
   sms: boolean;
   kpi: boolean;
   analyticsModule: boolean;
@@ -29,7 +28,6 @@ export interface UpdateShopFeaturesRequest {
 }
 
 export interface ShopFeaturesPayload {
-  manageInventory: boolean;
   sms: boolean;
   kpi: boolean;
   analyticsModule: boolean;

@@ -144,7 +144,6 @@ const updateShopFeatures = async (req, res) => {
   try {
     const {
       shopId,
-      manageInventory,
       sms,
       kpi,
       analyticsModule,
@@ -168,11 +167,6 @@ const updateShopFeatures = async (req, res) => {
     const shop = await ShopsData.findOne({ shopId: normalizedShopId });
     if (!shop) {
       return res.status(404).json({ success: false, message: 'Shop not found' });
-    }
-
-    const manageInventoryParsed = requireBooleanField(manageInventory, 'manageInventory');
-    if (manageInventoryParsed.error) {
-      return res.status(400).json({ success: false, message: manageInventoryParsed.error });
     }
 
     const smsParsed = requireBooleanField(sms, 'sms');
@@ -243,7 +237,6 @@ const updateShopFeatures = async (req, res) => {
     }
 
     const updates = {
-      manageInventory: manageInventoryParsed.value,
       sms: smsParsed.value,
       kpi: kpiParsed.value,
       analyticsModule: analyticsModuleParsed.value,
@@ -268,7 +261,6 @@ const updateShopFeatures = async (req, res) => {
       onboardStep: updated.onboardStep,
       message: 'Shop features saved',
       features: {
-        manageInventory: updated.manageInventory,
         sms: updated.sms,
         kpi: updated.kpi,
         analyticsModule: updated.analyticsModule,

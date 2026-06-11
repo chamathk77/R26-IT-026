@@ -26,6 +26,14 @@
     },
     "web": {
       "favicon": "./assets/icon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Smart Cost to access your camera to scan product barcodes."
+        }
+      ]
+    ]
   }
 }

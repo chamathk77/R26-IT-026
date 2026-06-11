@@ -84,10 +84,6 @@ const shopsDataSchema = new mongoose.Schema(
     //   type: Boolean,
     //   default: true,
     // },
-    manageInventory: {
-      type: Boolean,
-      default: false,
-    },
 
     //module related
     sms: {
@@ -262,7 +258,7 @@ module.exports = ShopsData;
   // otpExpiresAt: date
   // onboardStep: startOnboarding | shopRegistered | featureSelected | completed
 
-  // manageInventory: boolean
+  // manageInventory removed — inventory is per product (Product.isInventoryAvailable)
   // sms: boolean
   // kpi: boolean
   // analyticsModule: boolean

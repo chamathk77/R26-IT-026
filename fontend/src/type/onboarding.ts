@@ -10,7 +10,6 @@ export type OnboardingOwnerData = {
 };
 
 export type ShopFeatureKey =
-  | 'manageInventory'
   | 'sms'
   | 'kpi'
   | 'analyticsModule'
