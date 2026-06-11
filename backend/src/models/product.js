@@ -16,8 +16,18 @@ const productSchema = new mongoose.Schema(
       required: true,
     },
     categoryName: { type: String, required: true, trim: true },
+    type: {
+      type: String,
+      enum: ['product', 'service'],
+      default: 'product',
+      required: true,
+    },
+    // Selling price. Required for product; null/0 for service (entered at cart/checkout).
+    amount: { type: Number, default: null, min: 0 },
+    // Optional unit cost (e.g. for margin tracking). May be null.
+    cost: { type: Number, default: null, min: 0 },
     barcode: { type: String, default: null, trim: true },
-    productQty: { type: Number, default: 0, min: 0 },
+    qty: { type: Number, default: 0, min: 0 },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -27,9 +37,17 @@ const productSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-productSchema.pre('validate', function normalizeShopId() {
+productSchema.pre('validate', function normalizeProductFields() {
   if (this.shopId) {
     this.shopId = String(this.shopId).trim().toUpperCase();
+  }
+
+  if (this.type === 'service') {
+    this.amount = null;
+  }
+
+  if (this.cost === undefined || this.cost === '' || Number.isNaN(Number(this.cost))) {
+    this.cost = null;
   }
 });
 

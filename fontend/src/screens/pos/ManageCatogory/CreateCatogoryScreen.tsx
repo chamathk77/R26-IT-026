@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -15,17 +14,25 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootStackParamList } from '../../../navigation/RootStackParamsList';
 import { fonts } from '../../../constants/fonts';
 import { useTheme } from '../../../context/ThemeContext';
 import CommonHeader from '../../../components/CommonHeader/CommonHeader';
 import { AppDispatch, RootState } from '../../../store/store';
-import { createCategory_Service, updateCategory_Service } from '../../../services/CategoryService';
-import { devLog } from '../../../utils/devLog';
+import {
+  createCategory_Service,
+  fetchCategoryById_Service,
+  updateCategory_Service,
+} from '../../../services/CategoryService';
 import { Category } from '../../../type/category';
 import { useCommonAlert } from '../../../hooks/useCommonAlert';
-import CommonAlert from '../../../components/CommonAlert';
+import {
+  getApiErrorMessage,
+  handleSessionExpiredApiError,
+} from '../../../utils/apiErrorAlert';
+import CommonAlert from '../../../components/CommonAlert/CommonAlert';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateCatogory'>;
 
@@ -53,12 +60,36 @@ function resolveColorFromCategory(cat: Category): string {
   return match ?? cat.colorCode ?? COLOR_OPTIONS[0];
 }
 
+function applyCategoryToForm(
+  cat: Category,
+  setName: (v: string) => void,
+  setDescription: (v: string) => void,
+  setSelectedColor: (v: string) => void,
+  setInitialSnapshot: (v: { n: string; d: string; c: string }) => void,
+) {
+  const color = resolveColorFromCategory(cat);
+  setName(cat.name ?? '');
+  setDescription(cat.description ?? '');
+  setSelectedColor(color);
+  setInitialSnapshot({
+    n: (cat.name ?? '').trim(),
+    d: (cat.description ?? '').trim(),
+    c: color.trim().toUpperCase(),
+  });
+}
+
 export default function CreateCatogoryScreen({ navigation, route }: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
   const dispatch = useDispatch<AppDispatch>();
-  const categoryParam = route.params?.category;
-  const isEdit = Boolean(categoryParam?._id);
+  const categoryId = route.params?.category?._id ?? route.params?.categoryId;
+  const isEdit = Boolean(categoryId);
 
+  const shopId = useSelector(
+    (state: RootState) =>
+      state.AuthReducer.Login.shopData?.shopId ||
+      state.AuthReducer.Login.userData?.shopId ||
+      '',
+  );
   const createLoading = useSelector((state: RootState) => state.CategoryReducer.create.loading);
   const updateLoading = useSelector((state: RootState) => state.CategoryReducer.update.loading);
   const saving = isEdit ? updateLoading : createLoading;
@@ -68,7 +99,8 @@ export default function CreateCatogoryScreen({ navigation, route }: Props) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedColor, setSelectedColor] = useState(COLOR_OPTIONS[0]);
-  /** Baseline for edit mode — save enabled only when user changes something */
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [initialSnapshot, setInitialSnapshot] = useState<{
     n: string;
     d: string;
@@ -77,25 +109,79 @@ export default function CreateCatogoryScreen({ navigation, route }: Props) {
 
   const scrollRef = useRef<ScrollView>(null);
 
-  useEffect(() => {
-    const cat = route.params?.category;
-    if (cat?._id) {
-      const color = resolveColorFromCategory(cat);
-      setName(cat.name ?? '');
-      setDescription(cat.description ?? '');
-      setSelectedColor(color);
-      setInitialSnapshot({
-        n: (cat.name ?? '').trim(),
-        d: (cat.description ?? '').trim(),
-        c: color.trim().toUpperCase(),
-      });
-    } else {
+  const loadCategoryDetail = useCallback(async () => {
+    if (!categoryId) return;
+
+    if (!shopId) {
+      setTimeout(() => {
+        show_Alert(
+          'error',
+          'Error',
+          'Shop not found. Please log in again.',
+          1,
+          false,
+          'OK',
+          () => navigation.goBack(),
+        );
+      }, 150);
+      return;
+    }
+
+    setLoadingDetail(true);
+    setDetailError(null);
+
+    try {
+      const response = await dispatch(fetchCategoryById_Service(categoryId)).unwrap();
+      applyCategoryToForm(
+        response.data,
+        setName,
+        setDescription,
+        setSelectedColor,
+        setInitialSnapshot,
+      );
+    } catch (error: unknown) {
+      console.log('error in loadCategoryDetail', error);
+
+      const handled = await handleSessionExpiredApiError(error, show_Alert);
+      if (handled) return;
+
+      const message = getApiErrorMessage(error, 'Could not load category. Please try again.');
+      setDetailError(message);
+
+      setTimeout(() => {
+        show_Alert(
+          'error',
+          'Load failed',
+          message,
+          2,
+          false,
+          'Retry',
+          () => {
+            void loadCategoryDetail();
+          },
+          'Go back',
+          () => navigation.goBack(),
+        );
+      }, 150);
+    } finally {
+      setLoadingDetail(false);
+    }
+  }, [categoryId, dispatch, navigation, shopId, show_Alert]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (categoryId) {
+        void loadCategoryDetail();
+        return;
+      }
+
       setName('');
       setDescription('');
       setSelectedColor(COLOR_OPTIONS[0]);
       setInitialSnapshot(null);
-    }
-  }, [route.params?.category]);
+      setDetailError(null);
+    }, [categoryId, loadCategoryDetail]),
+  );
 
   const isDirty = useMemo(() => {
     if (!isEdit || !initialSnapshot) return true;
@@ -109,34 +195,72 @@ export default function CreateCatogoryScreen({ navigation, route }: Props) {
   const canSave = useMemo(() => {
     const valid = name.trim().length > 0 && description.trim().length > 0;
     if (!valid) return false;
-    if (isEdit) return isDirty;
+    if (isEdit) return isDirty && !loadingDetail;
     return true;
-  }, [name, description, isEdit, isDirty]);
+  }, [name, description, isEdit, isDirty, loadingDetail]);
 
   const onSave = async () => {
     if (!canSave || saving) return;
+
     const body = {
       name: name.trim(),
       description: description.trim(),
       colorCode: selectedColor.trim().toUpperCase(),
     };
+
     try {
-      if (isEdit && categoryParam?._id) {
+      if (isEdit && categoryId) {
         await dispatch(
           updateCategory_Service({
-            id: categoryParam._id,
+            id: categoryId,
             ...body,
           }),
         ).unwrap();
-        devLog('Update category saved');
-      } else {
-        const response: unknown = await dispatch(createCategory_Service(body)).unwrap();
-        devLog('Create category response:', response);
+
+        setTimeout(() => {
+          show_Alert(
+            'success',
+            'Category updated',
+            'Your changes were saved successfully.',
+            1,
+            false,
+            'OK',
+            () => navigation.goBack(),
+          );
+        }, 150);
+        return;
       }
-      navigation.goBack();
-    } catch (err: unknown) {
-      devLog('Create category error:', err);
-      show_Alert('error', 'Error', 'Could not save category', 1, true, 'OK');
+
+      await dispatch(createCategory_Service(body)).unwrap();
+
+      setTimeout(() => {
+        show_Alert(
+          'success',
+          'Category created',
+          'The new category was saved successfully.',
+          1,
+          false,
+          'OK',
+          () => navigation.goBack(),
+        );
+      }, 150);
+    } catch (error: unknown) {
+      console.log('error in saveCategory', error);
+
+      const handled = await handleSessionExpiredApiError(error, show_Alert);
+      if (handled) return;
+
+      setTimeout(() => {
+        show_Alert(
+          'error',
+          'Save failed',
+          getApiErrorMessage(error, 'Could not save category. Please try again.'),
+          1,
+          false,
+          'OK',
+          () => {},
+        );
+      }, 150);
     }
   };
 
@@ -150,125 +274,134 @@ export default function CreateCatogoryScreen({ navigation, route }: Props) {
         backgroundColor={paperTheme.colors.background}
       />
 
-
       <SafeAreaView style={[styles.safe, { backgroundColor: paperTheme.colors.background }]}>
-      <CommonHeader
-            title={headerTitle}
-            titleColor={paperTheme.colors.onBackground}
-            iconColor={paperTheme.colors.onBackground}
-            onPressLeftBtn={() => navigation.goBack()}
-          />
-      
-      
-        <View style={{
-          flex: 1,
-          paddingHorizontal: 16, paddingTop: 8
-        }}>
-   
+        <CommonHeader
+          title={headerTitle}
+          titleColor={paperTheme.colors.onBackground}
+          iconColor={paperTheme.colors.onBackground}
+          onPressLeftBtn={() => navigation.goBack()}
+        />
 
-          <KeyboardAvoidingView
-            style={{ flex: 1 }}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-          >
-            <ScrollView
-              ref={scrollRef}
+        <View style={styles.content}>
+          {loadingDetail ? (
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator size="large" color={paperTheme.colors.primary} />
+              <Text style={[styles.loadingText, { color: paperTheme.colors.onSurfaceVariant }]}>
+                Loading category...
+              </Text>
+            </View>
+          ) : (
+            <KeyboardAvoidingView
               style={{ flex: 1 }}
-              contentContainerStyle={{
-                flexGrow: 1,
-                justifyContent: 'flex-end',
-              }}
-              bounces={false}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
-              <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
-                Category Name
-              </Text>
-              <TextInput
-                value={name}
-                onChangeText={setName}
-                placeholder="e.g. Beverages"
-                placeholderTextColor={paperTheme.colors.outline}
-                style={[
-                  styles.input,
-                  { backgroundColor: paperTheme.colors.surface, color: paperTheme.colors.onSurface },
-                ]}
-              />
-
-              <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
-                Description
-              </Text>
-              <TextInput
-                value={description}
-                onChangeText={setDescription}
-                placeholder="Short description for this category"
-                placeholderTextColor={paperTheme.colors.outline}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-                style={[
-                  styles.input,
-                  styles.textArea,
-                  { backgroundColor: paperTheme.colors.surface, color: paperTheme.colors.onSurface },
-                ]}
-              />
-
-              <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
-                Pick a Color
-              </Text>
-              <View style={styles.colorsRow}>
-                {COLOR_OPTIONS.map((color) => {
-                  const active = selectedColor.toUpperCase() === color.toUpperCase();
-                  return (
-                    <TouchableOpacity
-                      key={color}
-                      style={[
-                        styles.colorCircle,
-                        { backgroundColor: color, borderColor: active ? '#111' : 'transparent' },
-                      ]}
-                      onPress={() => setSelectedColor(color)}
-                    >
-                      {active ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <View style={[styles.previewCard, { backgroundColor: paperTheme.colors.surface }]}>
-                <View style={[styles.previewDot, { backgroundColor: selectedColor }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.previewTitle, { color: paperTheme.colors.onSurface }]}>
-                    {name.trim() || 'Category name preview'}
-                  </Text>
-                  <Text style={[styles.previewDesc, { color: paperTheme.colors.onSurfaceVariant }]}>
-                    {description.trim() || 'Description preview will appear here.'}
-                  </Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                disabled={!canSave || saving}
-                onPress={onSave}
-                style={[
-                  styles.saveBtn,
-                  {
-                    backgroundColor:
-                      canSave && !saving ? paperTheme.colors.primary : paperTheme.colors.outline,
-                  },
-                ]}
+              <ScrollView
+                ref={scrollRef}
+                style={{ flex: 1 }}
+                contentContainerStyle={styles.scrollContent}
+                bounces={false}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
               >
-                {saving ? (
-                  <ActivityIndicator color={paperTheme.colors.onPrimary} />
-                ) : (
-                  <Text style={[styles.saveBtnText, { color: paperTheme.colors.onPrimary }]}>
-                    {saveLabel}
+                {detailError ? (
+                  <Text style={[styles.errorText, { color: paperTheme.colors.error }]}>
+                    {detailError}
                   </Text>
-                )}
-              </TouchableOpacity>
-            </ScrollView>
-          </KeyboardAvoidingView>
+                ) : null}
+
+                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  Category Name
+                </Text>
+                <TextInput
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="e.g. Beverages"
+                  placeholderTextColor={paperTheme.colors.outline}
+                  editable={!loadingDetail}
+                  style={[
+                    styles.input,
+                    { backgroundColor: paperTheme.colors.surface, color: paperTheme.colors.onSurface },
+                  ]}
+                />
+
+                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  Description
+                </Text>
+                <TextInput
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder="Short description for this category"
+                  placeholderTextColor={paperTheme.colors.outline}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                  editable={!loadingDetail}
+                  style={[
+                    styles.input,
+                    styles.textArea,
+                    { backgroundColor: paperTheme.colors.surface, color: paperTheme.colors.onSurface },
+                  ]}
+                />
+
+                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  Pick a Color
+                </Text>
+                <View style={styles.colorsRow}>
+                  {COLOR_OPTIONS.map((color) => {
+                    const active = selectedColor.toUpperCase() === color.toUpperCase();
+                    return (
+                      <TouchableOpacity
+                        key={color}
+                        style={[
+                          styles.colorCircle,
+                          { backgroundColor: color, borderColor: active ? '#111' : 'transparent' },
+                        ]}
+                        onPress={() => setSelectedColor(color)}
+                        disabled={loadingDetail}
+                      >
+                        {active ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <View style={[styles.previewCard, { backgroundColor: paperTheme.colors.surface }]}>
+                  <View style={[styles.previewDot, { backgroundColor: selectedColor }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.previewTitle, { color: paperTheme.colors.onSurface }]}>
+                      {name.trim() || 'Category name preview'}
+                    </Text>
+                    <Text style={[styles.previewDesc, { color: paperTheme.colors.onSurfaceVariant }]}>
+                      {description.trim() || 'Description preview will appear here.'}
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  disabled={!canSave || saving}
+                  onPress={onSave}
+                  style={[
+                    styles.saveBtn,
+                    {
+                      backgroundColor:
+                        canSave && !saving ? paperTheme.colors.primary : paperTheme.colors.outline,
+                    },
+                  ]}
+                >
+                  {saving ? (
+                    <ActivityIndicator color={paperTheme.colors.onPrimary} />
+                  ) : (
+                    <Text style={[styles.saveBtnText, { color: paperTheme.colors.onPrimary }]}>
+                      {saveLabel}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </ScrollView>
+            </KeyboardAvoidingView>
+          )}
         </View>
+
         {alertConfig && (
           <CommonAlert
             visible={visible}
@@ -289,16 +422,17 @@ export default function CreateCatogoryScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 18 },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  safe: { flex: 1 },
+  content: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
+  scrollContent: { flexGrow: 1, justifyContent: 'flex-end' },
+  loadingWrap: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 12,
   },
-  title: { fontSize: 22, fontFamily: fonts.PoppinsBold },
+  loadingText: { fontFamily: fonts.PoppinsRegular, fontSize: 14 },
+  errorText: { fontFamily: fonts.PoppinsRegular, fontSize: 13, marginBottom: 8 },
   label: { fontSize: 13, fontFamily: fonts.PoppinsMedium, marginBottom: 8, marginTop: 8 },
   input: {
     borderRadius: 12,

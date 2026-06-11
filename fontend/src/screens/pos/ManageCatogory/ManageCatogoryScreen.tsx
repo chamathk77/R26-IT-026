@@ -22,40 +22,72 @@ import { AppDispatch, RootState } from '../../../store/store';
 import { deleteCategory_Service, fetchCategories_Service } from '../../../services/CategoryService';
 import { Category } from '../../../type/category';
 import { useCommonAlert } from '../../../hooks/useCommonAlert';
-import { devLog } from '../../../utils/devLog';
+import {
+  getApiErrorMessage,
+  handleSessionExpiredApiError,
+} from '../../../utils/apiErrorAlert';
 import CommonAlert from '../../../components/CommonAlert/CommonAlert';
-
-/** RTK unwrap() rejects with rejectWithValue payload ({ message }), not always Error. */
-function thunkErrorMessage(err: unknown, fallback: string): string {
-  if (err && typeof err === 'object' && 'message' in err) {
-    const m = (err as { message: unknown }).message;
-    if (typeof m === 'string' && m.trim()) return m;
-  }
-  if (err instanceof Error && err.message.trim()) return err.message;
-  return fallback;
-}
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageCatogory'>;
 
 export default function ManageCatogoryScreen({ navigation }: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
   const dispatch = useDispatch<AppDispatch>();
+  const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
+  const shopId = useSelector(
+    (state: RootState) =>
+      state.AuthReducer.Login.shopData?.shopId ||
+      state.AuthReducer.Login.userData?.shopId ||
+      '',
+  );
   const { items: categories, loading, error } = useSelector(
     (state: RootState) => state.CategoryReducer.list,
   );
   const [refreshing, setRefreshing] = useState(false);
   const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
 
-  const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
-
   const loadCategories = useCallback(async () => {
-    try {
-      await dispatch(fetchCategories_Service()).unwrap();
-    } catch (error: any) {
-      devLog('Load categories error:', error);
-      show_Alert('error', 'Error', error.message, 1, true, 'OK');
+    if (!shopId) {
+      setTimeout(() => {
+        show_Alert(
+          'error',
+          'Error',
+          'Shop not found. Please log in again.',
+          1,
+          false,
+          'OK',
+          () => {},
+        );
+      }, 150);
+      return;
     }
-  }, [dispatch, show_Alert]);
+
+    try {
+      const response = await dispatch(fetchCategories_Service()).unwrap();
+      console.log('response in loadCategories', response);
+    } catch (err: unknown) {
+      console.log('error in loadCategories', err);
+
+      const handled = await handleSessionExpiredApiError(err, show_Alert);
+      if (handled) return;
+
+      setTimeout(() => {
+        show_Alert(
+          'error',
+          'Load failed',
+          getApiErrorMessage(err, 'Could not load categories. Please try again.'),
+          2,
+          false,
+          'Retry',
+          () => {
+            void loadCategories();
+          },
+          'Cancel',
+          () => {},
+        );
+      }, 150);
+    }
+  }, [dispatch, shopId, show_Alert]);
 
   const confirmDeleteCategory = useCallback(
     (item: Category) => {
@@ -72,16 +104,30 @@ export default function ManageCatogoryScreen({ navigation }: Props) {
           try {
             await dispatch(deleteCategory_Service(item._id)).unwrap();
             swipeableRefs.current.get(item._id)?.close();
-            await loadCategories();
           } catch (err: unknown) {
-            show_Alert('error', 'Error', thunkErrorMessage(err, 'Could not delete category'), 1, true, 'OK');
+            console.log('error in deleteCategory', err);
+
+            const handled = await handleSessionExpiredApiError(err, show_Alert);
+            if (handled) return;
+
+            setTimeout(() => {
+              show_Alert(
+                'error',
+                'Delete failed',
+                getApiErrorMessage(err, 'Could not delete category. Please try again.'),
+                1,
+                false,
+                'OK',
+                () => {},
+              );
+            }, 150);
           }
         },
         'Cancel',
         closeSwipe,
       );
     },
-    [dispatch, show_Alert, loadCategories],
+    [dispatch, show_Alert],
   );
 
   useFocusEffect(
@@ -94,7 +140,7 @@ export default function ManageCatogoryScreen({ navigation }: Props) {
     setRefreshing(true);
     try {
       await loadCategories();
-    } finally { 
+    } finally {
       setRefreshing(false);
     }
   }, [loadCategories]);
@@ -215,21 +261,20 @@ export default function ManageCatogoryScreen({ navigation }: Props) {
           </Text>
         </TouchableOpacity>
 
-
         {alertConfig && (
-        <CommonAlert
-          visible={visible}
-          type={alertConfig.type}
-          title={alertConfig.title}
-          message={alertConfig.message}
-          buttons={alertConfig.buttons}
-          positiveButtonText={alertConfig.positiveButtonText}
-          negativeButtonText={alertConfig.negativeButtonText}
-          onPositivePress={alertConfig.onPositivePress}
-          onNegativePress={alertConfig.onNegativePress}
-          onClose={hideAlert}
-        />
-      )}
+          <CommonAlert
+            visible={visible}
+            type={alertConfig.type}
+            title={alertConfig.title}
+            message={alertConfig.message}
+            buttons={alertConfig.buttons}
+            positiveButtonText={alertConfig.positiveButtonText}
+            negativeButtonText={alertConfig.negativeButtonText}
+            onPositivePress={alertConfig.onPositivePress}
+            onNegativePress={alertConfig.onNegativePress}
+            onClose={hideAlert}
+          />
+        )}
       </SafeAreaView>
     </>
   );

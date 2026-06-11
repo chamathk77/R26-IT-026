@@ -1,9 +1,18 @@
+export interface CategoryCreatedBy {
+  _id?: string;
+  name?: string;
+  email?: string;
+  role?: string;
+}
+
 export interface Category {
   _id: string;
+  shopId?: string;
   name: string;
   description: string;
   colorCode: string;
-  createdBy?: unknown;
+  createdBy?: CategoryCreatedBy | string;
+  createdByName?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -33,5 +42,17 @@ export interface UpdateCategoryResponse {
 
 export interface GetCategoriesResponse {
   success: boolean;
+  count: number;
   data: Category[];
+}
+
+export interface GetCategoryByIdResponse {
+  success: boolean;
+  data: Category;
+}
+
+export interface DeleteCategoryResponse {
+  success: boolean;
+  message?: string;
+  id: string;
 }

@@ -35,7 +35,7 @@ export type RootStackParamList = {
   ManageInventory: undefined;
   AddProduct: undefined;
   EditProduct: InventoryProductFormParams;
-  CreateCatogory: { category?: Category };
+  CreateCatogory: { category?: Category; categoryId?: string };
   CostModuleHub: undefined;
   CostAnalysis: undefined;
   CostManagementMain: undefined;

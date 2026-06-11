@@ -4,7 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSelector } from 'react-redux';
 import { MainBottomTabParamList } from '../../navigation/MainBottomTabParamList';
+import { RootState } from '../../store/store';
 import { fonts } from '../../constants/fonts';
 import { useTheme } from '../../context/ThemeContext';
 import { navigationRef } from '../../navigation/RootNavigation';
@@ -24,9 +26,15 @@ function formatCurrency(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
+function canManageShopInventory(role?: string): boolean {
+  return role === 'owner' || role === 'admin';
+}
+
 export default function HomeScreen(_props: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
+  const userRole = useSelector((state: RootState) => state.AuthReducer.Login.userData?.role);
+  const showManageButtons = canManageShopInventory(userRole);
   const [todayStats, setTodayStats] = useState<TodayHomeStats>(EMPTY_TODAY_STATS);
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
@@ -184,31 +192,37 @@ export default function HomeScreen(_props: Props) {
             </View>
           </View>
 
-          <TouchableOpacity
-            style={[styles.manageCategoryBtn, { backgroundColor: paperTheme.colors.primary }]}
-            onPress={() => {
-              if (navigationRef.isReady()) {
-                navigationRef.navigate('ManageCatogory');
-              }
-            }}
-          >
-            <Ionicons name="pricetags-outline" size={18} color={paperTheme.colors.onPrimary} />
-            <Text style={[styles.manageCategoryBtnText, { color: paperTheme.colors.onPrimary }]}>
-              Manage Catogory
-            </Text>
-          </TouchableOpacity>
+          {showManageButtons ? (
+            <>
+              <TouchableOpacity
+                style={[styles.manageCategoryBtn, { backgroundColor: paperTheme.colors.primary }]}
+                onPress={() => {
+                  if (navigationRef.isReady()) {
+                    navigationRef.navigate('ManageCatogory');
+                  }
+                }}
+              >
+                <Ionicons name="pricetags-outline" size={18} color={paperTheme.colors.onPrimary} />
+                <Text style={[styles.manageCategoryBtnText, { color: paperTheme.colors.onPrimary }]}>
+                  Manage Catogory
+                </Text>
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.manageInventoryBtn, { backgroundColor: surface, borderColor: primary }]}
-            onPress={() => {
-              if (navigationRef.isReady()) {
-                navigationRef.navigate('ManageInventory');
-              }
-            }}
-          >
-            <Ionicons name="cube-outline" size={18} color={primary} />
-            <Text style={[styles.manageInventoryBtnText, { color: primary }]}>Manage Inventory</Text>
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.manageInventoryBtn, { backgroundColor: surface, borderColor: primary }]}
+                onPress={() => {
+                  if (navigationRef.isReady()) {
+                    navigationRef.navigate('ManageInventory');
+                  }
+                }}
+              >
+                <Ionicons name="cube-outline" size={18} color={primary} />
+                <Text style={[styles.manageInventoryBtnText, { color: primary }]}>
+                  Manage Inventory
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
 
           <View style={{ height: 24 }} />
         </ScrollView>

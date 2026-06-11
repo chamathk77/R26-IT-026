@@ -203,7 +203,7 @@ export default function LoginScreen({ navigation }: Props) {
         );
 
         const goToModuleHub = () => {
-          navigation.reset({ index: 0, routes: [{ name: "ModuleHub" }] });
+          navigation.reset({ index: 0, routes: [{ name: "PosMain" }] });
         };
         const trialEndText = formatTrialEndDate(response.trailEndDate);
 
@@ -393,7 +393,7 @@ export default function LoginScreen({ navigation }: Props) {
         }
 
         if (response.shop?.status === "active") {
-          navigation.reset({ index: 0, routes: [{ name: "ModuleHub" }] });
+          navigation.reset({ index: 0, routes: [{ name: "PosMain" }] });
         }
 
 

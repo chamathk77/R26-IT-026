@@ -71,6 +71,8 @@ export default function HistoryScreen(_props: Props) {
     const handledBy = getHandledUserName(item);
     const isExpanded = expandedHistoryId === item._id;
 
+    
+
     return (
       <TouchableOpacity
         activeOpacity={0.92}

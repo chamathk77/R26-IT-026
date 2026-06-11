@@ -6,11 +6,14 @@ import {
   updateCategory_Service,
 } from '../../services/CategoryService';
 import { Category } from '../../type/category';
+import { ApiErrorResponse } from '../../type/common';
 
 interface CategoryState {
   list: {
     loading: boolean;
     error: string | null;
+    success: boolean;
+    count: number;
     items: Category[];
   };
   create: {
@@ -36,6 +39,8 @@ const initialState: CategoryState = {
   list: {
     loading: false,
     error: null,
+    success: false,
+    count: 0,
     items: [],
   },
   create: {
@@ -67,19 +72,23 @@ export const CategorySlice = createSlice({
     builder.addCase(fetchCategories_Service.pending, (state) => {
       state.list.loading = true;
       state.list.error = null;
+      state.list.success = false;
     });
     builder.addCase(fetchCategories_Service.fulfilled, (state, action) => {
       state.list.loading = false;
+      state.list.success = true;
       state.list.error = null;
+      state.list.count = action.payload.count ?? 0;
       state.list.items = Array.isArray(action.payload?.data) ? action.payload.data : [];
     });
     builder.addCase(fetchCategories_Service.rejected, (state, action) => {
       state.list.loading = false;
-      const payload = action.payload as { message?: string } | undefined;
+      state.list.success = false;
+      state.list.count = 0;
+      state.list.items = [];
+      const payload = action.payload as ApiErrorResponse | undefined;
       state.list.error =
-        payload?.message ||
-        action.error.message ||
-        'Could not load categories';
+        payload?.message || action.error.message || 'Could not load categories';
     });
 
     builder.addCase(createCategory_Service.pending, (state) => {
@@ -98,11 +107,9 @@ export const CategorySlice = createSlice({
       state.create.loading = false;
       state.create.success = false;
       state.create.data = null;
-      const payload = action.payload as { message?: string } | undefined;
+      const payload = action.payload as ApiErrorResponse | undefined;
       state.create.error =
-        payload?.message ||
-        action.error.message ||
-        'Could not create category';
+        payload?.message || action.error.message || 'Could not create category';
     });
 
     builder.addCase(updateCategory_Service.pending, (state) => {
@@ -127,16 +134,20 @@ export const CategorySlice = createSlice({
       state.update.loading = false;
       state.update.success = false;
       state.update.data = null;
-      const payload = action.payload as { message?: string } | undefined;
+      const payload = action.payload as ApiErrorResponse | undefined;
       state.update.error =
-        payload?.message ||
-        action.error.message ||
-        'Could not update category';
+        payload?.message || action.error.message || 'Could not update category';
     });
 
     builder.addCase(deleteCategory_Service.fulfilled, (state, action) => {
-      const id = String(action.payload);
+      const id = String(action.payload.id);
       state.list.items = state.list.items.filter((c) => String(c._id) !== id);
+      state.list.count = state.list.items.length;
+    });
+    builder.addCase(deleteCategory_Service.rejected, (state, action) => {
+      const payload = action.payload as ApiErrorResponse | undefined;
+      state.list.error =
+        payload?.message || action.error.message || 'Could not delete category';
     });
   },
 });

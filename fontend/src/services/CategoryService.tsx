@@ -6,7 +6,9 @@ import { toApiErrorResponse } from '../utils/apiErrorAlert';
 import {
   CreateCategoryRequest,
   CreateCategoryResponse,
+  DeleteCategoryResponse,
   GetCategoriesResponse,
+  GetCategoryByIdResponse,
   UpdateCategoryPayload,
   UpdateCategoryResponse,
 } from '../type/category';
@@ -17,7 +19,7 @@ function isHttpSuccess(status: number): boolean {
 
 export const createCategory_Service = createAsyncThunk(
   'category/create',
-  async (payload: CreateCategoryRequest) => {
+  async (payload: CreateCategoryRequest, { rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
@@ -30,7 +32,7 @@ export const createCategory_Service = createAsyncThunk(
         },
       );
 
-      if (isHttpSuccess(response.status)) {
+      if (isHttpSuccess(response.status) && response.data?.success) {
         return response.data;
       }
 
@@ -40,22 +42,21 @@ export const createCategory_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      console.log('Create category error:---', error);
-      throw toApiErrorResponse(error);
+      return rejectWithValue(toApiErrorResponse(error));
     }
   },
 );
 
 export const updateCategory_Service = createAsyncThunk(
   'category/update',
-  async (payload: UpdateCategoryPayload) => {
+  async (payload: UpdateCategoryPayload, { rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
-      const response = await apiClient.put<UpdateCategoryResponse>(
-        `/api/categories/${payload.id}`,
+      const response = await apiClient.post<UpdateCategoryResponse>(
+        `/api/categories/${encodeURIComponent(payload.id)}/update`,
         {
           name: payload.name.trim(),
           description: payload.description.trim(),
@@ -63,7 +64,7 @@ export const updateCategory_Service = createAsyncThunk(
         },
       );
 
-      if (isHttpSuccess(response.status)) {
+      if (isHttpSuccess(response.status) && response.data?.success) {
         return response.data;
       }
 
@@ -73,26 +74,25 @@ export const updateCategory_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      console.log('Update category error:---', error);
-      throw toApiErrorResponse(error);
+      return rejectWithValue(toApiErrorResponse(error));
     }
   },
 );
 
 export const deleteCategory_Service = createAsyncThunk(
   'category/delete',
-  async (id: string) => {
+  async (id: string, { rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
-      const response = await apiClient.delete<{ success: boolean; message?: string; id?: string }>(
-        `/api/categories/${id}`,
+      const response = await apiClient.post<DeleteCategoryResponse>(
+        `/api/categories/${encodeURIComponent(id)}/delete`,
       );
 
-      if (isHttpSuccess(response.status)) {
-        return id;
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
       }
 
       const apiError: ApiErrorResponse = {
@@ -101,23 +101,49 @@ export const deleteCategory_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      console.log('Delete category error:---', error);
-      throw toApiErrorResponse(error);
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const fetchCategoryById_Service = createAsyncThunk(
+  'category/fetchById',
+  async (id: string, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.get<GetCategoryByIdResponse>(
+        `/api/categories/${encodeURIComponent(id)}`,
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: 'Could not load category',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
     }
   },
 );
 
 export const fetchCategories_Service = createAsyncThunk(
   'category/fetchAll',
-  async (_void) => {
+  async (_void, { rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
       const response = await apiClient.get<GetCategoriesResponse>('/api/categories');
 
-      if (isHttpSuccess(response.status)) {
+      if (isHttpSuccess(response.status) && response.data?.success) {
         return response.data;
       }
 
@@ -127,10 +153,11 @@ export const fetchCategories_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      console.log('Fetch categories error:---', error);
-      throw toApiErrorResponse(error);
+      const apiError = toApiErrorResponse(error);
+      console.log('error in fetchCategories_Service', apiError);
+      return rejectWithValue(apiError);
     }
   },
 );
