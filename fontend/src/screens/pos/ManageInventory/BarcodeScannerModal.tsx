@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Platform, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { BarcodeType, CameraView, useCameraPermissions } from 'expo-camera';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { MD3Theme } from 'react-native-paper';
 import { fonts } from '../../../constants/fonts';
@@ -34,7 +34,24 @@ function normalizeScannedBarcode(raw: string): string {
   return raw.replace(/\s+/g, '').trim();
 }
 
-export default function BarcodeScannerModal({ visible, onClose, onScanned, paperTheme }: Props) {
+function getFallbackTopInset(): number {
+  if (Platform.OS === 'android') {
+    return StatusBar.currentHeight ?? 0;
+  }
+  return 0;
+}
+
+type ScannerContentProps = {
+  onClose: () => void;
+  onScanned: (code: string) => void;
+  paperTheme: MD3Theme;
+};
+
+function BarcodeScannerContent({ onClose, onScanned, paperTheme }: ScannerContentProps) {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, getFallbackTopInset());
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16);
+
   const [permission, requestPermission] = useCameraPermissions();
   const [scanLocked, setScanLocked] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
@@ -42,17 +59,16 @@ export default function BarcodeScannerModal({ visible, onClose, onScanned, paper
   const lastScanRef = useRef<{ code: string; at: number } | null>(null);
 
   useEffect(() => {
-    if (!visible) return;
     scanLockRef.current = false;
     setScanLocked(false);
     setTorchEnabled(false);
     lastScanRef.current = null;
-  }, [visible]);
+  }, []);
 
   useEffect(() => {
-    if (!visible || permission?.granted) return;
+    if (permission?.granted) return;
     void requestPermission();
-  }, [visible, permission?.granted, requestPermission]);
+  }, [permission?.granted, requestPermission]);
 
   const handleBarcodeScanned = useCallback(
     ({ data }: { data: string }) => {
@@ -79,100 +95,136 @@ export default function BarcodeScannerModal({ visible, onClose, onScanned, paper
     void requestPermission();
   }, [requestPermission]);
 
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.root, { backgroundColor: '#000' }]}>
-        {permission?.granted ? (
-          <>
-            <CameraView
-              style={StyleSheet.absoluteFillObject}
-              facing="back"
-              enableTorch={torchEnabled}
-              onBarcodeScanned={scanLocked ? undefined : handleBarcodeScanned}
-              barcodeScannerSettings={{
-                barcodeTypes: ALL_BARCODE_TYPES,
-              }}
-            />
-            <SafeAreaView style={styles.overlay} edges={['top', 'bottom']}>
-              <View style={styles.header}>
-                <TouchableOpacity
-                  style={styles.headerIconBtn}
-                  onPress={onClose}
-                  activeOpacity={0.85}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Ionicons name="close" size={24} color="#fff" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Scan barcode</Text>
-                <TouchableOpacity
-                  style={styles.headerIconBtn}
-                  onPress={() => setTorchEnabled((prev) => !prev)}
-                  activeOpacity={0.85}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Ionicons
-                    name={torchEnabled ? 'flashlight' : 'flashlight-outline'}
-                    size={22}
-                    color={torchEnabled ? paperTheme.colors.primary : '#fff'}
-                  />
-                </TouchableOpacity>
-              </View>
+  if (permission?.granted) {
+    return (
+      <View style={styles.root}>
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          facing="back"
+          enableTorch={torchEnabled}
+          onBarcodeScanned={scanLocked ? undefined : handleBarcodeScanned}
+          barcodeScannerSettings={{
+            barcodeTypes: ALL_BARCODE_TYPES,
+          }}
+        />
 
-              <View style={styles.centerBlock}>
-                <View style={styles.viewfinder}>
-                  <View style={[styles.corner, styles.cornerTopLeft]} />
-                  <View style={[styles.corner, styles.cornerTopRight]} />
-                  <View style={[styles.corner, styles.cornerBottomLeft]} />
-                  <View style={[styles.corner, styles.cornerBottomRight]} />
-                </View>
-                <Text style={styles.hint}>Hold the barcode flat and horizontal inside the frame</Text>
-                <Text style={styles.subHint}>
-                  Move closer slowly, avoid glare, and keep the phone steady until it reads
-                </Text>
-              </View>
-
-              <View style={[styles.footer, { backgroundColor: 'rgba(0,0,0,0.55)' }]}>
-                <Ionicons name="information-circle-outline" size={20} color="#fff" />
-                <Text style={styles.footerText}>
-                  EAN-13 and UPC-A labels on curved or shiny packaging may need extra light or a
-                  different angle. Tap the flashlight if the label reflects light.
-                </Text>
-              </View>
-            </SafeAreaView>
-          </>
-        ) : (
-          <SafeAreaView
-            style={[styles.permissionWrap, { backgroundColor: paperTheme.colors.background }]}
-            edges={['top', 'bottom']}
-          >
-            <TouchableOpacity style={styles.permissionClose} onPress={onClose} activeOpacity={0.85}>
-              <Ionicons name="close" size={24} color={paperTheme.colors.onBackground} />
+        <View style={styles.overlay} pointerEvents="box-none">
+          <View style={[styles.header, { paddingTop: topInset + 8 }]} pointerEvents="box-none">
+            <TouchableOpacity
+              style={styles.headerIconBtn}
+              onPress={onClose}
+              activeOpacity={0.85}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Close scanner"
+            >
+              <Ionicons name="close" size={24} color="#fff" />
             </TouchableOpacity>
-            <Ionicons name="camera-outline" size={48} color={paperTheme.colors.primary} />
-            <Text style={[styles.permissionTitle, { color: paperTheme.colors.onBackground }]}>
-              Camera access needed
+            <Text style={styles.headerTitle}>Scan barcode</Text>
+            <TouchableOpacity
+              style={styles.headerIconBtn}
+              onPress={() => setTorchEnabled((prev) => !prev)}
+              activeOpacity={0.85}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel={torchEnabled ? 'Turn flashlight off' : 'Turn flashlight on'}
+            >
+              <Ionicons
+                name={torchEnabled ? 'flashlight' : 'flashlight-outline'}
+                size={22}
+                color={torchEnabled ? paperTheme.colors.primary : '#fff'}
+              />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.centerBlock} pointerEvents="none">
+            <View style={styles.viewfinder}>
+              <View style={[styles.corner, styles.cornerTopLeft]} />
+              <View style={[styles.corner, styles.cornerTopRight]} />
+              <View style={[styles.corner, styles.cornerBottomLeft]} />
+              <View style={[styles.corner, styles.cornerBottomRight]} />
+            </View>
+            <Text style={styles.hint}>Hold the barcode flat and horizontal inside the frame</Text>
+            <Text style={styles.subHint}>
+              Move closer slowly, avoid glare, and keep the phone steady until it reads
             </Text>
-            <Text style={[styles.permissionMessage, { color: paperTheme.colors.onSurfaceVariant }]}>
-              Allow camera access to scan product barcodes.
+          </View>
+
+          <View
+            style={[
+              styles.footer,
+              {
+                backgroundColor: 'rgba(0,0,0,0.55)',
+                marginBottom: bottomInset + 8,
+              },
+            ]}
+            pointerEvents="none"
+          >
+            <Ionicons name="information-circle-outline" size={20} color="#fff" />
+            <Text style={styles.footerText}>
+              EAN-13 and UPC-A labels on curved or shiny packaging may need extra light or a
+              different angle. Tap the flashlight if the label reflects light.
             </Text>
-            {permission?.canAskAgain !== false ? (
-              <TouchableOpacity
-                style={[styles.permissionBtn, { backgroundColor: paperTheme.colors.primary }]}
-                onPress={handleRequestPermission}
-                activeOpacity={0.9}
-              >
-                <Text style={[styles.permissionBtnText, { color: paperTheme.colors.onPrimary }]}>
-                  Allow camera
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <Text style={[styles.permissionMessage, { color: paperTheme.colors.error }]}>
-                Camera permission was denied. Enable it in your device Settings.
-              </Text>
-            )}
-          </SafeAreaView>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.permissionRoot, { backgroundColor: paperTheme.colors.background }]}>
+      <TouchableOpacity
+        style={[styles.permissionClose, { top: topInset + 8 }]}
+        onPress={onClose}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel="Close"
+      >
+        <Ionicons name="close" size={24} color={paperTheme.colors.onBackground} />
+      </TouchableOpacity>
+
+      <View style={[styles.permissionBody, { paddingBottom: bottomInset + 24 }]}>
+        <Ionicons name="camera-outline" size={48} color={paperTheme.colors.primary} />
+        <Text style={[styles.permissionTitle, { color: paperTheme.colors.onBackground }]}>
+          Camera access needed
+        </Text>
+        <Text style={[styles.permissionMessage, { color: paperTheme.colors.onSurfaceVariant }]}>
+          Allow camera access to scan product barcodes.
+        </Text>
+        {permission?.canAskAgain !== false ? (
+          <TouchableOpacity
+            style={[styles.permissionBtn, { backgroundColor: paperTheme.colors.primary }]}
+            onPress={handleRequestPermission}
+            activeOpacity={0.9}
+          >
+            <Text style={[styles.permissionBtnText, { color: paperTheme.colors.onPrimary }]}>
+              Allow camera
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={[styles.permissionMessage, { color: paperTheme.colors.error }]}>
+            Camera permission was denied. Enable it in your device Settings.
+          </Text>
         )}
       </View>
+    </View>
+  );
+}
+
+export default function BarcodeScannerModal({ visible, onClose, onScanned, paperTheme }: Props) {
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <SafeAreaProvider style={styles.provider}>
+        {visible ? (
+          <BarcodeScannerContent onClose={onClose} onScanned={onScanned} paperTheme={paperTheme} />
+        ) : null}
+      </SafeAreaProvider>
     </Modal>
   );
 }
@@ -181,11 +233,16 @@ const CORNER_SIZE = 24;
 const CORNER_WIDTH = 3;
 
 const styles = StyleSheet.create({
+  provider: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
   root: {
     flex: 1,
+    backgroundColor: '#000',
   },
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'space-between',
   },
   header: {
@@ -193,7 +250,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingBottom: 8,
+    zIndex: 2,
   },
   headerIconBtn: {
     width: 40,
@@ -209,7 +267,9 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   centerBlock: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 10,
     paddingHorizontal: 20,
   },
@@ -267,10 +327,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
     marginHorizontal: 16,
-    marginBottom: 16,
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 12,
+    zIndex: 2,
   },
   footerText: {
     flex: 1,
@@ -279,18 +339,21 @@ const styles = StyleSheet.create({
     color: '#fff',
     lineHeight: 17,
   },
-  permissionWrap: {
+  permissionRoot: {
+    flex: 1,
+  },
+  permissionClose: {
+    position: 'absolute',
+    left: 20,
+    zIndex: 2,
+    padding: 8,
+  },
+  permissionBody: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 28,
     gap: 12,
-  },
-  permissionClose: {
-    position: 'absolute',
-    top: 56,
-    left: 20,
-    padding: 8,
   },
   permissionTitle: {
     fontFamily: fonts.PoppinsBold,

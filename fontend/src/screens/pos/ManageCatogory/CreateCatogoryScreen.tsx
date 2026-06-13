@@ -19,7 +19,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootStackParamList } from '../../../navigation/RootStackParamsList';
 import { fonts } from '../../../constants/fonts';
 import { useTheme } from '../../../context/ThemeContext';
-import CommonHeader from '../../../components/CommonHeader/CommonHeader';
 import { AppDispatch, RootState } from '../../../store/store';
 import {
   createCategory_Service,
@@ -33,6 +32,7 @@ import {
   handleSessionExpiredApiError,
 } from '../../../utils/apiErrorAlert';
 import CommonAlert from '../../../components/CommonAlert/CommonAlert';
+import { inventoryUi, softShadow } from '../ManageInventory/inventoryUiStyles';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateCatogory'>;
 
@@ -76,6 +76,41 @@ function applyCategoryToForm(
     d: (cat.description ?? '').trim(),
     c: color.trim().toUpperCase(),
   });
+}
+
+function FormSection({
+  title,
+  icon,
+  children,
+  paperTheme,
+  resolvedTheme,
+}: {
+  title: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  children: React.ReactNode;
+  paperTheme: ReturnType<typeof useTheme>['paperTheme'];
+  resolvedTheme: 'light' | 'dark';
+}) {
+  return (
+    <View
+      style={[
+        inventoryUi.sectionCard,
+        {
+          backgroundColor: paperTheme.colors.surface,
+          borderColor: paperTheme.colors.outlineVariant,
+        },
+        softShadow(resolvedTheme),
+      ]}
+    >
+      <View style={styles.sectionHeader}>
+        <View style={[styles.sectionIconWrap, { backgroundColor: paperTheme.colors.primaryContainer }]}>
+          <Ionicons name={icon} size={18} color={paperTheme.colors.primary} />
+        </View>
+        <Text style={[styles.sectionTitle, { color: paperTheme.colors.onSurface }]}>{title}</Text>
+      </View>
+      {children}
+    </View>
+  );
 }
 
 export default function CreateCatogoryScreen({ navigation, route }: Props) {
@@ -140,8 +175,6 @@ export default function CreateCatogoryScreen({ navigation, route }: Props) {
         setInitialSnapshot,
       );
     } catch (error: unknown) {
-      console.log('error in loadCategoryDetail', error);
-
       const handled = await handleSessionExpiredApiError(error, show_Alert);
       if (handled) return;
 
@@ -245,8 +278,6 @@ export default function CreateCatogoryScreen({ navigation, route }: Props) {
         );
       }, 150);
     } catch (error: unknown) {
-      console.log('error in saveCategory', error);
-
       const handled = await handleSessionExpiredApiError(error, show_Alert);
       if (handled) return;
 
@@ -264,9 +295,6 @@ export default function CreateCatogoryScreen({ navigation, route }: Props) {
     }
   };
 
-  const headerTitle = isEdit ? 'Edit Catogory' : 'Create Catogory';
-  const saveLabel = isEdit ? 'Save changes' : 'Save Catogory';
-
   return (
     <>
       <StatusBar
@@ -274,133 +302,190 @@ export default function CreateCatogoryScreen({ navigation, route }: Props) {
         backgroundColor={paperTheme.colors.background}
       />
 
-      <SafeAreaView style={[styles.safe, { backgroundColor: paperTheme.colors.background }]}>
-        <CommonHeader
-          title={headerTitle}
-          titleColor={paperTheme.colors.onBackground}
-          iconColor={paperTheme.colors.onBackground}
-          onPressLeftBtn={() => navigation.goBack()}
-        />
-
-        <View style={styles.content}>
-          {loadingDetail ? (
-            <View style={styles.loadingWrap}>
-              <ActivityIndicator size="large" color={paperTheme.colors.primary} />
-              <Text style={[styles.loadingText, { color: paperTheme.colors.onSurfaceVariant }]}>
-                Loading category...
+      <SafeAreaView style={[styles.safe, { backgroundColor: paperTheme.colors.background }]} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={[
+              styles.backBtn,
+              { backgroundColor: paperTheme.colors.surface, borderColor: paperTheme.colors.outlineVariant },
+              softShadow(resolvedTheme),
+            ]}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={20} color={paperTheme.colors.primary} />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <View style={styles.headerTitleRow}>
+              <Text style={[styles.title, { color: paperTheme.colors.onBackground }]}>
+                {isEdit ? 'Edit category' : 'New category'}
               </Text>
+              <View style={[styles.modeBadge, { backgroundColor: paperTheme.colors.primaryContainer }]}>
+                <Text style={[styles.modeBadgeText, { color: paperTheme.colors.primary }]}>
+                  {isEdit ? 'Update' : 'Create'}
+                </Text>
+              </View>
             </View>
-          ) : (
-            <KeyboardAvoidingView
-              style={{ flex: 1 }}
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-            >
-              <ScrollView
-                ref={scrollRef}
-                style={{ flex: 1 }}
-                contentContainerStyle={styles.scrollContent}
-                bounces={false}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-              >
-                {detailError ? (
-                  <Text style={[styles.errorText, { color: paperTheme.colors.error }]}>
-                    {detailError}
-                  </Text>
-                ) : null}
+            <Text style={[styles.subtitle, { color: paperTheme.colors.onSurfaceVariant }]}>
+              Name, description, and a color for POS grouping
+            </Text>
+          </View>
+        </View>
 
-                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  Category Name
+        {loadingDetail ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color={paperTheme.colors.primary} />
+            <Text style={[styles.loadingText, { color: paperTheme.colors.onSurfaceVariant }]}>
+              Loading category...
+            </Text>
+          </View>
+        ) : (
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+          >
+            <ScrollView
+              ref={scrollRef}
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.scrollContent}
+              bounces={false}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
+              {detailError ? (
+                <View style={[styles.errorBanner, { backgroundColor: paperTheme.colors.errorContainer }]}>
+                  <Ionicons name="alert-circle-outline" size={18} color={paperTheme.colors.error} />
+                  <Text style={[styles.errorText, { color: paperTheme.colors.error }]}>{detailError}</Text>
+                </View>
+              ) : null}
+
+              <FormSection title="Category details" icon="document-text-outline" paperTheme={paperTheme} resolvedTheme={resolvedTheme}>
+                <Text style={[inventoryUi.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  Category name
                 </Text>
                 <TextInput
                   value={name}
                   onChangeText={setName}
                   placeholder="e.g. Beverages"
-                  placeholderTextColor={paperTheme.colors.outline}
+                  placeholderTextColor={paperTheme.colors.onSurfaceVariant}
                   editable={!loadingDetail}
                   style={[
-                    styles.input,
-                    { backgroundColor: paperTheme.colors.surface, color: paperTheme.colors.onSurface },
+                    inventoryUi.fieldInput,
+                    {
+                      backgroundColor: paperTheme.colors.background,
+                      borderColor: paperTheme.colors.outlineVariant,
+                      color: paperTheme.colors.onSurface,
+                    },
                   ]}
                 />
 
-                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
+                <Text style={[inventoryUi.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
                   Description
                 </Text>
                 <TextInput
                   value={description}
                   onChangeText={setDescription}
-                  placeholder="Short description for this category"
-                  placeholderTextColor={paperTheme.colors.outline}
+                  placeholder="Short description for staff and reports"
+                  placeholderTextColor={paperTheme.colors.onSurfaceVariant}
                   multiline
                   numberOfLines={4}
                   textAlignVertical="top"
                   editable={!loadingDetail}
                   style={[
-                    styles.input,
+                    inventoryUi.fieldInput,
+                    inventoryUi.fieldInputLast,
                     styles.textArea,
-                    { backgroundColor: paperTheme.colors.surface, color: paperTheme.colors.onSurface },
+                    {
+                      backgroundColor: paperTheme.colors.background,
+                      borderColor: paperTheme.colors.outlineVariant,
+                      color: paperTheme.colors.onSurface,
+                    },
                   ]}
                 />
+              </FormSection>
 
-                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  Pick a Color
+              <FormSection title="Brand color" icon="color-palette-outline" paperTheme={paperTheme} resolvedTheme={resolvedTheme}>
+                <Text style={[inventoryUi.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  Pick a color
                 </Text>
-                <View style={styles.colorsRow}>
+                <View style={styles.colorsGrid}>
                   {COLOR_OPTIONS.map((color) => {
                     const active = selectedColor.toUpperCase() === color.toUpperCase();
                     return (
                       <TouchableOpacity
                         key={color}
                         style={[
-                          styles.colorCircle,
-                          { backgroundColor: color, borderColor: active ? '#111' : 'transparent' },
+                          styles.colorCircleOuter,
+                          active && { borderColor: paperTheme.colors.primary },
                         ]}
                         onPress={() => setSelectedColor(color)}
                         disabled={loadingDetail}
+                        activeOpacity={0.85}
                       >
-                        {active ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
+                        <View style={[styles.colorCircle, { backgroundColor: color }]}>
+                          {active ? <Ionicons name="checkmark" size={18} color="#fff" /> : null}
+                        </View>
                       </TouchableOpacity>
                     );
                   })}
                 </View>
 
-                <View style={[styles.previewCard, { backgroundColor: paperTheme.colors.surface }]}>
-                  <View style={[styles.previewDot, { backgroundColor: selectedColor }]} />
-                  <View style={{ flex: 1 }}>
+                <View
+                  style={[
+                    styles.previewCard,
+                    {
+                      backgroundColor: paperTheme.colors.background,
+                      borderColor: paperTheme.colors.outlineVariant,
+                    },
+                  ]}
+                >
+                  <View style={[styles.previewAccent, { backgroundColor: selectedColor }]} />
+                  <View style={[styles.previewSwatch, { backgroundColor: selectedColor }]}>
+                    <Ionicons name="pricetag" size={20} color="#fff" />
+                  </View>
+                  <View style={styles.previewBody}>
                     <Text style={[styles.previewTitle, { color: paperTheme.colors.onSurface }]}>
                       {name.trim() || 'Category name preview'}
                     </Text>
                     <Text style={[styles.previewDesc, { color: paperTheme.colors.onSurfaceVariant }]}>
                       {description.trim() || 'Description preview will appear here.'}
                     </Text>
+                    <Text style={[styles.previewColorCode, { color: paperTheme.colors.primary }]}>
+                      {selectedColor.toUpperCase()}
+                    </Text>
                   </View>
                 </View>
+              </FormSection>
 
-                <TouchableOpacity
-                  disabled={!canSave || saving}
-                  onPress={onSave}
-                  style={[
-                    styles.saveBtn,
-                    {
-                      backgroundColor:
-                        canSave && !saving ? paperTheme.colors.primary : paperTheme.colors.outline,
-                    },
-                  ]}
-                >
-                  {saving ? (
-                    <ActivityIndicator color={paperTheme.colors.onPrimary} />
-                  ) : (
+              <TouchableOpacity
+                disabled={!canSave || saving}
+                onPress={onSave}
+                activeOpacity={0.9}
+                style={[
+                  styles.saveBtn,
+                  {
+                    backgroundColor:
+                      canSave && !saving ? paperTheme.colors.primary : paperTheme.colors.outlineVariant,
+                  },
+                  canSave && !saving && softShadow(resolvedTheme),
+                  saving && styles.btnDisabled,
+                ]}
+              >
+                {saving ? (
+                  <ActivityIndicator color={paperTheme.colors.onPrimary} />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={22} color={paperTheme.colors.onPrimary} />
                     <Text style={[styles.saveBtnText, { color: paperTheme.colors.onPrimary }]}>
-                      {saveLabel}
+                      {isEdit ? 'Save changes' : 'Save category'}
                     </Text>
-                  )}
-                </TouchableOpacity>
-              </ScrollView>
-            </KeyboardAvoidingView>
-          )}
-        </View>
+                  </>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        )}
 
         {alertConfig && (
           <CommonAlert
@@ -423,8 +508,41 @@ export default function CreateCatogoryScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  content: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
-  scrollContent: { flexGrow: 1, justifyContent: 'flex-end' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 14,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  title: { fontSize: 22, fontFamily: fonts.PoppinsBold, lineHeight: 28 },
+  modeBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  modeBadgeText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
+    letterSpacing: 0.3,
+  },
+  subtitle: { fontSize: 13, fontFamily: fonts.PoppinsRegular, marginTop: 4, lineHeight: 18 },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 32 },
   loadingWrap: {
     flex: 1,
     alignItems: 'center',
@@ -432,43 +550,98 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: { fontFamily: fonts.PoppinsRegular, fontSize: 14 },
-  errorText: { fontFamily: fonts.PoppinsRegular, fontSize: 13, marginBottom: 8 },
-  label: { fontSize: 13, fontFamily: fonts.PoppinsMedium, marginBottom: 8, marginTop: 8 },
-  input: {
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontFamily: fonts.PoppinsRegular,
-    fontSize: 14,
+    padding: 12,
+    marginBottom: 12,
   },
-  textArea: { minHeight: 96 },
-  colorsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4, marginBottom: 8 },
-  colorCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  errorText: { fontFamily: fonts.PoppinsRegular, fontSize: 13, flex: 1 },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+  },
+  sectionIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sectionTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 16,
+  },
+  textArea: { minHeight: 100 },
+  colorsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+  },
+  colorCircleOuter: {
+    padding: 3,
+    borderRadius: 22,
     borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   previewCard: {
-    marginTop: 14,
-    borderRadius: 14,
+    borderRadius: 16,
+    borderWidth: 1,
     padding: 14,
     flexDirection: 'row',
-    gap: 10,
     alignItems: 'center',
+    gap: 12,
+    overflow: 'hidden',
+    position: 'relative',
   },
-  previewDot: { width: 14, height: 14, borderRadius: 7 },
-  previewTitle: { fontFamily: fonts.PoppinsSemiBold, fontSize: 15 },
-  previewDesc: { fontFamily: fonts.PoppinsRegular, fontSize: 13, marginTop: 2 },
-  saveBtn: {
-    marginTop: 'auto',
-    marginBottom: 12,
+  previewAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+  },
+  previewSwatch: {
+    width: 44,
+    height: 44,
     borderRadius: 14,
-    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 6,
   },
-  saveBtnText: { fontFamily: fonts.PoppinsSemiBold, fontSize: 15 },
+  previewBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  previewTitle: { fontFamily: fonts.PoppinsSemiBold, fontSize: 15 },
+  previewDesc: { fontFamily: fonts.PoppinsRegular, fontSize: 13, marginTop: 2, lineHeight: 18 },
+  previewColorCode: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
+    marginTop: 6,
+    letterSpacing: 0.4,
+  },
+  saveBtn: {
+    marginTop: 4,
+    borderRadius: 16,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  saveBtnText: { fontFamily: fonts.PoppinsSemiBold, fontSize: 16 },
+  btnDisabled: { opacity: 0.75 },
 });

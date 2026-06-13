@@ -3,6 +3,8 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Keyboard,
+  Pressable,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -32,7 +34,9 @@ import { handleSessionExpiredApiError } from '../../../utils/apiErrorAlert';
 import { resolveProductImageUri } from '../../../utils/productImage';
 import CommonAlert from '../../../components/CommonAlert/CommonAlert';
 import { cardShadow, settingsDetailStyles as sharedStyles } from '../../settings/shared/settingsDetailStyles';
+import { inventoryUi, softShadow } from './inventoryUiStyles';
 import { SettingsEmptyState } from '../../settings/shared/SettingsDetailComponents';
+import BarcodeScannerModal from './BarcodeScannerModal';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageInventory'>;
 
@@ -55,16 +59,19 @@ function FilterChipRow({
   selected,
   onSelect,
   paperTheme,
+  resolvedTheme,
 }: {
   options: { key: CategoryFilter; label: string; colorCode?: string }[];
   selected: CategoryFilter;
   onSelect: (value: CategoryFilter) => void;
   paperTheme: ReturnType<typeof useTheme>['paperTheme'];
+  resolvedTheme: 'light' | 'dark';
 }) {
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
       contentContainerStyle={inventoryStyles.filterRow}
     >
       {options.map((option) => {
@@ -72,9 +79,13 @@ function FilterChipRow({
         return (
           <TouchableOpacity
             key={option.key}
-            onPress={() => onSelect(option.key)}
+            onPress={() => {
+              Keyboard.dismiss();
+              onSelect(option.key);
+            }}
             style={[
               inventoryStyles.filterChip,
+              isActive && softShadow(resolvedTheme),
               {
                 backgroundColor: isActive ? paperTheme.colors.primary : paperTheme.colors.surface,
                 borderColor: isActive ? paperTheme.colors.primary : paperTheme.colors.outlineVariant,
@@ -119,6 +130,7 @@ function ProductCard({
 }) {
   const imageUri = resolveProductImageUri(product.image);
   const categoryColor = getCategoryColor(categories, product);
+  const isService = product.type === 'service';
 
   return (
     <Swipeable
@@ -128,7 +140,8 @@ function ProductCard({
       renderRightActions={() => (
         <View style={inventoryStyles.swipeDeleteWrap}>
           <TouchableOpacity style={inventoryStyles.swipeDeleteBtn} onPress={onDelete} activeOpacity={0.85}>
-            <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+            <Ionicons name="trash" size={22} color="#FFFFFF" />
+            <Text style={inventoryStyles.swipeDeleteText}>Delete</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -145,8 +158,6 @@ function ProductCard({
           cardShadow(resolvedTheme),
         ]}
       >
-        <View style={[inventoryStyles.categoryAccent, { backgroundColor: categoryColor }]} />
-
         <View style={inventoryStyles.productRow}>
           <View style={inventoryStyles.thumbWrap}>
             {imageUri ? (
@@ -155,52 +166,103 @@ function ProductCard({
               <View
                 style={[
                   inventoryStyles.thumbPlaceholder,
-                  { backgroundColor: paperTheme.colors.surfaceVariant },
+                  { backgroundColor: `${categoryColor}18` },
                 ]}
               >
-                <Ionicons name="cube-outline" size={20} color={paperTheme.colors.onSurfaceVariant} />
+                <Ionicons name="cube-outline" size={22} color={categoryColor} />
               </View>
             )}
+            {product.isInventoryAvailable ? (
+              <View style={inventoryStyles.qtyBadge}>
+                <Text style={inventoryStyles.qtyBadgeText}>{product.qty ?? 0}</Text>
+              </View>
+            ) : null}
           </View>
 
           <View style={inventoryStyles.productBody}>
-            <Text
-              style={[inventoryStyles.productName, { color: paperTheme.colors.onSurface }]}
-              numberOfLines={1}
-            >
-              {product.productName}
-            </Text>
-            <Text
-              style={[inventoryStyles.categoryLabel, { color: paperTheme.colors.onSurfaceVariant }]}
-              numberOfLines={1}
-            >
-              {product.categoryName}
-            </Text>
+            <View style={inventoryStyles.productTitleRow}>
+              <Text
+                style={[inventoryStyles.productName, { color: paperTheme.colors.onSurface }]}
+                numberOfLines={1}
+              >
+                {product.productName}
+              </Text>
+              <View
+                style={[
+                  inventoryStyles.pricePill,
+                  { backgroundColor: paperTheme.colors.primaryContainer },
+                ]}
+              >
+                <Text style={[inventoryStyles.amountText, { color: paperTheme.colors.primary }]}>
+                  {formatAmount(product.amount)}
+                </Text>
+              </View>
+            </View>
+
+            <View style={inventoryStyles.categoryRow}>
+              <View style={[inventoryStyles.categoryDot, { backgroundColor: categoryColor }]} />
+              <Text
+                style={[inventoryStyles.categoryLabel, { color: paperTheme.colors.onSurfaceVariant }]}
+                numberOfLines={1}
+              >
+                {product.categoryName}
+              </Text>
+            </View>
+
             <View style={inventoryStyles.metaChipRow}>
               <View
                 style={[
                   inventoryStyles.metaChip,
-                  { backgroundColor: paperTheme.colors.surfaceVariant },
+                  {
+                    backgroundColor: isService
+                      ? `${paperTheme.colors.tertiary}22`
+                      : `${paperTheme.colors.primary}14`,
+                  },
                 ]}
               >
-                <Text style={[inventoryStyles.metaChipText, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  {product.type === 'service' ? 'Service' : 'Product'}
+                <Ionicons
+                  name={isService ? 'construct-outline' : 'pricetag-outline'}
+                  size={11}
+                  color={isService ? paperTheme.colors.tertiary : paperTheme.colors.primary}
+                />
+                <Text
+                  style={[
+                    inventoryStyles.metaChipText,
+                    {
+                      color: isService ? paperTheme.colors.tertiary : paperTheme.colors.primary,
+                    },
+                  ]}
+                >
+                  {isService ? 'Service' : 'Product'}
                 </Text>
               </View>
-              {product.isInventoryAvailable ? (
-                <View style={[inventoryStyles.metaChip, inventoryStyles.qtyChip]}>
-                  <Text style={inventoryStyles.qtyChipText}>Qty {product.qty ?? 0}</Text>
+              {product.barcode ? (
+                <View
+                  style={[
+                    inventoryStyles.metaChip,
+                    { backgroundColor: paperTheme.colors.surfaceVariant },
+                  ]}
+                >
+                  <Ionicons
+                    name="barcode-outline"
+                    size={11}
+                    color={paperTheme.colors.onSurfaceVariant}
+                  />
+                  <Text
+                    style={[
+                      inventoryStyles.metaChipText,
+                      { color: paperTheme.colors.onSurfaceVariant },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {product.barcode}
+                  </Text>
                 </View>
               ) : null}
             </View>
           </View>
 
-          <View style={inventoryStyles.priceColumn}>
-            <Text style={[inventoryStyles.amountText, { color: paperTheme.colors.primary }]}>
-              {formatAmount(product.amount)}
-            </Text>
-            <Ionicons name="chevron-forward" size={18} color={paperTheme.colors.onSurfaceVariant} />
-          </View>
+          <Ionicons name="chevron-forward" size={18} color={paperTheme.colors.outline} />
         </View>
       </TouchableOpacity>
     </Swipeable>
@@ -222,9 +284,31 @@ export default function ManageInventoryScreen({ navigation }: Props) {
 
   const [refreshing, setRefreshing] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [nameSearchQuery, setNameSearchQuery] = useState('');
+  const [barcodeSearchQuery, setBarcodeSearchQuery] = useState('');
+  const [barcodeScannerVisible, setBarcodeScannerVisible] = useState(false);
+  const nameSearchInputRef = useRef<TextInput>(null);
 
   const loading = categoriesLoading || productsLoading;
+
+  const handleCategoryFilterSelect = useCallback((value: CategoryFilter) => {
+    setCategoryFilter(value);
+  }, []);
+
+  const openBarcodeScanner = useCallback(() => {
+    Keyboard.dismiss();
+    setBarcodeScannerVisible(true);
+  }, []);
+
+  const handleBarcodeScanned = useCallback((code: string) => {
+    setBarcodeSearchQuery(code);
+    setBarcodeScannerVisible(false);
+  }, []);
+
+  const clearBarcodeSearch = useCallback(() => {
+    setBarcodeSearchQuery('');
+    Keyboard.dismiss();
+  }, []);
 
   const categoryFilterOptions = useMemo(
     () => [
@@ -245,20 +329,27 @@ export default function ManageInventoryScreen({ navigation }: Props) {
       list = list.filter((product) => getProductCategoryId(product) === categoryFilter);
     }
 
-    const query = searchQuery.trim().toLowerCase();
-    if (query) {
+    const nameQuery = nameSearchQuery.trim().toLowerCase();
+    if (nameQuery) {
       list = list.filter((product) => {
         const categoryName = product.categoryName.toLowerCase();
         return (
-          product.productName.toLowerCase().includes(query) ||
-          categoryName.includes(query) ||
-          (product.barcode?.toLowerCase().includes(query) ?? false)
+          product.productName.toLowerCase().includes(nameQuery) ||
+          categoryName.includes(nameQuery)
         );
       });
     }
 
+    const barcodeQuery = barcodeSearchQuery.replace(/\s+/g, '').trim().toLowerCase();
+    if (barcodeQuery) {
+      list = list.filter((product) => {
+        const barcode = (product.barcode ?? '').replace(/\s+/g, '').toLowerCase();
+        return barcode.includes(barcodeQuery);
+      });
+    }
+
     return list;
-  }, [products, categoryFilter, searchQuery]);
+  }, [products, categoryFilter, nameSearchQuery, barcodeSearchQuery]);
 
   const loadInventory = useCallback(async () => {
     try {
@@ -340,81 +431,163 @@ export default function ManageInventoryScreen({ navigation }: Props) {
     [dispatch, show_Alert, loadInventory],
   );
 
-  const renderListHeader = () => (
-    <View style={inventoryStyles.headerContent}>
-      <View style={inventoryStyles.statsRow}>
-        <View style={inventoryStyles.statsTextBlock}>
-          <Text style={[inventoryStyles.statsTitle, { color: paperTheme.colors.onSurface }]}>
-            Catalog
-          </Text>
-          <Text style={[inventoryStyles.statsSubtitle, { color: paperTheme.colors.onSurfaceVariant }]}>
-            {filteredProducts.length} shown · {productCount} total
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={[inventoryStyles.addProductBtn, { backgroundColor: paperTheme.colors.primary }]}
-          onPress={() => navigation.navigate('AddProduct')}
-          activeOpacity={0.9}
-        >
-          <Ionicons name="add" size={20} color={paperTheme.colors.onPrimary} />
-          <Text style={[inventoryStyles.addProductBtnText, { color: paperTheme.colors.onPrimary }]}>
-            Add
-          </Text>
-        </TouchableOpacity>
-      </View>
-
+  const renderSummaryStrip = () => (
+    <Pressable onPress={Keyboard.dismiss}>
       <View
         style={[
-          inventoryStyles.filtersCard,
+          inventoryStyles.summaryStrip,
           {
-            backgroundColor: paperTheme.colors.surface,
+            backgroundColor: paperTheme.colors.surfaceVariant,
             borderColor: paperTheme.colors.outlineVariant,
           },
-          cardShadow(resolvedTheme),
         ]}
       >
+      <View style={inventoryStyles.summaryItem}>
+        <Text style={[inventoryStyles.summaryValue, { color: paperTheme.colors.primary }]}>
+          {productCount}
+        </Text>
+        <Text style={[inventoryStyles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+          Total
+        </Text>
+      </View>
+      <View style={[inventoryStyles.summaryDivider, { backgroundColor: paperTheme.colors.outlineVariant }]} />
+      <View style={inventoryStyles.summaryItem}>
+        <Text style={[inventoryStyles.summaryValue, { color: paperTheme.colors.primary }]}>
+          {filteredProducts.length}
+        </Text>
+        <Text style={[inventoryStyles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+          Showing
+        </Text>
+      </View>
+      <View style={[inventoryStyles.summaryDivider, { backgroundColor: paperTheme.colors.outlineVariant }]} />
+      <View style={inventoryStyles.summaryItem}>
+        <Text style={[inventoryStyles.summaryValue, { color: paperTheme.colors.primary }]}>
+          {categories.length}
+        </Text>
+        <Text style={[inventoryStyles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+          Categories
+        </Text>
+      </View>
+      </View>
+    </Pressable>
+  );
+
+  const renderFiltersBar = () => (
+    <View
+      style={[
+        inventoryStyles.filtersCard,
+        {
+          backgroundColor: paperTheme.colors.surface,
+          borderColor: paperTheme.colors.outlineVariant,
+        },
+        cardShadow(resolvedTheme),
+      ]}
+    >
+      <View style={inventoryStyles.filterTopRow}>
         <View
           style={[
             inventoryStyles.searchWrap,
+            inventoryStyles.searchWrapFlex,
             {
               backgroundColor: paperTheme.colors.background,
               borderColor: paperTheme.colors.outlineVariant,
             },
           ]}
         >
-          <Ionicons name="search-outline" size={18} color={paperTheme.colors.onSurfaceVariant} />
+          <View style={[inventoryStyles.searchIconWrap, { backgroundColor: paperTheme.colors.primaryContainer }]}>
+            <Ionicons name="search" size={15} color={paperTheme.colors.primary} />
+          </View>
           <TextInput
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search products…"
+            ref={nameSearchInputRef}
+            value={nameSearchQuery}
+            onChangeText={setNameSearchQuery}
+            placeholder="Search name or category…"
             placeholderTextColor={paperTheme.colors.onSurfaceVariant}
             style={[inventoryStyles.searchInput, { color: paperTheme.colors.onSurface }]}
             autoCorrect={false}
             autoCapitalize="none"
+            blurOnSubmit={false}
             clearButtonMode="while-editing"
           />
-          {searchQuery.length > 0 ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          {nameSearchQuery.length > 0 ? (
+            <TouchableOpacity
+              onPress={() => {
+                setNameSearchQuery('');
+                nameSearchInputRef.current?.focus();
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <Ionicons name="close-circle" size={20} color={paperTheme.colors.onSurfaceVariant} />
             </TouchableOpacity>
           ) : null}
         </View>
-
-        <Text style={[inventoryStyles.filterSectionLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-          Category
-        </Text>
-        <FilterChipRow
-          options={categoryFilterOptions}
-          selected={categoryFilter}
-          onSelect={setCategoryFilter}
-          paperTheme={paperTheme}
-        />
+        <TouchableOpacity
+          style={[
+            inventoryStyles.scanIconBtn,
+            { backgroundColor: paperTheme.colors.primary },
+            softShadow(resolvedTheme),
+          ]}
+          onPress={openBarcodeScanner}
+          activeOpacity={0.9}
+          accessibilityRole="button"
+          accessibilityLabel="Scan barcode"
+        >
+          <Ionicons name="scan" size={22} color={paperTheme.colors.onPrimary} />
+          <Text style={[inventoryStyles.scanIconBtnText, { color: paperTheme.colors.onPrimary }]}>Scan</Text>
+        </TouchableOpacity>
       </View>
 
-      <Text style={[inventoryStyles.sectionLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-        Products
-      </Text>
+      {barcodeSearchQuery.length > 0 ? (
+        <View
+          style={[
+            inventoryStyles.barcodeChip,
+            {
+              backgroundColor: paperTheme.colors.primaryContainer,
+              borderColor: `${paperTheme.colors.primary}33`,
+            },
+          ]}
+        >
+          <Ionicons name="barcode-outline" size={15} color={paperTheme.colors.primary} />
+          <Text
+            style={[inventoryStyles.barcodeChipText, { color: paperTheme.colors.onPrimaryContainer }]}
+            numberOfLines={1}
+          >
+            {barcodeSearchQuery}
+          </Text>
+          <TouchableOpacity
+            onPress={clearBarcodeSearch}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Clear scanned barcode"
+          >
+            <Ionicons name="close-circle" size={18} color={paperTheme.colors.onPrimaryContainer} />
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      <FilterChipRow
+        options={categoryFilterOptions}
+        selected={categoryFilter}
+        onSelect={handleCategoryFilterSelect}
+        paperTheme={paperTheme}
+        resolvedTheme={resolvedTheme}
+      />
     </View>
+  );
+
+  const productsListLabel = useMemo(
+    () => (
+      <Text
+        style={[
+          inventoryUi.sectionEyebrow,
+          inventoryStyles.listSectionLabel,
+          { color: paperTheme.colors.onSurfaceVariant },
+        ]}
+      >
+        Your products
+      </Text>
+    ),
+    [paperTheme.colors.onSurfaceVariant],
   );
 
   return (
@@ -434,15 +607,23 @@ export default function ManageInventoryScreen({ navigation }: Props) {
           onPressLeftBtn={() => navigation.goBack()}
         />
 
+        <View style={inventoryStyles.listHeader}>
+          {renderSummaryStrip()}
+          {renderFiltersBar()}
+        </View>
+
         <FlatList
+          style={{ flex: 1 }}
           data={filteredProducts}
           keyExtractor={(item) => item._id}
           contentContainerStyle={inventoryStyles.listContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={paperTheme.colors.primary} />
           }
-          ListHeaderComponent={renderListHeader}
+          ListHeaderComponent={productsListLabel}
           renderItem={({ item }) => (
             <ProductCard
               product={item}
@@ -479,14 +660,26 @@ export default function ManageInventoryScreen({ navigation }: Props) {
                 description={
                   products.length === 0
                     ? 'Add your first product to start managing inventory.'
-                    : 'Try another category or clear your search.'
+                    : 'Try another filter or clear your name or barcode search.'
                 }
                 paperTheme={paperTheme}
               />
             ) : null
           }
-          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
         />
+
+        <TouchableOpacity
+          style={[
+            inventoryStyles.fab,
+            { backgroundColor: paperTheme.colors.primary },
+            softShadow(resolvedTheme),
+          ]}
+          onPress={() => navigation.navigate('AddProduct')}
+          activeOpacity={0.92}
+        >
+          <Ionicons name="add" size={28} color={paperTheme.colors.onPrimary} />
+        </TouchableOpacity>
 
         {loading && (
           <View
@@ -519,6 +712,13 @@ export default function ManageInventoryScreen({ navigation }: Props) {
             onClose={hideAlert}
           />
         )}
+
+        <BarcodeScannerModal
+          visible={barcodeScannerVisible}
+          onClose={() => setBarcodeScannerVisible(false)}
+          onScanned={handleBarcodeScanned}
+          paperTheme={paperTheme}
+        />
       </SafeAreaView>
     </>
   );
@@ -528,61 +728,54 @@ const inventoryStyles = StyleSheet.create({
   screen: {
     paddingHorizontal: 20,
   },
-  headerContent: {
-    paddingTop: 8,
-    paddingBottom: 12,
+  listHeader: {
+    paddingTop: 4,
+    paddingBottom: 4,
   },
-  statsRow: {
+  summaryStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 16,
-    marginBottom: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    marginBottom: 8,
   },
-  statsTextBlock: {
+  summaryItem: {
     flex: 1,
-  },
-  statsTitle: {
-    fontFamily: fonts.PoppinsBold,
-    fontSize: 20,
-    lineHeight: 26,
-  },
-  statsSubtitle: {
-    fontFamily: fonts.PoppinsRegular,
-    fontSize: 13,
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  addProductBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
+    gap: 4,
   },
-  addProductBtnText: {
-    fontFamily: fonts.PoppinsSemiBold,
+  summaryValue: {
+    fontFamily: fonts.PoppinsBold,
     fontSize: 14,
+    lineHeight: 17,
+  },
+  summaryLabel: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  summaryDivider: {
+    width: 1,
+    height: 16,
   },
   filtersCard: {
-    borderRadius: 20,
+    borderRadius: 14,
     borderWidth: 1,
-    padding: 16,
-    marginBottom: 20,
+    padding: 10,
+    marginBottom: 8,
+    gap: 8,
   },
-  filterSectionLabel: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 10,
-    marginTop: 4,
+  filterTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   filterRow: {
     gap: 8,
-    paddingBottom: 2,
     paddingRight: 2,
   },
   filterChip: {
@@ -593,11 +786,11 @@ const inventoryStyles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    maxWidth: 160,
+    maxWidth: 150,
   },
   filterDot: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: 4,
   },
   filterChipText: {
@@ -608,115 +801,171 @@ const inventoryStyles = StyleSheet.create({
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    borderRadius: 14,
+    gap: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    marginBottom: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  searchWrapFlex: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  barcodeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  barcodeChipText: {
+    flex: 1,
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  scanIconBtn: {
+    minWidth: 52,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    paddingHorizontal: 8,
+  },
+  scanIconBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 10,
+    lineHeight: 12,
+  },
+  searchIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchInput: {
     flex: 1,
     fontFamily: fonts.PoppinsRegular,
     fontSize: 14,
-    paddingVertical: 0,
+    paddingVertical: 3,
   },
-  sectionLabel: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 12,
+  listSectionLabel: {
+    marginBottom: 8,
   },
   listContent: {
-    paddingBottom: 32,
+    paddingBottom: 100,
     flexGrow: 1,
   },
   productCard: {
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     overflow: 'hidden',
-    position: 'relative',
-  },
-  categoryAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
   },
   productRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    paddingLeft: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
   },
   thumbWrap: {
-    width: 52,
-    height: 52,
+    width: 60,
+    height: 60,
+    position: 'relative',
   },
   thumb: {
-    width: 52,
-    height: 52,
-    borderRadius: 12,
+    width: 60,
+    height: 60,
+    borderRadius: 16,
   },
   thumbPlaceholder: {
-    width: 52,
-    height: 52,
-    borderRadius: 12,
+    width: 60,
+    height: 60,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  qtyBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#15803d',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  qtyBadgeText: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 10,
+    color: '#fff',
   },
   productBody: {
     flex: 1,
     minWidth: 0,
+    gap: 6,
+  },
+  productTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   productName: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 15,
     lineHeight: 20,
+    flex: 1,
+  },
+  pricePill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  amountText: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 12,
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  categoryDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   categoryLabel: {
     fontFamily: fonts.PoppinsRegular,
     fontSize: 12,
-    marginTop: 2,
-    lineHeight: 16,
+    flex: 1,
   },
   metaChipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginTop: 6,
   },
   metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     borderRadius: 999,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
+    maxWidth: '100%',
   },
   metaChipText: {
-    fontFamily: fonts.PoppinsMedium,
-    fontSize: 10,
-  },
-  qtyChip: {
-    backgroundColor: '#dcfce7',
-  },
-  qtyChipText: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 10,
-    color: '#15803d',
-  },
-  priceColumn: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    gap: 4,
-    minWidth: 72,
-  },
-  amountText: {
-    fontFamily: fonts.PoppinsBold,
-    fontSize: 14,
-    textAlign: 'right',
+    flexShrink: 1,
   },
   swipeDeleteWrap: {
     justifyContent: 'center',
@@ -727,9 +976,25 @@ const inventoryStyles = StyleSheet.create({
     backgroundColor: '#DC2626',
     justifyContent: 'center',
     alignItems: 'center',
-    width: 64,
+    width: 80,
     height: '100%',
-    borderRadius: 18,
+    borderRadius: 20,
+    gap: 4,
+  },
+  swipeDeleteText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
+    color: '#fff',
+  },
+  fab: {
+    position: 'absolute',
+    right: 24,
+    bottom: 28,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,

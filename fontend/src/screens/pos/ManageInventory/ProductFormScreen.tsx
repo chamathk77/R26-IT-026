@@ -37,6 +37,7 @@ import { useCommonAlert } from '../../../hooks/useCommonAlert';
 import { handleSessionExpiredApiError } from '../../../utils/apiErrorAlert';
 import CommonAlert from '../../../components/CommonAlert';
 import BarcodeScannerModal from './BarcodeScannerModal';
+import { inventoryUi, softShadow } from './inventoryUiStyles';
 
 type FormMode = 'add' | 'edit';
 
@@ -112,6 +113,41 @@ type ProductFormContentProps = {
   mode: FormMode;
   initial?: InventoryProductFormParams;
 };
+
+function FormSection({
+  title,
+  icon,
+  children,
+  paperTheme,
+  resolvedTheme,
+}: {
+  title: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  children: React.ReactNode;
+  paperTheme: ReturnType<typeof useTheme>['paperTheme'];
+  resolvedTheme: 'light' | 'dark';
+}) {
+  return (
+    <View
+      style={[
+        inventoryUi.sectionCard,
+        {
+          backgroundColor: paperTheme.colors.surface,
+          borderColor: paperTheme.colors.outlineVariant,
+        },
+        softShadow(resolvedTheme),
+      ]}
+    >
+      <View style={styles.sectionHeader}>
+        <View style={[styles.sectionIconWrap, { backgroundColor: paperTheme.colors.primaryContainer }]}>
+          <Ionicons name={icon} size={18} color={paperTheme.colors.primary} />
+        </View>
+        <Text style={[styles.sectionTitle, { color: paperTheme.colors.onSurface }]}>{title}</Text>
+      </View>
+      {children}
+    </View>
+  );
+}
 
 function ProductFormContent({ navigation, mode, initial }: ProductFormContentProps) {
   const { paperTheme, resolvedTheme } = useTheme();
@@ -426,17 +462,28 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
         >
           <View style={styles.header}>
             <TouchableOpacity
-              style={[styles.backBtn, { backgroundColor: paperTheme.colors.surface }]}
+              style={[
+                styles.backBtn,
+                { backgroundColor: paperTheme.colors.surface, borderColor: paperTheme.colors.outlineVariant },
+                softShadow(resolvedTheme),
+              ]}
               onPress={() => navigation.goBack()}
             >
               <Ionicons name="arrow-back" size={20} color={paperTheme.colors.primary} />
             </TouchableOpacity>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.title, { color: paperTheme.colors.onBackground }]}>
-                {mode === 'add' ? 'Add product' : 'Edit product'}
-              </Text>
+              <View style={styles.headerTitleRow}>
+                <Text style={[styles.title, { color: paperTheme.colors.onBackground }]}>
+                  {mode === 'add' ? 'New product' : 'Edit product'}
+                </Text>
+                <View style={[styles.modeBadge, { backgroundColor: paperTheme.colors.primaryContainer }]}>
+                  <Text style={[styles.modeBadgeText, { color: paperTheme.colors.primary }]}>
+                    {mode === 'add' ? 'Create' : 'Update'}
+                  </Text>
+                </View>
+              </View>
               <Text style={[styles.subtitle, { color: paperTheme.colors.onSurfaceVariant }]}>
-                Product details, pricing, and inventory
+                Fill in details below — inventory is tracked per product
               </Text>
             </View>
           </View>
@@ -448,104 +495,132 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
             keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}
           >
-            <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>Name</Text>
-            <TextInput
-              value={productName}
-              onChangeText={setProductName}
-              placeholder="Product name"
-              placeholderTextColor={paperTheme.colors.onSurfaceVariant}
-              style={[
-                styles.input,
-                { color: paperTheme.colors.onSurface, backgroundColor: paperTheme.colors.surface },
-              ]}
-            />
+            <FormSection title="Basic details" icon="information-circle-outline" paperTheme={paperTheme} resolvedTheme={resolvedTheme}>
+              <Text style={[inventoryUi.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>Product name</Text>
+              <TextInput
+                value={productName}
+                onChangeText={setProductName}
+                placeholder="e.g. Organic shampoo 250ml"
+                placeholderTextColor={paperTheme.colors.onSurfaceVariant}
+                style={[
+                  inventoryUi.fieldInput,
+                  {
+                    color: paperTheme.colors.onSurface,
+                    backgroundColor: paperTheme.colors.background,
+                    borderColor: paperTheme.colors.outlineVariant,
+                  },
+                ]}
+              />
 
-            <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>Category</Text>
-            <TouchableOpacity
-              style={[
-                styles.input,
-                styles.selectRow,
-                { backgroundColor: paperTheme.colors.surface, borderColor: paperTheme.colors.outline },
-              ]}
-              onPress={() => setCategoryModalVisible(true)}
-              activeOpacity={0.85}
-            >
-              {selectedCategory ? (
-                <View style={styles.selectInner}>
-                  <View style={[styles.catDot, { backgroundColor: selectedCategory.colorCode }]} />
-                  <Text style={[styles.selectText, { color: paperTheme.colors.onSurface }]}>
-                    {selectedCategory.name}
-                  </Text>
-                </View>
-              ) : (
-                <Text style={[styles.selectPlaceholder, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  Select a category
-                </Text>
-              )}
-              <Ionicons name="chevron-down" size={20} color={paperTheme.colors.onSurfaceVariant} />
-            </TouchableOpacity>
-
-            <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>Type</Text>
-            <View style={styles.typeRow}>
-              {(['product', 'service'] as const).map((typeOption) => {
-                const active = productType === typeOption;
-                return (
-                  <TouchableOpacity
-                    key={typeOption}
-                    style={[
-                      styles.typeChip,
-                      {
-                        backgroundColor: active
-                          ? paperTheme.colors.primary
-                          : paperTheme.colors.surface,
-                        borderColor: active ? paperTheme.colors.primary : paperTheme.colors.outline,
-                      },
-                    ]}
-                    onPress={() => setProductType(typeOption)}
-                    activeOpacity={0.85}
-                  >
-                    <Text
-                      style={[
-                        styles.typeChipText,
-                        { color: active ? paperTheme.colors.onPrimary : paperTheme.colors.onSurface },
-                      ]}
-                    >
-                      {typeOption === 'product' ? 'Product' : 'Service'}
+              <Text style={[inventoryUi.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>Category</Text>
+              <TouchableOpacity
+                style={[
+                  inventoryUi.fieldInput,
+                  styles.selectRow,
+                  {
+                    backgroundColor: paperTheme.colors.background,
+                    borderColor: paperTheme.colors.outlineVariant,
+                  },
+                ]}
+                onPress={() => setCategoryModalVisible(true)}
+                activeOpacity={0.85}
+              >
+                {selectedCategory ? (
+                  <View style={styles.selectInner}>
+                    <View style={[styles.catDot, { backgroundColor: selectedCategory.colorCode }]} />
+                    <Text style={[styles.selectText, { color: paperTheme.colors.onSurface }]}>
+                      {selectedCategory.name}
                     </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+                  </View>
+                ) : (
+                  <Text style={[styles.selectPlaceholder, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    Choose a category
+                  </Text>
+                )}
+                <Ionicons name="chevron-forward" size={18} color={paperTheme.colors.onSurfaceVariant} />
+              </TouchableOpacity>
+
+              <Text style={[inventoryUi.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>Type</Text>
+              <View style={styles.typeRow}>
+                {(['product', 'service'] as const).map((typeOption) => {
+                  const active = productType === typeOption;
+                  return (
+                    <TouchableOpacity
+                      key={typeOption}
+                      style={[
+                        styles.typeChip,
+                        active && softShadow(resolvedTheme),
+                        {
+                          backgroundColor: active
+                            ? paperTheme.colors.primary
+                            : paperTheme.colors.background,
+                          borderColor: active ? paperTheme.colors.primary : paperTheme.colors.outlineVariant,
+                        },
+                      ]}
+                      onPress={() => setProductType(typeOption)}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons
+                        name={typeOption === 'product' ? 'cube-outline' : 'construct-outline'}
+                        size={18}
+                        color={active ? paperTheme.colors.onPrimary : paperTheme.colors.onSurfaceVariant}
+                      />
+                      <Text
+                        style={[
+                          styles.typeChipText,
+                          { color: active ? paperTheme.colors.onPrimary : paperTheme.colors.onSurface },
+                        ]}
+                      >
+                        {typeOption === 'product' ? 'Product' : 'Service'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </FormSection>
 
             {productType === 'product' ? (
-              <>
-                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>Amount</Text>
-                <TextInput
-                  value={amount}
-                  onChangeText={setAmount}
-                  placeholder="0.00"
-                  placeholderTextColor={paperTheme.colors.onSurfaceVariant}
-                  keyboardType="decimal-pad"
-                  style={[
-                    styles.input,
-                    { color: paperTheme.colors.onSurface, backgroundColor: paperTheme.colors.surface },
-                  ]}
-                />
-
-                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  Cost (optional)
-                </Text>
-                <TextInput
-                  value={cost}
-                  onChangeText={setCost}
-                  placeholder="0.00"
-                  placeholderTextColor={paperTheme.colors.onSurfaceVariant}
-                  keyboardType="decimal-pad"
-                  style={[
-                    styles.input,
-                    { color: paperTheme.colors.onSurface, backgroundColor: paperTheme.colors.surface },
-                  ]}
-                />
+              <FormSection title="Pricing & stock" icon="wallet-outline" paperTheme={paperTheme} resolvedTheme={resolvedTheme}>
+                <View style={styles.twoColRow}>
+                  <View style={styles.twoColField}>
+                    <Text style={[inventoryUi.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>Amount</Text>
+                    <TextInput
+                      value={amount}
+                      onChangeText={setAmount}
+                      placeholder="0.00"
+                      placeholderTextColor={paperTheme.colors.onSurfaceVariant}
+                      keyboardType="decimal-pad"
+                      style={[
+                        inventoryUi.fieldInput,
+                        inventoryUi.fieldInputLast,
+                        {
+                          color: paperTheme.colors.onSurface,
+                          backgroundColor: paperTheme.colors.background,
+                          borderColor: paperTheme.colors.outlineVariant,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <View style={styles.twoColField}>
+                    <Text style={[inventoryUi.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>Cost</Text>
+                    <TextInput
+                      value={cost}
+                      onChangeText={setCost}
+                      placeholder="Optional"
+                      placeholderTextColor={paperTheme.colors.onSurfaceVariant}
+                      keyboardType="decimal-pad"
+                      style={[
+                        inventoryUi.fieldInput,
+                        inventoryUi.fieldInputLast,
+                        {
+                          color: paperTheme.colors.onSurface,
+                          backgroundColor: paperTheme.colors.background,
+                          borderColor: paperTheme.colors.outlineVariant,
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
 
                 <TouchableOpacity
                   style={[
@@ -553,7 +628,7 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
                     {
                       backgroundColor: isInventoryAvailable
                         ? paperTheme.colors.primaryContainer
-                        : paperTheme.colors.surface,
+                        : paperTheme.colors.background,
                       borderColor: isInventoryAvailable
                         ? paperTheme.colors.primary
                         : paperTheme.colors.outlineVariant,
@@ -617,7 +692,7 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
 
                 {isInventoryAvailable ? (
                   <>
-                    <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    <Text style={[inventoryUi.fieldLabel, { color: paperTheme.colors.onSurfaceVariant, marginTop: 14 }]}>
                       Quantity
                     </Text>
                     <TextInput
@@ -627,59 +702,53 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
                       placeholderTextColor={paperTheme.colors.onSurfaceVariant}
                       keyboardType="number-pad"
                       style={[
-                        styles.input,
-                        { color: paperTheme.colors.onSurface, backgroundColor: paperTheme.colors.surface },
+                        inventoryUi.fieldInput,
+                        {
+                          color: paperTheme.colors.onSurface,
+                          backgroundColor: paperTheme.colors.background,
+                          borderColor: paperTheme.colors.outlineVariant,
+                        },
                       ]}
                     />
                   </>
                 ) : null}
 
-                <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  Barcode (optional)
-                </Text>
+                <Text style={[inventoryUi.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>Barcode</Text>
                 <View style={styles.barcodeRow}>
                   <TextInput
                     value={barcode}
                     onChangeText={setBarcode}
-                    placeholder="Scan or enter barcode"
+                    placeholder="Scan or type barcode"
                     placeholderTextColor={paperTheme.colors.onSurfaceVariant}
                     autoCapitalize="characters"
                     style={[
-                      styles.input,
+                      inventoryUi.fieldInput,
                       styles.barcodeInput,
-                      { color: paperTheme.colors.onSurface, backgroundColor: paperTheme.colors.surface },
+                      inventoryUi.fieldInputLast,
+                      {
+                        color: paperTheme.colors.onSurface,
+                        backgroundColor: paperTheme.colors.background,
+                        borderColor: paperTheme.colors.outlineVariant,
+                      },
                     ]}
                   />
                   <TouchableOpacity
                     style={[
                       styles.scanBarcodeBtn,
-                      {
-                        backgroundColor: paperTheme.colors.primaryContainer,
-                        borderColor: paperTheme.colors.primary,
-                      },
+                      { backgroundColor: paperTheme.colors.primary },
+                      softShadow(resolvedTheme),
                     ]}
                     onPress={openBarcodeScanner}
                     activeOpacity={0.9}
                   >
-                    <Ionicons name="scan-outline" size={22} color={paperTheme.colors.primary} />
-                    <Text style={[styles.scanBarcodeBtnText, { color: paperTheme.colors.primary }]}>
-                      Scan
-                    </Text>
+                    <Ionicons name="scan" size={22} color={paperTheme.colors.onPrimary} />
+                    <Text style={[styles.scanBarcodeBtnText, { color: paperTheme.colors.onPrimary }]}>Scan</Text>
                   </TouchableOpacity>
                 </View>
-              </>
+              </FormSection>
             ) : null}
 
-            <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>Image</Text>
-            <View
-              style={[
-                styles.imageSection,
-                {
-                  borderColor: paperTheme.colors.outlineVariant,
-                  backgroundColor: paperTheme.colors.surface,
-                },
-              ]}
-            >
+            <FormSection title="Product photo" icon="camera-outline" paperTheme={paperTheme} resolvedTheme={resolvedTheme}>
               {imageUri ? (
                 <View style={styles.imagePreviewWrap}>
                   <Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="cover" />
@@ -767,61 +836,67 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
                   <Ionicons name="chevron-forward" size={20} color={paperTheme.colors.primary} />
                 </TouchableOpacity>
               </View>
+              {imageUri ? (
+                <TouchableOpacity
+                  style={styles.removeImageBtn}
+                  onPress={() => setImageUri(null)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="trash-outline" size={18} color={paperTheme.colors.error} />
+                  <Text style={[styles.removeImageText, { color: paperTheme.colors.error }]}>Remove photo</Text>
+                </TouchableOpacity>
+              ) : null}
+            </FormSection>
+
+            <View style={styles.formActions}>
+              {canSave ? (
+                <TouchableOpacity
+                  style={[
+                    styles.saveBtn,
+                    { backgroundColor: paperTheme.colors.primary },
+                    softShadow(resolvedTheme),
+                    saving && styles.btnDisabled,
+                  ]}
+                  onPress={onSave}
+                  activeOpacity={0.9}
+                  disabled={saving || deleting}
+                >
+                  {saving ? (
+                    <ActivityIndicator size="small" color={paperTheme.colors.onPrimary} />
+                  ) : (
+                    <Ionicons name="checkmark-circle" size={22} color={paperTheme.colors.onPrimary} />
+                  )}
+                  <Text style={[styles.saveBtnText, { color: paperTheme.colors.onPrimary }]}>
+                    {saving ? 'Saving...' : mode === 'add' ? 'Save product' : 'Save changes'}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {mode === 'edit' && initial ? (
+                <TouchableOpacity
+                  style={[
+                    styles.deleteBtn,
+                    {
+                      backgroundColor: paperTheme.colors.errorContainer,
+                      borderColor: paperTheme.colors.error,
+                    },
+                    (saving || deleting) && styles.btnDisabled,
+                  ]}
+                  onPress={onDelete}
+                  activeOpacity={0.9}
+                  disabled={saving || deleting}
+                >
+                  {deleting ? (
+                    <ActivityIndicator size="small" color={paperTheme.colors.error} />
+                  ) : (
+                    <Ionicons name="trash-outline" size={20} color={paperTheme.colors.error} />
+                  )}
+                  <Text style={[styles.deleteBtnText, { color: paperTheme.colors.error }]}>
+                    {deleting ? 'Deleting...' : 'Delete product'}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
-            {imageUri ? (
-              <TouchableOpacity
-                style={styles.removeImageBtn}
-                onPress={() => setImageUri(null)}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="trash-outline" size={18} color={paperTheme.colors.error} />
-                <Text style={[styles.removeImageText, { color: paperTheme.colors.error }]}>Remove photo</Text>
-              </TouchableOpacity>
-            ) : null}
-
-            {canSave ? (
-              <TouchableOpacity
-                style={[
-                  styles.saveBtn,
-                  { backgroundColor: paperTheme.colors.primary },
-                  saving && styles.btnDisabled,
-                ]}
-                onPress={onSave}
-                activeOpacity={0.9}
-                disabled={saving || deleting}
-              >
-                {saving ? (
-                  <ActivityIndicator size="small" color={paperTheme.colors.onPrimary} />
-                ) : (
-                  <Ionicons name="checkmark-circle-outline" size={20} color={paperTheme.colors.onPrimary} />
-                )}
-                <Text style={[styles.saveBtnText, { color: paperTheme.colors.onPrimary }]}>
-                  {saving ? 'Saving...' : mode === 'add' ? 'Save product' : 'Save changes'}
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-
-            {mode === 'edit' && initial ? (
-              <TouchableOpacity
-                style={[
-                  styles.deleteBtn,
-                  { borderColor: paperTheme.colors.error },
-                  (saving || deleting) && styles.btnDisabled,
-                ]}
-                onPress={onDelete}
-                activeOpacity={0.9}
-                disabled={saving || deleting}
-              >
-                {deleting ? (
-                  <ActivityIndicator size="small" color={paperTheme.colors.error} />
-                ) : (
-                  <Ionicons name="trash-outline" size={20} color={paperTheme.colors.error} />
-                )}
-                <Text style={[styles.deleteBtnText, { color: paperTheme.colors.error }]}>
-                  {deleting ? 'Deleting...' : 'Delete product'}
-                </Text>
-              </TouchableOpacity>
-            ) : null}
           </ScrollView>
 
           <Modal
@@ -839,6 +914,7 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
                 style={[styles.modalSheet, { backgroundColor: paperTheme.colors.surface }]}
                 onStartShouldSetResponder={() => true}
               >
+                <View style={[styles.modalHandle, { backgroundColor: paperTheme.colors.outlineVariant }]} />
                 <Text style={[styles.modalTitle, { color: paperTheme.colors.onSurface }]}>Select category</Text>
                 <ScrollView style={styles.modalList} keyboardShouldPersistTaps="handled">
                   {categories.length === 0 ? (
@@ -929,66 +1005,95 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 12,
+    paddingBottom: 14,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  title: { fontSize: 22, fontFamily: fonts.PoppinsBold, lineHeight: 28 },
+  modeBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  modeBadgeText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
+    letterSpacing: 0.3,
+  },
+  subtitle: { fontSize: 13, fontFamily: fonts.PoppinsRegular, marginTop: 4, lineHeight: 18 },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 40 },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+  },
+  sectionIconWrap: {
+    width: 36,
+    height: 36,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { fontSize: 22, fontFamily: fonts.PoppinsBold },
-  subtitle: { fontSize: 13, fontFamily: fonts.PoppinsRegular, marginTop: 2 },
-  scrollContent: { paddingHorizontal: 16, paddingBottom: 32 },
-  label: {
+  sectionTitle: {
     fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 13,
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  input: {
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'ios' ? 14 : 12,
-    fontFamily: fonts.PoppinsRegular,
     fontSize: 16,
-    marginBottom: 4,
   },
   selectRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 1,
   },
   selectInner: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  selectText: { fontFamily: fonts.PoppinsRegular, fontSize: 16, flex: 1 },
-  selectPlaceholder: { fontFamily: fonts.PoppinsRegular, fontSize: 16, flex: 1 },
+  selectText: { fontFamily: fonts.PoppinsRegular, fontSize: 15, flex: 1 },
+  selectPlaceholder: { fontFamily: fonts.PoppinsRegular, fontSize: 15, flex: 1 },
   catDot: { width: 12, height: 12, borderRadius: 6 },
   typeRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 8,
   },
   typeChip: {
     flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingVertical: 12,
+    flexDirection: 'row',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   typeChipText: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 14,
   },
+  twoColRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 4,
+  },
+  twoColField: {
+    flex: 1,
+  },
   inventoryCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginVertical: 12,
+    marginTop: 14,
     paddingHorizontal: 14,
     paddingVertical: 14,
     borderRadius: 16,
@@ -1031,16 +1136,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     gap: 10,
-    marginBottom: 4,
   },
   barcodeInput: {
     flex: 1,
     marginBottom: 0,
   },
   scanBarcodeBtn: {
-    minWidth: 76,
+    minWidth: 72,
     borderRadius: 14,
-    borderWidth: 1.5,
     paddingHorizontal: 12,
     paddingVertical: Platform.OS === 'ios' ? 14 : 12,
     alignItems: 'center',
@@ -1051,26 +1154,23 @@ const styles = StyleSheet.create({
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 11,
   },
-  imageSection: {
-    borderWidth: 1,
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
   imagePreviewWrap: {
     position: 'relative',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 12,
   },
   imagePreview: {
     width: '100%',
-    height: 220,
+    height: 200,
   },
   removeImageBadge: {
     position: 'absolute',
     top: 10,
     right: 10,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1079,12 +1179,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 32,
+    paddingVertical: 28,
     paddingHorizontal: 20,
+    borderRadius: 16,
+    marginBottom: 12,
   },
   imagePlaceholderTitle: {
     fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 16,
+    fontSize: 15,
     marginTop: 4,
   },
   imagePlaceholderHint: {
@@ -1095,8 +1197,6 @@ const styles = StyleSheet.create({
   },
   imageActionColumn: {
     gap: 10,
-    padding: 12,
-    paddingTop: 4,
   },
   imageActionBtn: {
     flexDirection: 'row',
@@ -1116,11 +1216,6 @@ const styles = StyleSheet.create({
   },
   imageActionBtnSecondary: {
     borderWidth: 2,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
   },
   imageActionIconCircle: {
     width: 44,
@@ -1148,23 +1243,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginBottom: 8,
+    marginTop: 4,
     paddingVertical: 8,
   },
   removeImageText: { fontFamily: fonts.PoppinsMedium, fontSize: 14 },
+  formActions: {
+    gap: 12,
+    marginTop: 4,
+  },
   saveBtn: {
-    marginTop: 20,
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderRadius: 16,
+    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   deleteBtn: {
-    marginTop: 12,
-    borderRadius: 14,
-    borderWidth: 1,
+    borderRadius: 16,
+    borderWidth: 1.5,
     paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1173,7 +1270,7 @@ const styles = StyleSheet.create({
   },
   deleteBtnText: {
     fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 16,
+    fontSize: 15,
   },
   btnDisabled: {
     opacity: 0.75,
@@ -1181,15 +1278,22 @@ const styles = StyleSheet.create({
   saveBtnText: { fontFamily: fonts.PoppinsSemiBold, fontSize: 16 },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 10,
     paddingHorizontal: 16,
-    maxHeight: '70%',
+    maxHeight: '72%',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 14,
   },
   modalTitle: { fontFamily: fonts.PoppinsBold, fontSize: 18, marginBottom: 8 },
   modalList: { maxHeight: 360 },
@@ -1200,11 +1304,14 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    marginBottom: 4,
   },
   modalRowText: { flex: 1, fontFamily: fonts.PoppinsRegular, fontSize: 16 },
   modalClose: {
     marginVertical: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
   },
