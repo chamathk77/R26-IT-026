@@ -77,9 +77,7 @@ function buildProductFormData(
   if (payload.isInventoryAvailable != null) {
     formData.append('isInventoryAvailable', String(payload.isInventoryAvailable));
   }
-  if (payload.barcode !== undefined) {
-    formData.append('barcode', payload.barcode == null ? '' : String(payload.barcode));
-  }
+  appendOptionalField(formData, 'barcode', payload.barcode?.trim() || null);
   if (hasNumericValue(payload.qty)) {
     formData.append('qty', String(payload.qty));
   }
@@ -104,7 +102,11 @@ function buildProductJsonBody(payload: ProductBodyFields) {
   if (payload.isInventoryAvailable != null) {
     body.isInventoryAvailable = payload.isInventoryAvailable;
   }
-  if (payload.barcode !== undefined) body.barcode = payload.barcode;
+  if (payload.barcode !== undefined) {
+    const trimmed = payload.barcode == null ? null : String(payload.barcode).trim();
+    if (trimmed) body.barcode = trimmed;
+    else body.barcode = null;
+  }
   if (hasNumericValue(payload.qty)) body.qty = payload.qty;
 
   return body;

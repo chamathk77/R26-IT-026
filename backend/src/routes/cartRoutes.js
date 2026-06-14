@@ -5,12 +5,10 @@ const {
   getCartSessions,
   getCartItems,
   addCartItem,
-  updateCartItem,
   updateCartSessionStatus,
   updateCartSessionItem,
   removeCartSessionItem,
   deleteCartSession,
-  removeCartItem,
 } = require('../controllers/cartController');
 
 const router = express.Router();
@@ -23,7 +21,5 @@ router.delete('/sessions/:sessionId/items/:productId', protect, removeCartSessio
 router.delete('/sessions/:sessionId', protect, deleteCartSession);
 router.get('/', protect, getCartItems);
 router.post('/', protect, addCartItem);
-router.put('/:id', protect, updateCartItem);
-router.delete('/:id', protect, removeCartItem);
 
 module.exports = router;

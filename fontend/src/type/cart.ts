@@ -20,6 +20,8 @@ export interface CartOrder {
 
 export interface CartSessionSummary {
   sessionId: string;
+  cartNumber?: number;
+  shopId?: string;
   status: CartStatus;
   itemCount: number;
   totalAmount: number;
@@ -31,6 +33,7 @@ export interface CartLineItem {
   _id: string;
   user: string;
   sessionId: string;
+  cartNumber?: number;
   product: Product | string;
   productName: string;
   quantity: number;
@@ -63,6 +66,9 @@ export interface AddCartItemRequest {
 
 export interface AddCartItemResponse {
   success: boolean;
+  sessionId?: string;
+  cartNumber?: number;
+  status?: CartStatus;
   data: CartLineItem;
   message: string;
 }

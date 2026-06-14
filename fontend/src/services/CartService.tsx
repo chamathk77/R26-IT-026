@@ -26,7 +26,7 @@ function isHttpSuccess(status: number): boolean {
 
 export const fetchPendingCartSessions_Service = createAsyncThunk(
   'cart/fetchPendingSessions',
-  async () => {
+  async (_, { rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
@@ -34,8 +34,7 @@ export const fetchPendingCartSessions_Service = createAsyncThunk(
         params: { status: 'pending' },
       });
 
-      if (isHttpSuccess(response.status)) {
-        console.log('Fetch pending cart sessions response:', response.data);
+      if (isHttpSuccess(response.status) && response.data?.success) {
         return response.data;
       }
 
@@ -45,17 +44,18 @@ export const fetchPendingCartSessions_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      console.log('Fetch pending cart sessions error:---', error);
-      throw toApiErrorResponse(error);
+      const apiError = toApiErrorResponse(error);
+      console.log('Fetch pending cart sessions error:', apiError);
+      return rejectWithValue(apiError);
     }
   },
 );
 
 export const fetchAddedCartSessions_Service = createAsyncThunk(
   'cart/fetchAddedSessions',
-  async () => {
+  async (_, { rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
@@ -63,8 +63,7 @@ export const fetchAddedCartSessions_Service = createAsyncThunk(
         params: { status: 'added' },
       });
 
-      if (isHttpSuccess(response.status)) {
-        console.log('Fetch added cart sessions response:', response.data);
+      if (isHttpSuccess(response.status) && response.data?.success) {
         return response.data;
       }
 
@@ -74,17 +73,18 @@ export const fetchAddedCartSessions_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      console.log('Fetch added cart sessions error:---', error);
-      throw toApiErrorResponse(error);
+      const apiError = toApiErrorResponse(error);
+      console.log('Fetch added cart sessions error:', apiError);
+      return rejectWithValue(apiError);
     }
   },
 );
 
 export const fetchCartItems_Service = createAsyncThunk(
   'cart/fetchItems',
-  async (params: { sessionId?: string; status?: CartStatus } = {}) => {
+  async (params: { sessionId?: string; status?: CartStatus } = {}, { rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
@@ -95,8 +95,7 @@ export const fetchCartItems_Service = createAsyncThunk(
         },
       });
 
-      if (isHttpSuccess(response.status)) {
-        console.log('Fetch cart items response:', response.data);
+      if (isHttpSuccess(response.status) && response.data?.success) {
         return {
           ...response.data,
           sessionId: params.sessionId ?? null,
@@ -110,46 +109,60 @@ export const fetchCartItems_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      console.log('Fetch cart items error:---', error);
-      throw toApiErrorResponse(error);
+      const apiError = toApiErrorResponse(error);
+      console.log('Fetch cart items error:', apiError);
+      return rejectWithValue(apiError);
     }
   },
 );
 
 export const createCartSession_Service = createAsyncThunk(
   'cart/createSession',
-  async (status: 'pending' | 'added' | 'proceed' = 'pending') => {
+  async (_, { rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
-      const response = await apiClient.post<CreateCartSessionResponse>('/api/cart/sessions', {
-        status,
-      });
+      const response = await apiClient.post<CreateCartSessionResponse>('/api/cart/sessions', {});
 
-      if (isHttpSuccess(response.status)) {
-        console.log('Create cart session response:', response.data);
+      if (isHttpSuccess(response.status) && response.data?.success) {
         return response.data;
       }
 
       const apiError: ApiErrorResponse = {
         error: 'Error',
-        message: 'Could not create cart session',
+        message: 'Could not create cart',
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      console.log('Create cart session error:---', error);
-      throw toApiErrorResponse(error);
+      const apiError = toApiErrorResponse(error);
+      console.log('Create cart session error:', apiError);
+      return rejectWithValue(apiError);
+    }
+  },
+);
+
+export const createNewPendingCart_Service = createAsyncThunk(
+  'cart/createNewPending',
+  async (_, { dispatch, rejectWithValue }) => {
+    try {
+      const session = await dispatch(createCartSession_Service()).unwrap();
+      await dispatch(fetchPendingCartSessions_Service());
+      return session;
+    } catch (error: unknown) {
+      const apiError = toApiErrorResponse(error);
+      console.log('Create new pending cart error:', apiError);
+      return rejectWithValue(apiError);
     }
   },
 );
 
 export const addCartItem_Service = createAsyncThunk(
   'cart/addItem',
-  async (payload: AddCartItemRequest) => {
+  async (payload: AddCartItemRequest, { rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
@@ -157,11 +170,9 @@ export const addCartItem_Service = createAsyncThunk(
         productId: payload.productId,
         quantity: payload.quantity,
         sessionId: payload.sessionId,
-        status: payload.status ?? 'pending',
       });
 
-      if (isHttpSuccess(response.status)) {
-        console.log('Add cart item response:', response.data);
+      if (isHttpSuccess(response.status) && response.data?.success) {
         return response.data;
       }
 
@@ -171,24 +182,28 @@ export const addCartItem_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      console.log('Add cart item error:---', error);
-      throw toApiErrorResponse(error);
+      const apiError = toApiErrorResponse(error);
+      console.log('Add cart item error:', apiError);
+      return rejectWithValue(apiError);
     }
   },
 );
 
 export const addProductToPendingCart_Service = createAsyncThunk(
   'cart/addProductToPendingCart',
-  async (payload: { productId: string; quantity: number }, { dispatch, getState }) => {
+  async (
+    payload: { productId: string; quantity: number; forceNewCart?: boolean },
+    { dispatch, getState, rejectWithValue },
+  ) => {
     try {
       const state = getState() as RootState;
-      let sessionId = state.CartReducer.activeSession.sessionId;
-      let cartNumber = state.CartReducer.activeSession.cartNumber;
+      let sessionId = payload.forceNewCart ? null : state.CartReducer.activeSession.sessionId;
+      let cartNumber = payload.forceNewCart ? null : state.CartReducer.activeSession.cartNumber;
 
       if (!sessionId) {
-        const session = await dispatch(createCartSession_Service('pending')).unwrap();
+        const session = await dispatch(createCartSession_Service()).unwrap();
         sessionId = session.sessionId;
         cartNumber = session.cartNumber;
       }
@@ -198,14 +213,25 @@ export const addProductToPendingCart_Service = createAsyncThunk(
           productId: payload.productId,
           quantity: payload.quantity,
           sessionId,
-          status: 'pending',
         }),
       ).unwrap();
 
-      await dispatch(fetchPendingCartSessions_Service());
+      await Promise.all([
+        dispatch(fetchPendingCartSessions_Service()),
+        dispatch(
+          fetchCartItems_Service({
+            sessionId,
+            status: 'pending',
+          }),
+        ),
+      ]);
+
       const pendingSessions = (getState() as RootState).CartReducer.pendingSessions.items;
       const resolvedCartNumber =
-        getCartNumberForSession(pendingSessions, sessionId) ?? cartNumber ?? 1;
+        item.cartNumber ??
+        getCartNumberForSession(pendingSessions, sessionId) ??
+        cartNumber ??
+        1;
 
       return {
         sessionId,
@@ -213,15 +239,94 @@ export const addProductToPendingCart_Service = createAsyncThunk(
         item: item.data,
       };
     } catch (error: unknown) {
-      console.log('Add product to pending cart error:---', error);
-      throw toApiErrorResponse(error);
+      const apiError = toApiErrorResponse(error);
+      console.log('Add product to pending cart error:', apiError);
+      return rejectWithValue(apiError);
+    }
+  },
+);
+
+export const updatePendingCartItemQuantity_Service = createAsyncThunk(
+  'cart/updatePendingItemQuantity',
+  async (payload: UpdateAddedCartItemRequest, { dispatch, rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.patch<MutateCartSessionItemsResponse>(
+        `/api/cart/sessions/${payload.sessionId}/items`,
+        {
+          productId: payload.productId,
+          quantity: payload.quantity,
+        },
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        await Promise.all([
+          dispatch(fetchPendingCartSessions_Service()),
+          dispatch(
+            fetchCartItems_Service({
+              sessionId: payload.sessionId,
+              status: 'pending',
+            }),
+          ),
+        ]);
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: 'Could not update cart item',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      const apiError = toApiErrorResponse(error);
+      return rejectWithValue(apiError);
+    }
+  },
+);
+
+export const removePendingCartItem_Service = createAsyncThunk(
+  'cart/removePendingItem',
+  async (payload: RemoveAddedCartItemRequest, { dispatch, rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.delete<MutateCartSessionItemsResponse>(
+        `/api/cart/sessions/${payload.sessionId}/items/${payload.productId}`,
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        await Promise.all([
+          dispatch(fetchPendingCartSessions_Service()),
+          dispatch(
+            fetchCartItems_Service({
+              sessionId: payload.sessionId,
+              status: 'pending',
+            }),
+          ),
+        ]);
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: 'Could not remove cart item',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      const apiError = toApiErrorResponse(error);
+      return rejectWithValue(apiError);
     }
   },
 );
 
 export const revertAddedCartToPending_Service = createAsyncThunk(
   'cart/revertAddedToPending',
-  async (sessionId: string, { dispatch }) => {
+  async (sessionId: string, { dispatch, rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
@@ -230,8 +335,7 @@ export const revertAddedCartToPending_Service = createAsyncThunk(
         { status: 'pending' },
       );
 
-      if (isHttpSuccess(response.status)) {
-        console.log('Revert added cart to pending response:', response.data);
+      if (isHttpSuccess(response.status) && response.data?.success) {
         await Promise.all([
           dispatch(fetchAddedCartSessions_Service()),
           dispatch(fetchPendingCartSessions_Service()),
@@ -245,17 +349,17 @@ export const revertAddedCartToPending_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      console.log('Revert added cart to pending error:---', error);
-      throw toApiErrorResponse(error);
+      const apiError = toApiErrorResponse(error);
+      return rejectWithValue(apiError);
     }
   },
 );
 
 export const deleteAddedCartSession_Service = createAsyncThunk(
   'cart/deleteAddedSession',
-  async (sessionId: string, { dispatch }) => {
+  async (sessionId: string, { dispatch, rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
@@ -263,8 +367,7 @@ export const deleteAddedCartSession_Service = createAsyncThunk(
         `/api/cart/sessions/${sessionId}`,
       );
 
-      if (isHttpSuccess(response.status)) {
-        console.log('Delete cart session response:', response.data);
+      if (isHttpSuccess(response.status) && response.data?.success) {
         await Promise.all([
           dispatch(fetchPendingCartSessions_Service()),
           dispatch(fetchAddedCartSessions_Service()),
@@ -278,17 +381,17 @@ export const deleteAddedCartSession_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      console.log('Delete added cart session error:---', error);
-      throw toApiErrorResponse(error);
+      const apiError = toApiErrorResponse(error);
+      return rejectWithValue(apiError);
     }
   },
 );
 
 export const updateAddedCartItemQuantity_Service = createAsyncThunk(
   'cart/updateAddedItemQuantity',
-  async (payload: UpdateAddedCartItemRequest, { dispatch }) => {
+  async (payload: UpdateAddedCartItemRequest, { dispatch, rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
@@ -300,8 +403,7 @@ export const updateAddedCartItemQuantity_Service = createAsyncThunk(
         },
       );
 
-      if (isHttpSuccess(response.status)) {
-        console.log('Update added cart item response:', response.data);
+      if (isHttpSuccess(response.status) && response.data?.success) {
         await Promise.all([
           dispatch(fetchAddedCartSessions_Service()),
           dispatch(
@@ -320,17 +422,17 @@ export const updateAddedCartItemQuantity_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      console.log('Update added cart item error:---', error);
-      throw toApiErrorResponse(error);
+      const apiError = toApiErrorResponse(error);
+      return rejectWithValue(apiError);
     }
   },
 );
 
 export const removeAddedCartItem_Service = createAsyncThunk(
   'cart/removeAddedItem',
-  async (payload: RemoveAddedCartItemRequest, { dispatch }) => {
+  async (payload: RemoveAddedCartItemRequest, { dispatch, rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
@@ -338,8 +440,7 @@ export const removeAddedCartItem_Service = createAsyncThunk(
         `/api/cart/sessions/${payload.sessionId}/items/${payload.productId}`,
       );
 
-      if (isHttpSuccess(response.status)) {
-        console.log('Remove added cart item response:', response.data);
+      if (isHttpSuccess(response.status) && response.data?.success) {
         await dispatch(fetchAddedCartSessions_Service());
         if (!response.data.cartDeleted) {
           await dispatch(
@@ -358,17 +459,17 @@ export const removeAddedCartItem_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      console.log('Remove added cart item error:---', error);
-      throw toApiErrorResponse(error);
+      const apiError = toApiErrorResponse(error);
+      return rejectWithValue(apiError);
     }
   },
 );
 
 export const checkoutCartSession_Service = createAsyncThunk(
   'cart/checkoutSession',
-  async (sessionId: string, { dispatch, getState }) => {
+  async (sessionId: string, { dispatch, getState, rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
@@ -379,8 +480,7 @@ export const checkoutCartSession_Service = createAsyncThunk(
         sessionId,
       });
 
-      if (isHttpSuccess(response.status)) {
-        console.log('Checkout cart session response:', response.data);
+      if (isHttpSuccess(response.status) && response.data?.success) {
         await dispatch(fetchAddedCartSessions_Service());
         return {
           ...response.data,
@@ -394,17 +494,17 @@ export const checkoutCartSession_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      console.log('Checkout cart session error:---', error);
-      throw toApiErrorResponse(error);
+      const apiError = toApiErrorResponse(error);
+      return rejectWithValue(apiError);
     }
   },
 );
 
 export const proceedCartSession_Service = createAsyncThunk(
   'cart/proceedSession',
-  async (sessionId: string, { dispatch, getState }) => {
+  async (sessionId: string, { dispatch, getState, rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
@@ -416,8 +516,7 @@ export const proceedCartSession_Service = createAsyncThunk(
         { status: 'added' },
       );
 
-      if (isHttpSuccess(response.status)) {
-        console.log('Proceed cart session response:', response.data);
+      if (isHttpSuccess(response.status) && response.data?.success) {
         await Promise.all([
           dispatch(fetchPendingCartSessions_Service()),
           dispatch(fetchAddedCartSessions_Service()),
@@ -434,10 +533,10 @@ export const proceedCartSession_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      console.log('Proceed cart session error:---', error);
-      throw toApiErrorResponse(error);
+      const apiError = toApiErrorResponse(error);
+      return rejectWithValue(apiError);
     }
   },
 );

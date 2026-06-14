@@ -1,9 +1,11 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Image,
+  Keyboard,
   Modal,
+  Pressable,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -25,23 +27,60 @@ import { useCommonAlert } from '../../hooks/useCommonAlert';
 import { fetchCategories_Service } from '../../services/CategoryService';
 import {
   addProductToPendingCart_Service,
+  createNewPendingCart_Service,
   deleteAddedCartSession_Service,
   fetchCartItems_Service,
   fetchPendingCartSessions_Service,
   proceedCartSession_Service,
+  removePendingCartItem_Service,
+  updatePendingCartItemQuantity_Service,
 } from '../../services/CartService';
 import { fetchProducts_Service } from '../../services/ProductService';
 import { setActiveSession } from '../../store/reducers/CartReducer';
 import { AppDispatch, RootState } from '../../store/store';
 import { CartSessionSummary } from '../../type/cart';
-import { Product } from '../../type/product';
+import { Category } from '../../type/category';
+import { getProductCategoryId, Product } from '../../type/product';
+import { cardShadow } from '../settings/shared/settingsDetailStyles';
+import { inventoryUi, softShadow } from './ManageInventory/inventoryUiStyles';
+import { handleSessionExpiredApiError } from '../../utils/apiErrorAlert';
 import { getCartOrderItemKey } from '../../utils/cartOrder';
 import { getCartNumberForSession } from '../../utils/cartSession';
 import { devLog } from '../../utils/devLog';
 import { resolveProductImageUri } from '../../utils/productImage';
 import CommonAlert from '../../components/CommonAlert/CommonAlert';
+import SlideToast from '../../components/SlideToast/SlideToast';
+import BarcodeScannerModal from './ManageInventory/BarcodeScannerModal';
 
 type Props = BottomTabScreenProps<MainBottomTabParamList, 'Products'>;
+
+function getCategoryColor(categories: Category[], product: Product): string {
+  const categoryId = getProductCategoryId(product);
+  return categories.find((entry) => entry._id === categoryId)?.colorCode ?? '#64748b';
+}
+
+function formatAmount(amount: number | null): string {
+  if (amount == null) return '—';
+  return `Rs. ${amount.toLocaleString('en-LK')}`;
+}
+
+function getStockLimitToastMessage(product: Product, cartQty: number): string | null {
+  if (!product.isInventoryAvailable) return null;
+
+  const stockQty = product.qty ?? 0;
+  if (stockQty <= 0) {
+    return `${product.productName} is out of stock`;
+  }
+  if (cartQty >= stockQty) {
+    return `Only ${stockQty} in stock for ${product.productName}`;
+  }
+  return null;
+}
+
+function isAtProductStockLimit(product: Product, cartQty: number): boolean {
+  if (!product.isInventoryAvailable) return false;
+  return cartQty >= (product.qty ?? 0);
+}
 
 function thunkErrorMessage(err: unknown, fallback: string): string {
   if (err && typeof err === 'object' && 'message' in err) {
@@ -82,32 +121,96 @@ export default function ProductsScreen({ navigation }: Props) {
   );
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-  const [productQuantities, setProductQuantities] = useState<Record<string, number>>({});
+  const [nameSearchQuery, setNameSearchQuery] = useState('');
+  const [barcodeSearchQuery, setBarcodeSearchQuery] = useState('');
+  const [barcodeScannerVisible, setBarcodeScannerVisible] = useState(false);
   const [addingProductId, setAddingProductId] = useState<string | null>(null);
+  const [adjustingProductId, setAdjustingProductId] = useState<string | null>(null);
+  const [creatingCart, setCreatingCart] = useState(false);
   const [pendingModalVisible, setPendingModalVisible] = useState(false);
+  const [categoryDropdownVisible, setCategoryDropdownVisible] = useState(false);
+  const [slideToastMessage, setSlideToastMessage] = useState<string | null>(null);
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
   const pendingCartCount = pendingSessions.length;
 
+  const showSlideToast = useCallback((message: string) => {
+    setSlideToastMessage(message);
+  }, []);
+
+  const hideSlideToast = useCallback(() => {
+    setSlideToastMessage(null);
+  }, []);
+
+  const activeCartQuantities = useMemo(() => {
+    if (!activeSession.sessionId || reviewSessionId !== activeSession.sessionId) {
+      return {} as Record<string, number>;
+    }
+
+    const map: Record<string, number> = {};
+    for (const item of reviewOrder?.items ?? []) {
+      map[item.productId] = item.quantity;
+    }
+    return map;
+  }, [activeSession.sessionId, reviewOrder?.items, reviewSessionId]);
+
+  const refreshActiveCartItems = useCallback(async () => {
+    if (!activeSession.sessionId) return;
+
+    try {
+      await dispatch(
+        fetchCartItems_Service({
+          sessionId: activeSession.sessionId,
+          status: 'pending',
+        }),
+      ).unwrap();
+    } catch (err: unknown) {
+      devLog('Refresh active cart items:', err);
+    }
+  }, [activeSession.sessionId, dispatch]);
+
   const filteredProducts = useMemo(() => {
     let list = products;
+
     if (selectedCategoryId !== null) {
-      list = list.filter((product) => product.category === selectedCategoryId);
+      list = list.filter((product) => getProductCategoryId(product) === selectedCategoryId);
     }
-    const query = searchQuery.trim().toLowerCase();
-    if (query) {
+
+    const nameQuery = nameSearchQuery.trim().toLowerCase();
+    if (nameQuery) {
       list = list.filter((product) => {
-        const category = categories.find((item) => item._id === product.category);
-        const categoryName = category?.name.toLowerCase() ?? '';
+        const categoryName = (product.categoryName ?? '').toLowerCase();
         return (
-          product.name.toLowerCase().includes(query) ||
-          categoryName.includes(query)
+          product.productName.toLowerCase().includes(nameQuery) ||
+          categoryName.includes(nameQuery)
         );
       });
     }
+
+    const barcodeQuery = barcodeSearchQuery.replace(/\s+/g, '').trim().toLowerCase();
+    if (barcodeQuery) {
+      list = list.filter((product) => {
+        const barcode = (product.barcode ?? '').replace(/\s+/g, '').toLowerCase();
+        return barcode.includes(barcodeQuery);
+      });
+    }
+
     return list;
-  }, [products, selectedCategoryId, searchQuery, categories]);
+  }, [products, selectedCategoryId, nameSearchQuery, barcodeSearchQuery]);
+
+  const openBarcodeScanner = useCallback(() => {
+    Keyboard.dismiss();
+    setBarcodeScannerVisible(true);
+  }, []);
+
+  const handleBarcodeScanned = useCallback((code: string) => {
+    setBarcodeSearchQuery(code);
+    setBarcodeScannerVisible(false);
+  }, []);
+
+  const clearBarcodeSearch = useCallback(() => {
+    setBarcodeSearchQuery('');
+    Keyboard.dismiss();
+  }, []);
 
   const loadCatalog = useCallback(async () => {
     try {
@@ -116,34 +219,24 @@ export default function ProductsScreen({ navigation }: Props) {
         dispatch(fetchProducts_Service()).unwrap(),
         dispatch(fetchPendingCartSessions_Service()).unwrap(),
       ]);
+      await refreshActiveCartItems();
     } catch (err: unknown) {
       devLog('Products tab load:', err);
+
+      const handled = await handleSessionExpiredApiError(err, show_Alert);
+      if (handled) return;
+
       show_Alert('error', 'Error', thunkErrorMessage(err, 'Failed to load products'), 1, true, 'OK');
     }
-  }, [dispatch, show_Alert]);
+  }, [dispatch, refreshActiveCartItems, show_Alert]);
 
-  const getProductQuantity = useCallback(
-    (productId: string) => productQuantities[productId] ?? 0,
-    [productQuantities],
+  const getProductCartQuantity = useCallback(
+    (productId: string) => activeCartQuantities[productId] ?? 0,
+    [activeCartQuantities],
   );
 
-  const changeProductQuantity = useCallback((productId: string, delta: number) => {
-    setProductQuantities((current) => {
-      const next = Math.max(0, (current[productId] ?? 0) + delta);
-      return { ...current, [productId]: next };
-    });
-  }, []);
-
-  const resetProductQuantity = useCallback((productId: string) => {
-    setProductQuantities((current) => {
-      if ((current[productId] ?? 0) === 0) return current;
-      return { ...current, [productId]: 0 };
-    });
-  }, []);
-
-  const handleAddToPendingCart = useCallback(
-    async (product: Product) => {
-      const quantity = getProductQuantity(product._id);
+  const handleAddProductToCart = useCallback(
+    async (product: Product, quantity = 1, forceNewCart = false, showToast = true) => {
       if (quantity < 1 || addToCartLoading) return;
 
       setAddingProductId(product._id);
@@ -152,19 +245,19 @@ export default function ProductsScreen({ navigation }: Props) {
           addProductToPendingCart_Service({
             productId: product._id,
             quantity,
+            forceNewCart,
           }),
         ).unwrap();
-        resetProductQuantity(product._id);
-        show_Alert(
-          'success',
-          'Added',
-          `Added to Cart #${result.cartNumber}. You can keep adding items to this order.`,
-          1,
-          true,
-          'OK',
-        );
+
+        if (showToast) {
+          showSlideToast(`Added to Cart #${result.cartNumber}`);
+        }
       } catch (err: unknown) {
         devLog('Add to pending cart:', err);
+
+        const handled = await handleSessionExpiredApiError(err, show_Alert);
+        if (handled) return;
+
         show_Alert(
           'error',
           'Error',
@@ -177,7 +270,115 @@ export default function ProductsScreen({ navigation }: Props) {
         setAddingProductId(null);
       }
     },
-    [addToCartLoading, dispatch, getProductQuantity, resetProductQuantity, show_Alert],
+    [addToCartLoading, dispatch, showSlideToast, show_Alert],
+  );
+
+  const handleAdjustProductQuantity = useCallback(
+    async (product: Product, delta: number) => {
+      if (addToCartLoading || adjustingProductId) return;
+
+      const currentQty = getProductCartQuantity(product._id);
+      const sessionId = activeSession.sessionId;
+
+      if (delta > 0) {
+        const stockLimitMessage = getStockLimitToastMessage(product, currentQty);
+        if (stockLimitMessage) {
+          showSlideToast(stockLimitMessage);
+          return;
+        }
+
+        const nextQty = currentQty + 1;
+        const forceNewCart = currentQty === 0 && !sessionId;
+        await handleAddProductToCart(product, nextQty, forceNewCart, currentQty === 0);
+        return;
+      }
+
+      if (currentQty <= 0 || !sessionId) return;
+
+      setAdjustingProductId(product._id);
+      try {
+        if (currentQty <= 1) {
+          await dispatch(
+            removePendingCartItem_Service({
+              sessionId,
+              productId: product._id,
+            }),
+          ).unwrap();
+        } else {
+          await dispatch(
+            updatePendingCartItemQuantity_Service({
+              sessionId,
+              productId: product._id,
+              quantity: currentQty - 1,
+            }),
+          ).unwrap();
+        }
+      } catch (err: unknown) {
+        devLog('Adjust cart quantity:', err);
+
+        const handled = await handleSessionExpiredApiError(err, show_Alert);
+        if (handled) return;
+
+        show_Alert(
+          'error',
+          'Error',
+          thunkErrorMessage(err, 'Could not update cart item'),
+          1,
+          true,
+          'OK',
+        );
+      } finally {
+        setAdjustingProductId(null);
+      }
+    },
+    [
+      activeSession.sessionId,
+      addToCartLoading,
+      adjustingProductId,
+      dispatch,
+      getProductCartQuantity,
+      handleAddProductToCart,
+      showSlideToast,
+      show_Alert,
+    ],
+  );
+
+  const handleCreateNewCart = useCallback(async () => {
+    if (creatingCart || addToCartLoading) return;
+
+    setCreatingCart(true);
+    try {
+      const session = await dispatch(createNewPendingCart_Service()).unwrap();
+      showSlideToast(`Cart #${session.cartNumber} is ready`);
+    } catch (err: unknown) {
+      devLog('Create new cart:', err);
+
+      const handled = await handleSessionExpiredApiError(err, show_Alert);
+      if (handled) return;
+
+      show_Alert(
+        'error',
+        'Error',
+        thunkErrorMessage(err, 'Could not create a new cart'),
+        1,
+        true,
+        'OK',
+      );
+    } finally {
+      setCreatingCart(false);
+    }
+  }, [addToCartLoading, creatingCart, dispatch, showSlideToast, show_Alert]);
+
+  const closeCategoryDropdown = useCallback(() => {
+    setCategoryDropdownVisible(false);
+  }, []);
+
+  const handleSelectCategory = useCallback(
+    (categoryId: string | null) => {
+      setSelectedCategoryId(categoryId);
+      closeCategoryDropdown();
+    },
+    [closeCategoryDropdown],
   );
 
   const openPendingModal = useCallback(() => {
@@ -203,11 +404,18 @@ export default function ProductsScreen({ navigation }: Props) {
 
   const handleResumePendingSession = useCallback(
     (session: CartSessionSummary) => {
-      const cartNumber = getCartNumberForSession(pendingSessions, session.sessionId);
+      const cartNumber =
+        session.cartNumber ?? getCartNumberForSession(pendingSessions, session.sessionId);
       dispatch(
         setActiveSession({
           sessionId: session.sessionId,
           cartNumber,
+        }),
+      );
+      void dispatch(
+        fetchCartItems_Service({
+          sessionId: session.sessionId,
+          status: 'pending',
         }),
       );
       closePendingModal();
@@ -240,10 +448,19 @@ export default function ProductsScreen({ navigation }: Props) {
     async (targetSessionId: string) => {
       if (manageLoadingSessionId) return;
 
+      const cartNumber = getCartNumberForSession(pendingSessions, targetSessionId);
+
       try {
         await dispatch(deleteAddedCartSession_Service(targetSessionId)).unwrap();
+        showSlideToast(
+          cartNumber != null ? `Cart #${cartNumber} deleted` : 'Cart deleted',
+        );
       } catch (err: unknown) {
         devLog('Delete pending cart:', err);
+
+        const handled = await handleSessionExpiredApiError(err, show_Alert);
+        if (handled) return;
+
         show_Alert(
           'error',
           'Error',
@@ -254,7 +471,7 @@ export default function ProductsScreen({ navigation }: Props) {
         );
       }
     },
-    [dispatch, manageLoadingSessionId, show_Alert],
+    [dispatch, manageLoadingSessionId, pendingSessions, showSlideToast, show_Alert],
   );
 
   useFocusEffect(
@@ -262,6 +479,10 @@ export default function ProductsScreen({ navigation }: Props) {
       void loadCatalog();
     }, [loadCatalog]),
   );
+
+  useEffect(() => {
+    void refreshActiveCartItems();
+  }, [activeSession.sessionId, refreshActiveCartItems]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -273,111 +494,135 @@ export default function ProductsScreen({ navigation }: Props) {
   }, [loadCatalog]);
 
   const isAllSelected = selectedCategoryId === null;
+  const selectedCategory = useMemo(
+    () => categories.find((entry) => entry._id === selectedCategoryId) ?? null,
+    [categories, selectedCategoryId],
+  );
   const isInitialLoading =
     (categoriesLoading || productsLoading) && !refreshing && products.length === 0;
 
   const renderProductRow = ({ item }: { item: Product }) => {
-    const category = categories.find((entry) => entry._id === item.category);
     const imageUri = resolveProductImageUri(item.image);
-    const quantity = getProductQuantity(item._id);
-    const isSelected = selectedProductId === item._id;
-    const isAdding = addingProductId === item._id;
+    const cartQuantity = getProductCartQuantity(item._id);
+    const isAdjusting = adjustingProductId === item._id || addingProductId === item._id;
+    const atStockLimit = isAtProductStockLimit(item, cartQuantity);
+    const categoryColor = getCategoryColor(categories, item);
+    const categoryLabel =
+      item.categoryName ||
+      categories.find((entry) => entry._id === getProductCategoryId(item))?.name ||
+      'Uncategorized';
 
     return (
-      <TouchableOpacity
-        activeOpacity={0.92}
-        onPress={() => setSelectedProductId(item._id)}
+      <View
         style={[
           styles.productCard,
           {
-            backgroundColor: paperTheme.colors.surfaceVariant,
-            borderColor: isSelected ? paperTheme.colors.primary : paperTheme.colors.outline,
-            borderWidth: isSelected ? 2 : 1,
+            backgroundColor: paperTheme.colors.surface,
+            borderColor: paperTheme.colors.outlineVariant,
           },
+          cardShadow(resolvedTheme),
         ]}
       >
-        {imageUri ? (
-          <Image source={{ uri: imageUri }} style={styles.productImage} resizeMode="cover" />
-        ) : (
-          <View
-            style={[
-              styles.productImagePlaceholder,
-              { backgroundColor: paperTheme.colors.surfaceVariant },
-            ]}
-          >
-            <Ionicons name="image-outline" size={28} color={paperTheme.colors.onSurfaceVariant} />
+        <View style={styles.productRow}>
+          <View style={styles.thumbWrap}>
+            {imageUri ? (
+              <Image source={{ uri: imageUri }} style={styles.thumb} resizeMode="cover" />
+            ) : (
+              <View style={[styles.thumbPlaceholder, { backgroundColor: `${categoryColor}18` }]}>
+                <Ionicons name="cube-outline" size={22} color={categoryColor} />
+              </View>
+            )}
+            {item.isInventoryAvailable ? (
+              <View
+                style={[
+                  styles.stockBadge,
+                  {
+                    backgroundColor:
+                      (item.qty ?? 0) <= 0 ? paperTheme.colors.error : '#15803d',
+                    borderColor: paperTheme.colors.surface,
+                  },
+                ]}
+              >
+                <Text style={styles.stockBadgeText}>{item.qty ?? 0}</Text>
+              </View>
+            ) : null}
+            {cartQuantity > 0 ? (
+              <View style={[styles.cartBadge, { backgroundColor: paperTheme.colors.primary, borderColor: paperTheme.colors.surface }]}>
+                <Text style={[styles.cartBadgeText, { color: paperTheme.colors.onPrimary }]}>{cartQuantity}</Text>
+              </View>
+            ) : null}
           </View>
-        )}
-        <View style={styles.productBody}>
-          <Text style={[styles.productName, { color: paperTheme.colors.onSurface }]} numberOfLines={2}>
-            {item.name}
-          </Text>
-          <Text style={[styles.productCategory, { color: paperTheme.colors.onSurfaceVariant }]} numberOfLines={1}>
-            {category?.name ?? 'Uncategorized'}
-          </Text>
-          <Text style={[styles.productPrice, { color: paperTheme.colors.primary }]}>
-            ${item.price.toFixed(2)}
-          </Text>
-        </View>
-        <View style={styles.productActions}>
-          <View style={styles.qtyRow}>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={`Decrease quantity for ${item.name}`}
-              onPress={() => changeProductQuantity(item._id, -1)}
-              disabled={quantity < 1}
-              style={[
-                styles.qtyButton,
-                {
-                  backgroundColor: paperTheme.colors.surface,
-                  borderColor: paperTheme.colors.outline,
-                  opacity: quantity < 1 ? 0.45 : 1,
-                },
-              ]}
-            >
-              <Ionicons name="remove" size={18} color={paperTheme.colors.onSurface} />
-            </TouchableOpacity>
-            <Text style={[styles.qtyValue, { color: paperTheme.colors.onSurface }]}>{quantity}</Text>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={`Increase quantity for ${item.name}`}
-              onPress={() => changeProductQuantity(item._id, 1)}
-              style={[
-                styles.qtyButton,
-                {
-                  backgroundColor: paperTheme.colors.surface,
-                  borderColor: paperTheme.colors.outline,
-                },
-              ]}
-            >
-              <Ionicons name="add" size={18} color={paperTheme.colors.onSurface} />
-            </TouchableOpacity>
+
+          <View style={styles.productBody}>
+            <View style={styles.productTitleRow}>
+              <Text style={[styles.productName, { color: paperTheme.colors.onSurface }]} numberOfLines={1}>
+                {item.productName}
+              </Text>
+              <View style={[styles.pricePill, { backgroundColor: paperTheme.colors.primaryContainer }]}>
+                <Text style={[styles.priceText, { color: paperTheme.colors.primary }]}>
+                  {formatAmount(item.amount)}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.categoryRow}>
+              <View style={[styles.categoryDot, { backgroundColor: categoryColor }]} />
+              <Text style={[styles.categoryLabel, { color: paperTheme.colors.onSurfaceVariant }]} numberOfLines={1}>
+                {categoryLabel}
+              </Text>
+            </View>
           </View>
-          {quantity > 0 ? (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={`Add ${item.name} to pending cart`}
-              onPress={() => {
-                void handleAddToPendingCart(item);
-              }}
-              disabled={isAdding}
-              style={[
-                styles.addButton,
-                {
-                  backgroundColor: paperTheme.colors.primary,
-                  opacity: isAdding ? 0.7 : 1,
-                },
-              ]}
-            >
-              {isAdding ? (
-                <ActivityIndicator size="small" color={paperTheme.colors.onPrimary} />
-              ) : (
-                <Text style={[styles.addButtonText, { color: paperTheme.colors.onPrimary }]}>Add</Text>
-              )}
-            </TouchableOpacity>
-          ) : null}
+
+          <View style={styles.productActions}>
+            {isAdjusting ? (
+              <ActivityIndicator size="small" color={paperTheme.colors.primary} />
+            ) : (
+              <View
+                style={[
+                  styles.qtyStepper,
+                  {
+                    backgroundColor: paperTheme.colors.surfaceVariant,
+                    borderColor: paperTheme.colors.outlineVariant,
+                  },
+                ]}
+              >
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={`Decrease ${item.productName} quantity`}
+                  onPress={() => {
+                    void handleAdjustProductQuantity(item, -1);
+                  }}
+                  disabled={cartQuantity <= 0 || addToCartLoading}
+                  style={[
+                    styles.qtyBtn,
+                    { opacity: cartQuantity <= 0 ? 0.35 : 1 },
+                  ]}
+                >
+                  <Ionicons name="remove" size={15} color={paperTheme.colors.onSurface} />
+                </TouchableOpacity>
+                <Text style={[styles.qtyValue, { color: paperTheme.colors.onSurface }]}>{cartQuantity}</Text>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={`Increase ${item.productName} quantity`}
+                  onPress={() => {
+                    void handleAdjustProductQuantity(item, 1);
+                  }}
+                  disabled={addToCartLoading}
+                  style={[
+                    styles.qtyBtn,
+                    styles.qtyBtnAdd,
+                    {
+                      backgroundColor: paperTheme.colors.primary,
+                      opacity: atStockLimit ? 0.65 : 1,
+                    },
+                  ]}
+                >
+                  <Ionicons name="add" size={15} color={paperTheme.colors.onPrimary} />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 
@@ -391,47 +636,71 @@ export default function ProductsScreen({ navigation }: Props) {
         style={[styles.safe, { backgroundColor: paperTheme.colors.background }]}
         edges={['top']}
       >
-        <View style={styles.titleRow}>
-          <View style={styles.titleBlock}>
-            <Text style={[styles.title, { color: paperTheme.colors.onBackground }]}>Products</Text>
-            <Text style={[styles.sub, { color: paperTheme.colors.onSurfaceVariant }]}>
-              Browse your catalog by category or search.
-            </Text>
-          </View>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="View pending carts"
-            onPress={openPendingModal}
-            style={[
-              styles.pendingBadge,
-              {
-                backgroundColor: paperTheme.colors.surface,
-                borderColor: paperTheme.colors.outline,
-              },
-            ]}
-          >
-            <Ionicons name="cart-outline" size={18} color={paperTheme.colors.primary} />
-            {pendingSessionsLoading ? (
-              <ActivityIndicator size="small" color={paperTheme.colors.primary} />
-            ) : (
-              <Text style={[styles.pendingBadgeCount, { color: paperTheme.colors.onSurface }]}>
-                {pendingCartCount}
+        <SlideToast
+          message={slideToastMessage}
+          onDismiss={hideSlideToast}
+          paperTheme={paperTheme}
+          durationMs={2000}
+        />
+
+        <View style={styles.headerBlock}>
+          <View style={styles.titleRow}>
+            <View style={styles.titleBlock}>
+              <Text style={[styles.title, { color: paperTheme.colors.onBackground }]}>Products</Text>
+              <Text style={[styles.sub, { color: paperTheme.colors.onSurfaceVariant }]}>
+                Tap + to add items to your active cart
               </Text>
-            )}
-          </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="View pending carts"
+              onPress={openPendingModal}
+              style={[
+                styles.cartFab,
+                { backgroundColor: paperTheme.colors.primary },
+                softShadow(resolvedTheme),
+              ]}
+            >
+              <Ionicons name="cart-outline" size={20} color={paperTheme.colors.onPrimary} />
+              {pendingSessionsLoading ? (
+                <ActivityIndicator size="small" color={paperTheme.colors.onPrimary} />
+              ) : pendingCartCount > 0 ? (
+                <View style={[styles.cartFabBadge, { backgroundColor: paperTheme.colors.error }]}>
+                  <Text style={styles.cartFabBadgeText}>{pendingCartCount}</Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+          </View>
+
+          <Pressable onPress={Keyboard.dismiss}>
+            <View
+              style={[
+                styles.summaryStrip,
+                {
+                  backgroundColor: paperTheme.colors.surfaceVariant,
+                  borderColor: paperTheme.colors.outlineVariant,
+                },
+              ]}
+            >
+              <View style={styles.summaryItem}>
+                <Text style={[styles.summaryValue, { color: paperTheme.colors.primary }]}>
+                  {filteredProducts.length}
+                </Text>
+                <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>Showing</Text>
+              </View>
+              <View style={[styles.summaryDivider, { backgroundColor: paperTheme.colors.outlineVariant }]} />
+              <View style={styles.summaryItem}>
+                <Text style={[styles.summaryValue, { color: paperTheme.colors.primary }]}>{products.length}</Text>
+                <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>Total</Text>
+              </View>
+              <View style={[styles.summaryDivider, { backgroundColor: paperTheme.colors.outlineVariant }]} />
+              <View style={styles.summaryItem}>
+                <Text style={[styles.summaryValue, { color: paperTheme.colors.primary }]}>{pendingCartCount}</Text>
+                <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>Pending</Text>
+              </View>
+            </View>
+          </Pressable>
         </View>
-
-        {activeSession.sessionId && activeSession.cartNumber ? (
-          <Text style={[styles.activeCart, { color: paperTheme.colors.primary }]}>
-            Adding to Cart #{activeSession.cartNumber}
-          </Text>
-        ) : null}
-
-        {selectedProductId ? (
-          <Text style={[styles.selectedId, { color: paperTheme.colors.onSurfaceVariant }]}>
-            Selected card id: {selectedProductId}
-          </Text>
-        ) : null}
 
         {categoriesError ? (
           <Text style={[styles.errorText, { color: paperTheme.colors.error }]}>{categoriesError}</Text>
@@ -440,115 +709,177 @@ export default function ProductsScreen({ navigation }: Props) {
           <Text style={[styles.errorText, { color: paperTheme.colors.error }]}>{productsError}</Text>
         ) : null}
 
-        <Text style={[styles.sectionLabel, { color: paperTheme.colors.onSurfaceVariant }]}>Categories</Text>
-
-        {categoriesLoading && !refreshing && categories.length === 0 ? (
-          <View style={styles.categoriesLoading}>
-            <ActivityIndicator size="small" color={paperTheme.colors.primary} />
-          </View>
-        ) : (
-          <View style={styles.chipsOuter}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chipsRow}
-              bounces={false}
+        <View
+          style={[
+            styles.filtersCard,
+            {
+              backgroundColor: paperTheme.colors.surface,
+              borderColor: paperTheme.colors.outlineVariant,
+            },
+            cardShadow(resolvedTheme),
+          ]}
+        >
+          <View style={styles.searchTopRow}>
+            <View
+              style={[
+                styles.searchWrap,
+                styles.searchWrapFlex,
+                {
+                  backgroundColor: paperTheme.colors.surfaceVariant,
+                  borderColor: paperTheme.colors.outlineVariant,
+                },
+              ]}
             >
+              <Ionicons name="search-outline" size={18} color={paperTheme.colors.onSurfaceVariant} />
+              <TextInput
+                value={nameSearchQuery}
+                onChangeText={setNameSearchQuery}
+                placeholder="Search name or category…"
+                placeholderTextColor={paperTheme.colors.onSurfaceVariant}
+                style={[styles.searchInput, { color: paperTheme.colors.onSurface }]}
+                autoCorrect={false}
+                autoCapitalize="none"
+                clearButtonMode="while-editing"
+              />
+              {nameSearchQuery.length > 0 ? (
+                <TouchableOpacity
+                  onPress={() => setNameSearchQuery('')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="close-circle" size={20} color={paperTheme.colors.onSurfaceVariant} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.scanBtn,
+                { backgroundColor: paperTheme.colors.primary },
+                softShadow(resolvedTheme),
+              ]}
+              onPress={openBarcodeScanner}
+              activeOpacity={0.9}
+              accessibilityRole="button"
+              accessibilityLabel="Scan barcode"
+            >
+              <Ionicons name="scan" size={20} color={paperTheme.colors.onPrimary} />
+            </TouchableOpacity>
+          </View>
+
+          {barcodeSearchQuery.length > 0 ? (
+            <View
+              style={[
+                styles.barcodeChip,
+                {
+                  backgroundColor: paperTheme.colors.primaryContainer,
+                  borderColor: `${paperTheme.colors.primary}33`,
+                },
+              ]}
+            >
+              <Ionicons name="barcode-outline" size={15} color={paperTheme.colors.primary} />
+              <Text
+                style={[styles.barcodeChipText, { color: paperTheme.colors.onPrimaryContainer }]}
+                numberOfLines={1}
+              >
+                {barcodeSearchQuery}
+              </Text>
               <TouchableOpacity
-                onPress={() => setSelectedCategoryId(null)}
+                onPress={clearBarcodeSearch}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Clear scanned barcode"
+              >
+                <Ionicons name="close-circle" size={18} color={paperTheme.colors.onPrimaryContainer} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {categoriesLoading && !refreshing && categories.length === 0 ? (
+            <View style={styles.categoriesLoading}>
+              <ActivityIndicator size="small" color={paperTheme.colors.primary} />
+            </View>
+          ) : (
+            <View style={styles.categoryFilterBlock}>
+              <Text style={[inventoryUi.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                Category
+              </Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Filter by category"
+                onPress={() => setCategoryDropdownVisible(true)}
+                activeOpacity={0.85}
                 style={[
-                  styles.chip,
-                  styles.chipTouchable,
+                  styles.categoryDropdown,
                   {
-                    backgroundColor: isAllSelected ? paperTheme.colors.primary : paperTheme.colors.surface,
-                    borderColor: paperTheme.colors.outline,
+                    backgroundColor: paperTheme.colors.surfaceVariant,
+                    borderColor: paperTheme.colors.outlineVariant,
                   },
                 ]}
               >
-                <Ionicons
-                  name="grid-outline"
-                  size={16}
-                  color={isAllSelected ? paperTheme.colors.onPrimary : paperTheme.colors.primary}
-                />
-                <Text
-                  style={[
-                    styles.chipName,
-                    { color: isAllSelected ? paperTheme.colors.onPrimary : paperTheme.colors.onSurface },
-                  ]}
-                  numberOfLines={1}
-                >
-                  All products
-                </Text>
+                {selectedCategory ? (
+                  <View style={styles.categoryDropdownInner}>
+                    <View style={[styles.categoryDot, { backgroundColor: selectedCategory.colorCode }]} />
+                    <Text
+                      style={[styles.categoryDropdownText, { color: paperTheme.colors.onSurface }]}
+                      numberOfLines={1}
+                    >
+                      {selectedCategory.name}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.categoryDropdownInner}>
+                    <Ionicons name="grid-outline" size={16} color={paperTheme.colors.primary} />
+                    <Text
+                      style={[styles.categoryDropdownText, { color: paperTheme.colors.onSurface }]}
+                      numberOfLines={1}
+                    >
+                      All categories
+                    </Text>
+                  </View>
+                )}
+                <Ionicons name="chevron-down" size={18} color={paperTheme.colors.onSurfaceVariant} />
               </TouchableOpacity>
-
               {categories.length === 0 && !categoriesLoading ? (
                 <Text style={[styles.emptyCategories, { color: paperTheme.colors.onSurfaceVariant }]}>
                   No categories yet.
                 </Text>
-              ) : (
-                categories.map((item) => {
-                  const selected = selectedCategoryId === item._id;
-                  return (
-                    <TouchableOpacity
-                      key={item._id}
-                      onPress={() => setSelectedCategoryId(item._id)}
-                      style={[
-                        styles.chip,
-                        styles.chipTouchable,
-                        {
-                          backgroundColor: selected ? paperTheme.colors.primary : paperTheme.colors.surface,
-                          borderColor: paperTheme.colors.outline,
-                        },
-                      ]}
-                    >
-                      <View style={[styles.chipDot, { backgroundColor: item.colorCode }]} />
-                      <Text
-                        style={[
-                          styles.chipName,
-                          {
-                            color: selected ? paperTheme.colors.onPrimary : paperTheme.colors.onSurface,
-                          },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {item.name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })
-              )}
-            </ScrollView>
-          </View>
-        )}
-
-        <View
-          style={[
-            styles.searchWrap,
-            { backgroundColor: paperTheme.colors.surface, borderColor: paperTheme.colors.outline },
-          ]}
-        >
-          <Ionicons name="search-outline" size={20} color={paperTheme.colors.onSurfaceVariant} />
-          <TextInput
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search product or category…"
-            placeholderTextColor={paperTheme.colors.onSurfaceVariant}
-            style={[styles.searchInput, { color: paperTheme.colors.onSurface }]}
-            autoCorrect={false}
-            autoCapitalize="none"
-            clearButtonMode="while-editing"
-          />
-          {searchQuery.length > 0 ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={22} color={paperTheme.colors.onSurfaceVariant} />
-            </TouchableOpacity>
-          ) : null}
+              ) : null}
+            </View>
+          )}
         </View>
 
-        <Text style={[styles.listHeader, { color: paperTheme.colors.onSurfaceVariant }]}>
-          {isAllSelected && !searchQuery.trim()
-            ? `All products · ${filteredProducts.length} shown`
-            : `${filteredProducts.length} shown`}
+        {activeSession.sessionId && activeSession.cartNumber ? (
+          <View
+            style={[
+              styles.activeCartBanner,
+              {
+                backgroundColor: paperTheme.colors.primaryContainer,
+                borderColor: `${paperTheme.colors.primary}44`,
+              },
+              softShadow(resolvedTheme),
+            ]}
+          >
+            <View style={[styles.activeCartIconWrap, { backgroundColor: paperTheme.colors.primary }]}>
+              <Ionicons name="cart" size={14} color={paperTheme.colors.onPrimary} />
+            </View>
+            <View style={styles.activeCartTextBlock}>
+              <Text style={[styles.activeCartTitle, { color: paperTheme.colors.onPrimaryContainer }]}>
+                Cart #{activeSession.cartNumber} selected
+              </Text>
+              <Text style={[styles.activeCartText, { color: paperTheme.colors.onPrimaryContainer }]}>
+                Use + / − on products to adjust quantities
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
+        <Text
+          style={[
+            inventoryUi.sectionEyebrow,
+            styles.listHeader,
+            { color: paperTheme.colors.onSurfaceVariant },
+          ]}
+        >
+          Catalog
         </Text>
 
         {isInitialLoading ? (
@@ -562,6 +893,8 @@ export default function ProductsScreen({ navigation }: Props) {
             keyExtractor={(item) => item._id}
             renderItem={renderProductRow}
             contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -578,13 +911,87 @@ export default function ProductsScreen({ navigation }: Props) {
                 <Text style={[styles.emptyListBody, { color: paperTheme.colors.onSurfaceVariant }]}>
                   {products.length === 0
                     ? 'Add products from Manage Inventory to see them here.'
-                    : 'Try another category or clear the search.'}
+                    : 'Try another category, name search, or scan a different barcode.'}
                 </Text>
               </View>
             }
-            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+            showsVerticalScrollIndicator={false}
           />
         )}
+
+        <Modal
+          visible={categoryDropdownVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={closeCategoryDropdown}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={closeCategoryDropdown}
+          >
+            <View
+              style={[styles.modalSheet, { backgroundColor: paperTheme.colors.surface }]}
+              onStartShouldSetResponder={() => true}
+            >
+              <View style={[styles.modalHandle, { backgroundColor: paperTheme.colors.outlineVariant }]} />
+              <Text style={[styles.modalTitle, { color: paperTheme.colors.onSurface }]}>Filter by category</Text>
+              <ScrollView style={styles.categoryModalList} keyboardShouldPersistTaps="handled">
+                <TouchableOpacity
+                  style={[
+                    styles.categoryOptionRow,
+                    { borderBottomColor: paperTheme.colors.outlineVariant },
+                    isAllSelected && { backgroundColor: paperTheme.colors.primaryContainer },
+                  ]}
+                  onPress={() => handleSelectCategory(null)}
+                >
+                  <Ionicons name="grid-outline" size={18} color={paperTheme.colors.primary} />
+                  <Text style={[styles.categoryOptionText, { color: paperTheme.colors.onSurface }]}>
+                    All categories
+                  </Text>
+                  {isAllSelected ? (
+                    <Ionicons name="checkmark" size={20} color={paperTheme.colors.primary} />
+                  ) : null}
+                </TouchableOpacity>
+
+                {categories.map((item) => {
+                  const selected = selectedCategoryId === item._id;
+                  return (
+                    <TouchableOpacity
+                      key={item._id}
+                      style={[
+                        styles.categoryOptionRow,
+                        { borderBottomColor: paperTheme.colors.outlineVariant },
+                        selected && { backgroundColor: paperTheme.colors.primaryContainer },
+                      ]}
+                      onPress={() => handleSelectCategory(item._id)}
+                    >
+                      <View style={[styles.categoryDot, { backgroundColor: item.colorCode }]} />
+                      <Text
+                        style={[styles.categoryOptionText, { color: paperTheme.colors.onSurface }]}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                      {selected ? (
+                        <Ionicons name="checkmark" size={20} color={paperTheme.colors.primary} />
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+              <TouchableOpacity
+                style={[styles.modalClose, { backgroundColor: paperTheme.colors.secondaryContainer }]}
+                onPress={closeCategoryDropdown}
+              >
+                <Text style={[styles.modalCloseText, { color: paperTheme.colors.onSecondaryContainer }]}>
+                  Close
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
 
         <Modal
           visible={pendingModalVisible}
@@ -601,17 +1008,43 @@ export default function ProductsScreen({ navigation }: Props) {
               style={[styles.modalSheet, { backgroundColor: paperTheme.colors.surface }]}
               onStartShouldSetResponder={() => true}
             >
-              <Text style={[styles.modalTitle, { color: paperTheme.colors.onSurface }]}>
-                Pending carts
-              </Text>
+              <View style={[styles.modalHandle, { backgroundColor: paperTheme.colors.outlineVariant }]} />
+              <View style={styles.modalTitleRow}>
+                <Text style={[styles.modalTitle, { color: paperTheme.colors.onSurface }]}>
+                  Pending carts
+                </Text>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Create new cart"
+                  disabled={creatingCart || addToCartLoading}
+                  onPress={() => {
+                    void handleCreateNewCart();
+                  }}
+                  style={[
+                    styles.modalNewCartBtn,
+                    {
+                      backgroundColor: paperTheme.colors.primary,
+                      opacity: creatingCart || addToCartLoading ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  {creatingCart ? (
+                    <ActivityIndicator size="small" color={paperTheme.colors.onPrimary} />
+                  ) : (
+                    <Ionicons name="add" size={20} color={paperTheme.colors.onPrimary} />
+                  )}
+                </TouchableOpacity>
+              </View>
               <ScrollView style={styles.modalList} keyboardShouldPersistTaps="handled">
                 {pendingSessions.length === 0 ? (
                   <Text style={[styles.modalEmpty, { color: paperTheme.colors.onSurfaceVariant }]}>
-                    No pending carts yet.
+                    No pending carts yet. Tap + to create one.
                   </Text>
                 ) : (
                   pendingSessions.map((session) => {
-                    const cartNumber = getCartNumberForSession(pendingSessions, session.sessionId);
+                    const cartNumber =
+                      session.cartNumber ?? getCartNumberForSession(pendingSessions, session.sessionId);
+                    const isActive = activeSession.sessionId === session.sessionId;
                     const isReviewing = reviewSessionId === session.sessionId;
                     const isManaging = manageLoadingSessionId === session.sessionId;
                     return (
@@ -620,10 +1053,12 @@ export default function ProductsScreen({ navigation }: Props) {
                         style={[
                           styles.modalCartCard,
                           {
-                            borderColor: paperTheme.colors.outline,
+                            borderColor: isActive ? paperTheme.colors.primary : paperTheme.colors.outline,
                             backgroundColor: isReviewing
                               ? paperTheme.colors.primaryContainer
-                              : paperTheme.colors.surfaceVariant,
+                              : isActive
+                                ? `${paperTheme.colors.primary}12`
+                                : paperTheme.colors.surfaceVariant,
                           },
                         ]}
                       >
@@ -632,13 +1067,32 @@ export default function ProductsScreen({ navigation }: Props) {
                             style={styles.modalCartBody}
                             onPress={() => handleReviewPendingSession(session)}
                           >
-                            <Text style={[styles.modalCartTitle, { color: paperTheme.colors.onSurface }]}>
-                              Cart #{cartNumber ?? '—'}
-                            </Text>
+                            <View style={styles.modalCartTitleRow}>
+                              <Text style={[styles.modalCartTitle, { color: paperTheme.colors.onSurface }]}>
+                                Cart #{cartNumber ?? '—'}
+                              </Text>
+                              {isActive ? (
+                                <View
+                                  style={[
+                                    styles.activeCartPill,
+                                    { backgroundColor: paperTheme.colors.primary },
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.activeCartPillText,
+                                      { color: paperTheme.colors.onPrimary },
+                                    ]}
+                                  >
+                                    Selected
+                                  </Text>
+                                </View>
+                              ) : null}
+                            </View>
                             <Text
                               style={[styles.modalCartMeta, { color: paperTheme.colors.onSurfaceVariant }]}
                             >
-                              {session.itemCount} item{session.itemCount === 1 ? '' : 's'} · $
+                              {session.itemCount} item{session.itemCount === 1 ? '' : 's'} · Rs.{' '}
                               {session.totalAmount.toFixed(2)}
                             </Text>
                           </TouchableOpacity>
@@ -740,89 +1194,427 @@ export default function ProductsScreen({ navigation }: Props) {
             onClose={hideAlert}
           />
         )}
+
+        <BarcodeScannerModal
+          visible={barcodeScannerVisible}
+          onClose={() => setBarcodeScannerVisible(false)}
+          onScanned={handleBarcodeScanned}
+          paperTheme={paperTheme}
+        />
       </SafeAreaView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, paddingHorizontal: 16 },
+  safe: { flex: 1, paddingHorizontal: 20 },
+  headerBlock: {
+    paddingTop: 4,
+    marginBottom: 10,
+  },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 12,
-    marginTop: 8,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   titleBlock: { flex: 1, minWidth: 0 },
   title: {
     fontFamily: fonts.PoppinsBold,
-    fontSize: 24,
-    marginBottom: 8,
+    fontSize: 26,
+    letterSpacing: -0.3,
+    marginBottom: 4,
   },
   sub: {
     fontFamily: fonts.PoppinsRegular,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  cartFab: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  cartFabBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  cartFabBadgeText: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 10,
+    color: '#fff',
+  },
+  summaryStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  summaryItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  summaryValue: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 15,
+  },
+  summaryLabel: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 11,
+  },
+  summaryDivider: {
+    width: 1,
+    height: 18,
+  },
+  filtersCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 10,
+    gap: 10,
+  },
+  searchTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  searchWrapFlex: { flex: 1 },
+  searchInput: {
+    flex: 1,
+    fontFamily: fonts.PoppinsRegular,
     fontSize: 14,
+    paddingVertical: 0,
+  },
+  scanBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  barcodeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  barcodeChipText: {
+    flex: 1,
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 12,
+  },
+  activeCartBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  activeCartIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeCartTextBlock: { flex: 1, gap: 1 },
+  activeCartTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 13,
+  },
+  activeCartText: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 11,
+    lineHeight: 15,
+    opacity: 0.9,
+  },
+  listHeader: {
     marginBottom: 8,
   },
-  pendingBadge: {
+  categoriesLoading: {
+    minHeight: 36,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  categoryFilterBlock: {
+    gap: 6,
+  },
+  categoryDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    gap: 8,
+  },
+  categoryDropdownInner: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
+  },
+  categoryDropdownText: {
+    flex: 1,
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 14,
+  },
+  categoryModalList: {
+    maxHeight: 360,
+  },
+  categoryOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  categoryOptionText: {
+    flex: 1,
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 15,
+  },
+  emptyCategories: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    paddingTop: 2,
+  },
+  productsLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  productList: { flex: 1 },
+  listContent: { paddingBottom: 28, flexGrow: 1 },
+  productCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  productRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  thumbWrap: {
+    width: 56,
+    height: 56,
+    position: 'relative',
+  },
+  thumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+  },
+  thumbPlaceholder: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cartBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+  },
+  stockBadge: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+  },
+  stockBadgeText: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 10,
+    color: '#fff',
+  },
+  cartBadgeText: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 10,
+  },
+  productBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 5,
+  },
+  productTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 4,
   },
-  pendingBadgeCount: {
+  productName: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 14,
-    minWidth: 16,
-    textAlign: 'center',
+    lineHeight: 18,
+    flex: 1,
   },
-  activeCart: {
+  pricePill: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  priceText: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 11,
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  categoryDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  categoryLabel: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 11,
+    flex: 1,
+  },
+  productActions: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyStepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 999,
+    borderWidth: 1,
+    padding: 3,
+    gap: 2,
+  },
+  qtyBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyBtnAdd: {},
+  qtyValue: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 13,
-    marginBottom: 6,
+    minWidth: 20,
+    textAlign: 'center',
   },
-  selectedId: {
-    fontFamily: fonts.PoppinsMedium,
-    fontSize: 12,
-    marginBottom: 12,
+  emptyList: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  emptyListTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 16,
+    marginTop: 12,
+  },
+  emptyListBody: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 6,
+  },
+  errorText: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 13,
+    marginBottom: 8,
   },
   modalBackdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalSheet: {
-    maxHeight: '78%',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 12,
+    maxHeight: '80%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 16,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 14,
   },
   modalTitle: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 18,
-    marginBottom: 12,
   },
-  modalList: {
-    maxHeight: 420,
+  modalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+    gap: 12,
   },
+  modalNewCartBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalList: { maxHeight: 420 },
   modalEmpty: {
     fontFamily: fonts.PoppinsRegular,
     fontSize: 14,
-    paddingVertical: 12,
+    paddingVertical: 16,
+    textAlign: 'center',
   },
   modalCartCard: {
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 18,
     padding: 14,
-    marginBottom: 12,
+    marginBottom: 10,
     gap: 10,
   },
   modalCartHeaderRow: {
@@ -830,14 +1622,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
   },
-  modalCartBody: {
-    flex: 1,
-    minWidth: 0,
-  },
+  modalCartBody: { flex: 1, minWidth: 0 },
   modalDeleteBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -845,28 +1634,40 @@ const styles = StyleSheet.create({
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 16,
   },
+  modalCartTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  activeCartPill: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  activeCartPillText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 10,
+  },
   modalCartMeta: {
     fontFamily: fonts.PoppinsRegular,
-    fontSize: 13,
-    marginTop: 4,
+    fontSize: 12,
+    marginTop: 3,
   },
-  reviewBlock: {
-    gap: 6,
-    marginTop: 4,
-  },
+  reviewBlock: { gap: 6, marginTop: 4 },
   reviewLine: {
     fontFamily: fonts.PoppinsRegular,
     fontSize: 13,
   },
   modalActions: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     marginTop: 4,
   },
   modalActionBtn: {
     flex: 1,
-    borderRadius: 12,
-    paddingVertical: 10,
+    borderRadius: 14,
+    paddingVertical: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -875,114 +1676,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   modalClose: {
-    marginTop: 4,
-    borderRadius: 12,
-    paddingVertical: 12,
+    marginTop: 6,
+    borderRadius: 14,
+    paddingVertical: 13,
     alignItems: 'center',
   },
   modalCloseText: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 14,
   },
-  errorText: { fontFamily: fonts.PoppinsRegular, fontSize: 13, marginBottom: 8 },
-  sectionLabel: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 13,
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  categoriesLoading: { minHeight: 44, justifyContent: 'center', alignItems: 'flex-start', marginBottom: 6 },
-  chipsOuter: { maxHeight: 52, marginBottom: 8 },
-  chipsRow: { gap: 10, paddingBottom: 0, alignItems: 'center' },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    maxWidth: 220,
-    borderWidth: 1,
-  },
-  chipTouchable: { alignSelf: 'flex-start' },
-  chipDot: { width: 10, height: 10, borderRadius: 5 },
-  chipName: { fontFamily: fonts.PoppinsSemiBold, fontSize: 14, flexShrink: 1 },
-  emptyCategories: { fontFamily: fonts.PoppinsRegular, fontSize: 14, paddingVertical: 8, alignSelf: 'center' },
-  searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 10,
-  },
-  searchInput: {
-    flex: 1,
-    fontFamily: fonts.PoppinsRegular,
-    fontSize: 15,
-    paddingVertical: 0,
-  },
-  listHeader: {
-    fontFamily: fonts.PoppinsMedium,
-    fontSize: 12,
-    marginBottom: 8,
-  },
-  productsLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  productList: { flex: 1 },
-  listContent: { paddingBottom: 24, flexGrow: 1 },
-  productCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 12,
-  },
-  productImage: {
-    width: 84,
-    height: 84,
-    borderRadius: 14,
-  },
-  productImagePlaceholder: {
-    width: 84,
-    height: 84,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  productBody: { flex: 1, minWidth: 0, gap: 4 },
-  productActions: { alignItems: 'center', justifyContent: 'center', gap: 10, minWidth: 88 },
-  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  qtyButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  qtyValue: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 16,
-    minWidth: 20,
-    textAlign: 'center',
-  },
-  addButton: {
-    minWidth: 72,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addButtonText: { fontFamily: fonts.PoppinsSemiBold, fontSize: 13 },
-  productName: { fontFamily: fonts.PoppinsSemiBold, fontSize: 17 },
-  productCategory: { fontFamily: fonts.PoppinsRegular, fontSize: 13 },
-  productPrice: { fontFamily: fonts.PoppinsBold, fontSize: 18, marginTop: 4 },
-  emptyList: { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 },
-  emptyListTitle: { fontFamily: fonts.PoppinsSemiBold, fontSize: 16, marginTop: 12 },
-  emptyListBody: { fontFamily: fonts.PoppinsRegular, fontSize: 14, textAlign: 'center', marginTop: 6 },
 });

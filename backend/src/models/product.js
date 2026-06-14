@@ -57,12 +57,24 @@ productSchema.pre('validate', function normalizeProductFields() {
   if (this.cost === undefined || this.cost === '' || Number.isNaN(Number(this.cost))) {
     this.cost = null;
   }
+
+  if (this.barcode === undefined || this.barcode === null || String(this.barcode).trim() === '') {
+    this.barcode = null;
+  } else {
+    this.barcode = String(this.barcode).trim();
+  }
 });
 
 productSchema.index({ shopId: 1, productName: 1 });
 productSchema.index(
   { shopId: 1, barcode: 1 },
-  { unique: true, partialFilterExpression: { barcode: { $type: 'string', $nin: [null, ''] } } },
+  {
+    unique: true,
+    name: 'shopId_barcode_unique_when_set',
+    partialFilterExpression: {
+      barcode: { $exists: true, $type: 'string', $gt: '' },
+    },
+  },
 );
 
 module.exports = mongoose.model('Product', productSchema);

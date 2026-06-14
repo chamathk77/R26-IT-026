@@ -80,6 +80,35 @@ function normalizeBarcode(barcode) {
   return barcodeTrimmed || null;
 }
 
+async function assignBarcodeToProductFields(productFields, shopId, barcode, excludeProductId = null) {
+  const normalized = normalizeBarcode(barcode);
+  if (!normalized) {
+    productFields.barcode = null;
+    return null;
+  }
+
+  const filter = { shopId, barcode: normalized };
+  if (excludeProductId) {
+    filter._id = { $ne: excludeProductId };
+  }
+
+  const conflict = await Product.findOne(filter).select('_id').lean();
+  if (conflict) {
+    return 'A product with this barcode already exists for this shop';
+  }
+
+  productFields.barcode = normalized;
+  return null;
+}
+
+function duplicateKeyMessage(error) {
+  const keyPattern = error?.keyPattern || {};
+  if (keyPattern.barcode) {
+    return 'A product with this barcode already exists for this shop';
+  }
+  return 'Duplicate product value for this shop';
+}
+
 function resolveQtyFields({ isInventoryAvailable, qty, requireQty = false }) {
   if (!isInventoryAvailable) {
     return { isInventoryAvailable: false, qty: null };
@@ -110,10 +139,6 @@ function applyInventoryUpdates(updates, existing, body) {
 
   if (inventoryToggled) {
     updates.isInventoryAvailable = nextInventoryAvailable;
-  }
-
-  if (body.barcode !== undefined) {
-    updates.barcode = normalizeBarcode(body.barcode);
   }
 
   const effectiveInventory = updates.isInventoryAvailable ?? existing.isInventoryAvailable;
@@ -254,7 +279,12 @@ const createProduct = async (req, res) => {
       }
       productFields.isInventoryAvailable = qtyFields.isInventoryAvailable;
       productFields.qty = qtyFields.qty;
-      productFields.barcode = normalizeBarcode(barcode);
+
+      const barcodeError = await assignBarcodeToProductFields(productFields, shopId, barcode);
+      if (barcodeError) {
+        rollbackUploadedFile(req);
+        return res.status(400).json({ message: barcodeError, success: false });
+      }
     }
 
     const product = await Product.create(productFields);
@@ -271,7 +301,7 @@ const createProduct = async (req, res) => {
     rollbackUploadedFile(req);
     if (error.code === 11000) {
       return res.status(400).json({
-        message: 'A product with this barcode already exists for this shop',
+        message: duplicateKeyMessage(error),
         success: false,
       });
     }
@@ -387,6 +417,19 @@ const updateProduct = async (req, res) => {
         }
       }
 
+      if (req.body.barcode !== undefined) {
+        const barcodeError = await assignBarcodeToProductFields(
+          updates,
+          shopId,
+          req.body.barcode,
+          existing._id,
+        );
+        if (barcodeError) {
+          rollbackUploadedFile(req);
+          return res.status(400).json({ message: barcodeError, success: false });
+        }
+      }
+
       const inventoryError = applyInventoryUpdates(updates, existing, req.body);
       if (inventoryError) {
         return res.status(400).json({ message: inventoryError, success: false });
@@ -414,7 +457,7 @@ const updateProduct = async (req, res) => {
     rollbackUploadedFile(req);
     if (error.code === 11000) {
       return res.status(400).json({
-        message: 'A product with this barcode already exists for this shop',
+        message: duplicateKeyMessage(error),
         success: false,
       });
     }

@@ -3,6 +3,8 @@ import {
   addCartItem_Service,
   addProductToPendingCart_Service,
   checkoutCartSession_Service,
+  createCartSession_Service,
+  createNewPendingCart_Service,
   deleteAddedCartSession_Service,
   fetchAddedCartSessions_Service,
   fetchCartItems_Service,
@@ -254,6 +256,45 @@ export const CartSlice = createSlice({
       const payload = action.payload as { message?: string } | undefined;
       state.addToCart.error =
         payload?.message || action.error.message || 'Could not add item to cart';
+    });
+
+    builder.addCase(createCartSession_Service.pending, (state) => {
+      state.addToCart.loading = true;
+      state.addToCart.error = null;
+    });
+    builder.addCase(createCartSession_Service.fulfilled, (state, action) => {
+      state.addToCart.loading = false;
+      state.addToCart.error = null;
+      state.activeSession = {
+        sessionId: action.payload.sessionId,
+        cartNumber: action.payload.cartNumber,
+      };
+    });
+    builder.addCase(createCartSession_Service.rejected, (state, action) => {
+      state.addToCart.loading = false;
+      const payload = action.payload as { message?: string } | undefined;
+      state.addToCart.error =
+        payload?.message || action.error.message || 'Could not create cart';
+    });
+
+    builder.addCase(createNewPendingCart_Service.pending, (state) => {
+      state.addToCart.loading = true;
+      state.addToCart.error = null;
+    });
+    builder.addCase(createNewPendingCart_Service.fulfilled, (state, action) => {
+      state.addToCart.loading = false;
+      state.addToCart.error = null;
+      state.activeSession = {
+        sessionId: action.payload.sessionId,
+        cartNumber: action.payload.cartNumber,
+      };
+      state.sessionItems = initialState.sessionItems;
+    });
+    builder.addCase(createNewPendingCart_Service.rejected, (state, action) => {
+      state.addToCart.loading = false;
+      const payload = action.payload as { message?: string } | undefined;
+      state.addToCart.error =
+        payload?.message || action.error.message || 'Could not create cart';
     });
 
     builder.addCase(addCartItem_Service.pending, (state) => {

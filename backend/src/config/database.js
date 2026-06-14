@@ -18,6 +18,15 @@ async function connectDatabase() {
     throw err;
   }
   console.log(`MongoDB connected (database: ${mongoose.connection.db.databaseName})`);
+
+  const Product = require('../models/product');
+  try {
+    await Product.collection.dropIndex('shopId_1_barcode_1');
+    console.log('Dropped legacy product barcode index (shopId_1_barcode_1)');
+  } catch (_) {
+    // Index may not exist or already replaced.
+  }
+  await Product.syncIndexes();
 }
 
 module.exports = { connectDatabase };

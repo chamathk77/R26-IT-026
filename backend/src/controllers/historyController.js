@@ -26,6 +26,11 @@ function mapHistoryRecord(record) {
 
 const checkoutCart = async (req, res) => {
   try {
+    const shopId = req.user?.shopId ? String(req.user.shopId).trim().toUpperCase() : '';
+    if (!shopId) {
+      return res.status(400).json({ success: false, message: 'Shop id is required' });
+    }
+
     const { sessionId } = req.body;
 
     if (!sessionId || !mongoose.Types.ObjectId.isValid(sessionId)) {
@@ -33,6 +38,7 @@ const checkoutCart = async (req, res) => {
     }
 
     const cart = await Cart.findOne({
+      shopId,
       user: req.user.id,
       sessionId,
       status: 'added',
