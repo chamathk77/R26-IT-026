@@ -347,18 +347,17 @@ export default function CartScreen({ navigation }: Props) {
   const {
     items: addedSessions,
     loading: addedSessionsLoading,
-    error: addedSessionsError,
   } = useSelector((state: RootState) => state.CartReducer.addedSessions);
-  const { sessionId, cartNumber, order, loading, error } = useSelector(
+  const { sessionId, cartNumber, order, loading } = useSelector(
     (state: RootState) => state.CartReducer.cartTab,
   );
-  const { loading: checkoutLoading, error: checkoutError } = useSelector(
+  const { loading: checkoutLoading } = useSelector(
     (state: RootState) => state.CartReducer.checkout,
   );
-  const { loadingSessionId: manageLoadingSessionId, error: manageAddedError } = useSelector(
+  const { loadingSessionId: manageLoadingSessionId } = useSelector(
     (state: RootState) => state.CartReducer.manageAdded,
   );
-  const { loadingProductId: editLoadingProductId, error: editCartError } = useSelector(
+  const { loadingProductId: editLoadingProductId } = useSelector(
     (state: RootState) => state.CartReducer.editCart,
   );
   const { items: products } = useSelector((state: RootState) => state.ProductReducer.list);
@@ -455,7 +454,6 @@ export default function CartScreen({ navigation }: Props) {
 
   const addedCartCount = shopAddedSessions.length;
   const itemCount = items.length;
-  const hasShop = Boolean(shopId?.trim());
 
   const discountPreview = useMemo(() => {
     if (!discountEnabled || totalAmount <= 0) {
@@ -500,12 +498,67 @@ export default function CartScreen({ navigation }: Props) {
   }, [dispatch, shopId]);
 
   const loadAddedSessions = useCallback(async () => {
-    if (!hasShop) return;
-    await dispatch(fetchAddedCartSessions_Service());
-  }, [dispatch, hasShop]);
+    if (!shopId) {
+      setTimeout(() => {
+        show_Alert(
+          'error',
+          'Error',
+          'Shop not found. Please log in again.',
+          1,
+          false,
+          'OK',
+          () => {},
+        );
+      }, 150);
+      return;
+    }
+
+    try {
+      const response = await dispatch(fetchAddedCartSessions_Service()).unwrap();
+      console.log('response in loadAddedSessions', response);
+    } catch (error: unknown) {
+      console.log('error in loadAddedSessions', error);
+
+      const handled = await handleSessionExpiredApiError(error, show_Alert);
+      if (handled) return;
+
+      setTimeout(() => {
+        const message =
+          error && typeof error === 'object' && 'message' in error
+            ? String((error as { message?: string }).message)
+            : 'Could not load added carts. Please try again.';
+        show_Alert(
+          'error',
+          'Load failed',
+          message,
+          2,
+          false,
+          'Retry',
+          () => {
+            void loadAddedSessions();
+          },
+          'Cancel',
+          () => {},
+        );
+      }, 150);
+    }
+  }, [dispatch, shopId, show_Alert]);
 
   const loadSelectedCart = useCallback(async () => {
-    if (!hasShop) return;
+    if (!shopId) {
+      setTimeout(() => {
+        show_Alert(
+          'error',
+          'Error',
+          'Shop not found. Please log in again.',
+          1,
+          false,
+          'OK',
+          () => {},
+        );
+      }, 150);
+      return;
+    }
 
     const { cartTab, addedSessions: latestAdded } = store.getState().CartReducer;
     const selectedSessionId = cartTab.sessionId;
@@ -520,27 +573,100 @@ export default function CartScreen({ navigation }: Props) {
       return;
     }
 
-    await dispatch(
-      fetchCartItems_Service({
-        sessionId: selectedSessionId,
-        status: 'added',
-      }),
-    );
-  }, [dispatch, hasShop, shopId]);
+    try {
+      const response = await dispatch(
+        fetchCartItems_Service({
+          sessionId: selectedSessionId,
+          status: 'added',
+        }),
+      ).unwrap();
+      console.log('response in loadSelectedCart', response);
+    } catch (error: unknown) {
+      console.log('error in loadSelectedCart', error);
+
+      const handled = await handleSessionExpiredApiError(error, show_Alert);
+      if (handled) return;
+
+      setTimeout(() => {
+        const message =
+          error && typeof error === 'object' && 'message' in error
+            ? String((error as { message?: string }).message)
+            : 'Could not load cart items. Please try again.';
+        show_Alert(
+          'error',
+          'Load failed',
+          message,
+          2,
+          false,
+          'Retry',
+          () => {
+            void loadSelectedCart();
+          },
+          'Cancel',
+          () => {},
+        );
+      }, 150);
+    }
+  }, [dispatch, shopId, show_Alert]);
+
+  const loadProducts = useCallback(async () => {
+    if (!shopId) {
+      setTimeout(() => {
+        show_Alert(
+          'error',
+          'Error',
+          'Shop not found. Please log in again.',
+          1,
+          false,
+          'OK',
+          () => {},
+        );
+      }, 150);
+      return;
+    }
+
+    try {
+      const response = await dispatch(fetchProducts_Service()).unwrap();
+      console.log('response in loadProducts', response);
+    } catch (error: unknown) {
+      console.log('error in loadProducts', error);
+
+      const handled = await handleSessionExpiredApiError(error, show_Alert);
+      if (handled) return;
+
+      setTimeout(() => {
+        const message =
+          error && typeof error === 'object' && 'message' in error
+            ? String((error as { message?: string }).message)
+            : 'Could not load products. Please try again.';
+        show_Alert(
+          'error',
+          'Load failed',
+          message,
+          2,
+          false,
+          'Retry',
+          () => {
+            void loadProducts();
+          },
+          'Cancel',
+          () => {},
+        );
+      }, 150);
+    }
+  }, [dispatch, shopId, show_Alert]);
 
   const reloadCartScreen = useCallback(async () => {
-    if (!hasShop) return;
+    if (!shopId) return;
     await loadAddedSessions();
     await loadSelectedCart();
-  }, [hasShop, loadAddedSessions, loadSelectedCart]);
+  }, [loadAddedSessions, loadSelectedCart, shopId]);
 
   useFocusEffect(
     useCallback(() => {
       void reloadCartScreen();
-      if (hasShop) {
-        void dispatch(fetchProducts_Service());
-      }
-    }, [dispatch, hasShop, reloadCartScreen]),
+      void loadProducts();
+    }, [loadProducts, reloadCartScreen]),
   );
 
   const openAddedModal = useCallback(() => {
@@ -554,6 +680,21 @@ export default function CartScreen({ navigation }: Props) {
 
   const handleSelectAddedSession = useCallback(
     async (session: CartSessionSummary) => {
+      if (!shopId) {
+        setTimeout(() => {
+          show_Alert(
+            'error',
+            'Error',
+            'Shop not found. Please log in again.',
+            1,
+            false,
+            'OK',
+            () => {},
+          );
+        }, 150);
+        return;
+      }
+
       if (!filterAddedSessionsForShop([session], shopId).length) return;
 
       const resolvedCartNumber = getCartNumberForSession(shopAddedSessions, session.sessionId);
@@ -564,14 +705,43 @@ export default function CartScreen({ navigation }: Props) {
         }),
       );
       closeAddedModal();
-      await dispatch(
-        fetchCartItems_Service({
-          sessionId: session.sessionId,
-          status: 'added',
-        }),
-      );
+
+      try {
+        const response = await dispatch(
+          fetchCartItems_Service({
+            sessionId: session.sessionId,
+            status: 'added',
+          }),
+        ).unwrap();
+        console.log('response in handleSelectAddedSession', response);
+      } catch (error: unknown) {
+        console.log('error in handleSelectAddedSession', error);
+
+        const handled = await handleSessionExpiredApiError(error, show_Alert);
+        if (handled) return;
+
+        setTimeout(() => {
+          const message =
+            error && typeof error === 'object' && 'message' in error
+              ? String((error as { message?: string }).message)
+              : 'Could not load cart items. Please try again.';
+          show_Alert(
+            'error',
+            'Load failed',
+            message,
+            2,
+            false,
+            'Retry',
+            () => {
+              void handleSelectAddedSession(session);
+            },
+            'Cancel',
+            () => {},
+          );
+        }, 150);
+      }
     },
-    [closeAddedModal, dispatch, shopAddedSessions, shopId],
+    [closeAddedModal, dispatch, shopAddedSessions, shopId, show_Alert],
   );
 
   const buildCheckoutPayload = useCallback((): CheckoutCartRequest | null => {
@@ -660,7 +830,7 @@ export default function CartScreen({ navigation }: Props) {
   const handleConfirmCheckout = useCallback(async () => {
     if (!sessionId || items.length === 0 || checkoutLoading) return;
 
-    if (!hasShop) {
+    if (!shopId) {
       setTimeout(() => {
         show_Alert(
           'error',
@@ -694,7 +864,8 @@ export default function CartScreen({ navigation }: Props) {
     if (!payload) return;
 
     try {
-      await dispatch(checkoutCartSession_Service(payload)).unwrap();
+      const checkoutResponse = await dispatch(checkoutCartSession_Service(payload)).unwrap();
+      console.log('response in checkoutCartSession', checkoutResponse);
 
       const historyResponse = await dispatch(
         createHistory_Service({
@@ -704,7 +875,6 @@ export default function CartScreen({ navigation }: Props) {
           paymentOption: selectedPaymentMethod,
         }),
       ).unwrap();
-
       console.log('response in handleConfirmCheckout', historyResponse);
 
       setPaymentModalVisible(false);
@@ -720,15 +890,11 @@ export default function CartScreen({ navigation }: Props) {
         navigation.navigate('History');
       }, 1600);
 
-      if (hasShop) {
-        void dispatch(fetchProducts_Service());
-      }
+      void loadProducts();
     } catch (error: unknown) {
       console.log('error in handleConfirmCheckout', error);
 
-      if (hasShop) {
-        void dispatch(fetchProducts_Service());
-      }
+      void loadProducts();
 
       const handled = await handleSessionExpiredApiError(error, show_Alert);
       if (handled) return;
@@ -759,11 +925,12 @@ export default function CartScreen({ navigation }: Props) {
     customerName,
     customerPhone,
     dispatch,
-    hasShop,
     items.length,
+    loadProducts,
     navigation,
     selectedPaymentMethod,
     sessionId,
+    shopId,
     show_Alert,
     showSlideToast,
   ]);
@@ -772,31 +939,124 @@ export default function CartScreen({ navigation }: Props) {
     async (targetSessionId: string) => {
       if (manageLoadingSessionId) return;
 
+      if (!shopId) {
+        setTimeout(() => {
+          show_Alert(
+            'error',
+            'Error',
+            'Shop not found. Please log in again.',
+            1,
+            false,
+            'OK',
+            () => {},
+          );
+        }, 150);
+        return;
+      }
+
       try {
-        await dispatch(revertAddedCartToPending_Service(targetSessionId)).unwrap();
-      } catch (err: unknown) {
-        console.log('Revert added cart:', err);
+        const response = await dispatch(revertAddedCartToPending_Service(targetSessionId)).unwrap();
+        console.log('response in handleGoBackToPending', response);
+      } catch (error: unknown) {
+        console.log('error in handleGoBackToPending', error);
+
+        const handled = await handleSessionExpiredApiError(error, show_Alert);
+        if (handled) return;
+
+        setTimeout(() => {
+          const message =
+            error && typeof error === 'object' && 'message' in error
+              ? String((error as { message?: string }).message)
+              : 'Could not move cart back to pending. Please try again.';
+          show_Alert(
+            'error',
+            'Update failed',
+            message,
+            2,
+            false,
+            'Retry',
+            () => {
+              void handleGoBackToPending(targetSessionId);
+            },
+            'Cancel',
+            () => {},
+          );
+        }, 150);
       }
     },
-    [dispatch, manageLoadingSessionId],
+    [dispatch, manageLoadingSessionId, shopId, show_Alert],
   );
 
   const handleDeleteAddedCart = useCallback(
     async (targetSessionId: string) => {
       if (manageLoadingSessionId) return;
 
+      if (!shopId) {
+        setTimeout(() => {
+          show_Alert(
+            'error',
+            'Error',
+            'Shop not found. Please log in again.',
+            1,
+            false,
+            'OK',
+            () => {},
+          );
+        }, 150);
+        return;
+      }
+
       try {
-        await dispatch(deleteAddedCartSession_Service(targetSessionId)).unwrap();
-      } catch (err: unknown) {
-        console.log('Delete added cart:', err);
+        const response = await dispatch(deleteAddedCartSession_Service(targetSessionId)).unwrap();
+        console.log('response in handleDeleteAddedCart', response);
+      } catch (error: unknown) {
+        console.log('error in handleDeleteAddedCart', error);
+
+        const handled = await handleSessionExpiredApiError(error, show_Alert);
+        if (handled) return;
+
+        setTimeout(() => {
+          const message =
+            error && typeof error === 'object' && 'message' in error
+              ? String((error as { message?: string }).message)
+              : 'Could not delete cart. Please try again.';
+          show_Alert(
+            'error',
+            'Delete failed',
+            message,
+            2,
+            false,
+            'Retry',
+            () => {
+              void handleDeleteAddedCart(targetSessionId);
+            },
+            'Cancel',
+            () => {},
+          );
+        }, 150);
       }
     },
-    [dispatch, manageLoadingSessionId],
+    [dispatch, manageLoadingSessionId, shopId, show_Alert],
   );
 
   const handleIncreaseQuantity = useCallback(
     async (item: CartOrderItem) => {
       if (!sessionId || editLoadingProductId) return;
+
+      if (!shopId) {
+        setTimeout(() => {
+          show_Alert(
+            'error',
+            'Error',
+            'Shop not found. Please log in again.',
+            1,
+            false,
+            'OK',
+            () => {},
+          );
+        }, 150);
+        return;
+      }
 
       const product = productById.get(item.productId);
       const stockLimitMessage = product
@@ -808,55 +1068,157 @@ export default function CartScreen({ navigation }: Props) {
       }
 
       try {
-        await dispatch(
+        const response = await dispatch(
           updateAddedCartItemQuantity_Service({
             sessionId,
             productId: item.productId,
             quantity: item.quantity + 1,
           }),
         ).unwrap();
-      } catch (err: unknown) {
-        console.log('Increase cart item quantity:', err);
+        console.log('response in handleIncreaseQuantity', response);
+      } catch (error: unknown) {
+        console.log('error in handleIncreaseQuantity', error);
+
+        const handled = await handleSessionExpiredApiError(error, show_Alert);
+        if (handled) return;
+
+        setTimeout(() => {
+          const message =
+            error && typeof error === 'object' && 'message' in error
+              ? String((error as { message?: string }).message)
+              : 'Could not update item quantity. Please try again.';
+          show_Alert(
+            'error',
+            'Update failed',
+            message,
+            2,
+            false,
+            'Retry',
+            () => {
+              void handleIncreaseQuantity(item);
+            },
+            'Cancel',
+            () => {},
+          );
+        }, 150);
       }
     },
-    [dispatch, editLoadingProductId, productById, sessionId, showSlideToast],
+    [dispatch, editLoadingProductId, productById, sessionId, shopId, show_Alert, showSlideToast],
   );
 
   const handleDecreaseQuantity = useCallback(
     async (item: CartOrderItem) => {
       if (!sessionId || editLoadingProductId || item.quantity <= 1) return;
 
+      if (!shopId) {
+        setTimeout(() => {
+          show_Alert(
+            'error',
+            'Error',
+            'Shop not found. Please log in again.',
+            1,
+            false,
+            'OK',
+            () => {},
+          );
+        }, 150);
+        return;
+      }
+
       try {
-        await dispatch(
+        const response = await dispatch(
           updateAddedCartItemQuantity_Service({
             sessionId,
             productId: item.productId,
             quantity: item.quantity - 1,
           }),
         ).unwrap();
-      } catch (err: unknown) {
-        console.log('Decrease cart item quantity:', err);
+        console.log('response in handleDecreaseQuantity', response);
+      } catch (error: unknown) {
+        console.log('error in handleDecreaseQuantity', error);
+
+        const handled = await handleSessionExpiredApiError(error, show_Alert);
+        if (handled) return;
+
+        setTimeout(() => {
+          const message =
+            error && typeof error === 'object' && 'message' in error
+              ? String((error as { message?: string }).message)
+              : 'Could not update item quantity. Please try again.';
+          show_Alert(
+            'error',
+            'Update failed',
+            message,
+            2,
+            false,
+            'Retry',
+            () => {
+              void handleDecreaseQuantity(item);
+            },
+            'Cancel',
+            () => {},
+          );
+        }, 150);
       }
     },
-    [dispatch, editLoadingProductId, sessionId],
+    [dispatch, editLoadingProductId, sessionId, shopId, show_Alert],
   );
 
   const handleDeleteCartItem = useCallback(
     async (item: CartOrderItem) => {
       if (!sessionId || editLoadingProductId) return;
 
+      if (!shopId) {
+        setTimeout(() => {
+          show_Alert(
+            'error',
+            'Error',
+            'Shop not found. Please log in again.',
+            1,
+            false,
+            'OK',
+            () => {},
+          );
+        }, 150);
+        return;
+      }
+
       try {
-        await dispatch(
+        const response = await dispatch(
           removeAddedCartItem_Service({
             sessionId,
             productId: item.productId,
           }),
         ).unwrap();
-      } catch (err: unknown) {
-        console.log('Delete cart item:', err);
+        console.log('response in handleDeleteCartItem', response);
+      } catch (error: unknown) {
+        console.log('error in handleDeleteCartItem', error);
+
+        const handled = await handleSessionExpiredApiError(error, show_Alert);
+        if (handled) return;
+
+        setTimeout(() => {
+          const message =
+            error && typeof error === 'object' && 'message' in error
+              ? String((error as { message?: string }).message)
+              : 'Could not remove cart item. Please try again.';
+          show_Alert(
+            'error',
+            'Delete failed',
+            message,
+            2,
+            false,
+            'Retry',
+            () => {
+              void handleDeleteCartItem(item);
+            },
+            'Cancel',
+            () => {},
+          );
+        }, 150);
       }
     },
-    [dispatch, editLoadingProductId, sessionId],
+    [dispatch, editLoadingProductId, sessionId, shopId, show_Alert],
   );
 
   const renderCartItem = ({ item }: { item: CartOrderItem }) => {
@@ -1056,8 +1418,6 @@ export default function CartScreen({ navigation }: Props) {
     cartListRef.current = ref;
   }, []);
 
-  const screenError = error ?? addedSessionsError ?? checkoutError ?? manageAddedError ?? editCartError;
-
   return (
     <>
       <StatusBar
@@ -1106,11 +1466,7 @@ export default function CartScreen({ navigation }: Props) {
           </TouchableOpacity>
         </View>
 
-        {screenError ? (
-          <Text style={[styles.errorText, { color: paperTheme.colors.error }]}>{screenError}</Text>
-        ) : null}
-
-        {!hasShop ? (
+        {!shopId ? (
           <Text style={[styles.errorText, { color: paperTheme.colors.onSurfaceVariant }]}>
             No shop linked to this account. Added carts cannot be loaded.
           </Text>
