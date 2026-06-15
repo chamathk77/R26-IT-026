@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   FlatList,
   Modal,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -16,10 +17,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
+import { KeyboardAwareFlatList } from 'react-native-keyboard-aware-scroll-view';
 import { useDispatch, useSelector } from 'react-redux';
 import { MainBottomTabParamList } from '../../navigation/MainBottomTabParamList';
 import { fonts } from '../../constants/fonts';
 import { useTheme } from '../../context/ThemeContext';
+import { MD3Theme } from 'react-native-paper';
 import {
   checkoutCartSession_Service,
   deleteAddedCartSession_Service,
@@ -37,6 +40,7 @@ import { Product } from '../../type/product';
 import { getCartOrderItemKey } from '../../utils/cartOrder';
 import { getCartNumberForSession, filterAddedSessionsForShop } from '../../utils/cartSession';
 import { getStockLimitToastMessage, isAtProductStockLimit } from '../../utils/productStock';
+import { CheckoutCartRequest } from '../../type/history';
 import SlideToast from '../../components/SlideToast/SlideToast';
 import { cardShadow } from '../settings/shared/settingsDetailStyles';
 import { softShadow } from './ManageInventory/inventoryUiStyles';
@@ -53,6 +57,277 @@ function formatAmount(amount: number | null | undefined): string {
 function formatCurrency(amount: number): string {
   return `Rs. ${amount.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
+function parseAmountInput(value: string | undefined): number {
+  if (!value?.trim()) return 0;
+  const parsed = Number.parseFloat(value.replace(/,/g, '').trim());
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function sanitizeAmountInput(value: string): string {
+  const cleaned = value.replace(/[^0-9.]/g, '');
+  const parts = cleaned.split('.');
+  if (parts.length <= 1) return cleaned;
+  return `${parts[0]}.${parts.slice(1).join('')}`;
+}
+
+function getCheckoutValidationError(
+  items: CartOrderItem[],
+  productById: Map<string, Product>,
+  serviceAmounts: Record<string, string>,
+  discountEnabled: boolean,
+  discountMode: DiscountMode,
+  discountValue: string,
+): string | null {
+  for (const item of items) {
+    const product = productById.get(item.productId);
+    if (product?.type !== 'service') continue;
+
+    const amount = parseAmountInput(serviceAmounts[item.productId]);
+    if (amount <= 0) {
+      return `Enter service amount for ${item.name}`;
+    }
+  }
+
+  if (discountEnabled) {
+    const parsed = Number.parseFloat(discountValue.replace(/,/g, '').trim());
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return 'Enter a valid discount value';
+    }
+    if (discountMode === 'percentage' && parsed > 100) {
+      return 'Percentage discount cannot exceed 100';
+    }
+  }
+
+  return null;
+}
+
+type CartOrderFooterProps = {
+  paperTheme: MD3Theme;
+  resolvedTheme: 'light' | 'dark';
+  discountEnabled: boolean;
+  discountMode: DiscountMode;
+  discountValue: string;
+  onDiscountEnabledChange: (value: boolean) => void;
+  onDiscountModeChange: (mode: DiscountMode) => void;
+  onDiscountValueChange: (value: string) => void;
+  discountCheckoutTotal: number;
+  discountAmount: number;
+  totalAmount: number;
+  checkoutLoading: boolean;
+  onCheckout: () => void;
+};
+
+const CartOrderFooter = React.memo(function CartOrderFooter({
+  paperTheme,
+  resolvedTheme,
+  discountEnabled,
+  discountMode,
+  discountValue,
+  onDiscountEnabledChange,
+  onDiscountModeChange,
+  onDiscountValueChange,
+  discountCheckoutTotal,
+  discountAmount,
+  totalAmount,
+  checkoutLoading,
+  onCheckout,
+}: CartOrderFooterProps) {
+  return (
+    <View style={styles.cartFooter}>
+      <View
+        style={[
+          styles.discountCard,
+          { backgroundColor: paperTheme.colors.surface },
+          cardShadow(resolvedTheme),
+        ]}
+      >
+        <View style={styles.discountHeaderRow}>
+          <View style={styles.discountTitleBlock}>
+            <Ionicons name="pricetag-outline" size={18} color={paperTheme.colors.primary} />
+            <Text style={[styles.discountTitle, { color: paperTheme.colors.onSurface }]}>
+              Customer discount
+            </Text>
+          </View>
+          <Switch
+            value={discountEnabled}
+            onValueChange={onDiscountEnabledChange}
+            trackColor={{
+              false: paperTheme.colors.surfaceVariant,
+              true: `${paperTheme.colors.primary}88`,
+            }}
+            thumbColor={discountEnabled ? paperTheme.colors.primary : paperTheme.colors.outline}
+          />
+        </View>
+
+        {discountEnabled ? (
+          <View style={styles.discountBody}>
+            <Text style={[styles.discountLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+              Discount type
+            </Text>
+            <View style={styles.discountModeRow}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Discount by amount"
+                onPress={() => onDiscountModeChange('amount')}
+                style={[
+                  styles.discountModeChip,
+                  {
+                    backgroundColor:
+                      discountMode === 'amount'
+                        ? paperTheme.colors.primary
+                        : paperTheme.colors.surfaceVariant,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.discountModeChipText,
+                    {
+                      color:
+                        discountMode === 'amount'
+                          ? paperTheme.colors.onPrimary
+                          : paperTheme.colors.onSurface,
+                    },
+                  ]}
+                >
+                  Amount (Rs.)
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Discount by percentage"
+                onPress={() => onDiscountModeChange('percentage')}
+                style={[
+                  styles.discountModeChip,
+                  {
+                    backgroundColor:
+                      discountMode === 'percentage'
+                        ? paperTheme.colors.primary
+                        : paperTheme.colors.surfaceVariant,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.discountModeChipText,
+                    {
+                      color:
+                        discountMode === 'percentage'
+                          ? paperTheme.colors.onPrimary
+                          : paperTheme.colors.onSurface,
+                    },
+                  ]}
+                >
+                  Percentage (%)
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.discountLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+              {discountMode === 'amount' ? 'Discount amount' : 'Discount percentage'}
+            </Text>
+            <View
+              style={[
+                styles.discountInputWrap,
+                { backgroundColor: paperTheme.colors.surfaceVariant },
+              ]}
+            >
+              {discountMode === 'amount' ? (
+                <Text style={[styles.discountInputPrefix, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  Rs.
+                </Text>
+              ) : null}
+              <TextInput
+                value={discountValue}
+                onChangeText={onDiscountValueChange}
+                placeholder={discountMode === 'amount' ? '0.00' : '0'}
+                placeholderTextColor={paperTheme.colors.onSurfaceVariant}
+                keyboardType="decimal-pad"
+                blurOnSubmit={false}
+                style={[styles.discountInput, { color: paperTheme.colors.onSurface }]}
+              />
+              {discountMode === 'percentage' ? (
+                <Text style={[styles.discountInputSuffix, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  %
+                </Text>
+              ) : null}
+            </View>
+
+            <View
+              style={[
+                styles.discountBreakdown,
+                { backgroundColor: paperTheme.colors.surfaceVariant },
+              ]}
+            >
+              <View style={styles.discountBreakdownRow}>
+                <Text style={[styles.discountBreakdownLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  Subtotal
+                </Text>
+                <Text style={[styles.discountBreakdownValue, { color: paperTheme.colors.onSurface }]}>
+                  {formatCurrency(totalAmount)}
+                </Text>
+              </View>
+              <View style={styles.discountBreakdownRow}>
+                <Text style={[styles.discountBreakdownLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  Discount
+                </Text>
+                <Text style={[styles.discountBreakdownDiscount, { color: paperTheme.colors.error }]}>
+                  − {formatCurrency(discountAmount)}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.discountBreakdownDivider,
+                  { backgroundColor: paperTheme.colors.outlineVariant },
+                ]}
+              />
+              <View style={styles.discountBreakdownRow}>
+                <Text style={[styles.discountBreakdownTotalLabel, { color: paperTheme.colors.onSurface }]}>
+                  Checkout total
+                </Text>
+                <Text style={[styles.discountBreakdownTotalValue, { color: paperTheme.colors.primary }]}>
+                  {formatCurrency(discountCheckoutTotal)}
+                </Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
+      </View>
+
+      <TouchableOpacity
+        activeOpacity={0.9}
+        style={[
+          styles.checkout,
+          { backgroundColor: paperTheme.colors.primary, opacity: checkoutLoading ? 0.75 : 1 },
+          softShadow(resolvedTheme),
+        ]}
+        disabled={checkoutLoading}
+        onPress={onCheckout}
+      >
+        {checkoutLoading ? (
+          <ActivityIndicator size="small" color={paperTheme.colors.onPrimary} />
+        ) : (
+          <>
+            <View style={styles.checkoutLeft}>
+              <Text style={[styles.checkoutText, { color: paperTheme.colors.onPrimary }]}>
+                Checkout
+              </Text>
+              <Text style={[styles.checkoutSub, { color: paperTheme.colors.onPrimary }]}>
+                {formatCurrency(
+                  discountEnabled && discountAmount > 0 ? discountCheckoutTotal : totalAmount,
+                )}
+              </Text>
+            </View>
+            <View style={[styles.checkoutArrow, { backgroundColor: `${paperTheme.colors.onPrimary}22` }]}>
+              <Ionicons name="arrow-forward" size={18} color={paperTheme.colors.onPrimary} />
+            </View>
+          </>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+});
 
 export default function CartScreen(_props: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
@@ -86,7 +361,9 @@ export default function CartScreen(_props: Props) {
   const [discountEnabled, setDiscountEnabled] = useState(false);
   const [discountMode, setDiscountMode] = useState<DiscountMode>('amount');
   const [discountValue, setDiscountValue] = useState('');
+  const [serviceAmounts, setServiceAmounts] = useState<Record<string, string>>({});
   const previousShopIdRef = useRef(shopId);
+  const cartListRef = useRef<FlatList<CartOrderItem> | null>(null);
 
   const shopAddedSessions = useMemo(
     () => filterAddedSessionsForShop(addedSessions, shopId),
@@ -101,6 +378,11 @@ export default function CartScreen(_props: Props) {
     setSlideToastMessage(null);
   }, []);
 
+  const handleServiceAmountChange = useCallback((productId: string, value: string) => {
+    const sanitized = sanitizeAmountInput(value);
+    setServiceAmounts((prev) => ({ ...prev, [productId]: sanitized }));
+  }, []);
+
   const productById = useMemo(() => {
     const map = new Map<string, Product>();
     for (const product of products) {
@@ -110,7 +392,45 @@ export default function CartScreen(_props: Props) {
   }, [products]);
 
   const items = order?.items ?? [];
-  const totalAmount = order?.totalPrice ?? 0;
+  const hasServicesInCart = useMemo(
+    () => items.some((item) => productById.get(item.productId)?.type === 'service'),
+    [items, productById],
+  );
+
+  const getItemUnitPrice = useCallback(
+    (item: CartOrderItem, product: Product | undefined): number => {
+      if (product?.type === 'service') {
+        return parseAmountInput(serviceAmounts[item.productId]);
+      }
+      return product?.amount ?? 0;
+    },
+    [serviceAmounts],
+  );
+
+  const totalAmount = useMemo(() => {
+    const sum = items.reduce((acc, item) => {
+      const product = productById.get(item.productId);
+      return acc + getItemUnitPrice(item, product) * item.quantity;
+    }, 0);
+    return Number(sum.toFixed(2));
+  }, [getItemUnitPrice, items, productById]);
+
+  const scrollToCartItem = useCallback(
+    (productId: string) => {
+      const index = items.findIndex((entry) => entry.productId === productId);
+      if (index < 0) return;
+
+      requestAnimationFrame(() => {
+        cartListRef.current?.scrollToIndex({
+          index,
+          animated: true,
+          viewPosition: 0.25,
+        });
+      });
+    },
+    [items],
+  );
+
   const addedCartCount = shopAddedSessions.length;
   const itemCount = items.length;
   const hasShop = Boolean(shopId?.trim());
@@ -141,8 +461,13 @@ export default function CartScreen(_props: Props) {
       setDiscountEnabled(false);
       setDiscountValue('');
       setDiscountMode('amount');
+      setServiceAmounts({});
     }
   }, [itemCount]);
+
+  useEffect(() => {
+    setServiceAmounts({});
+  }, [sessionId]);
 
   useEffect(() => {
     const previousShopId = previousShopIdRef.current;
@@ -227,15 +552,81 @@ export default function CartScreen(_props: Props) {
     [closeAddedModal, dispatch, shopAddedSessions, shopId],
   );
 
+  const buildCheckoutPayload = useCallback((): CheckoutCartRequest | null => {
+    if (!sessionId) return null;
+
+    const validationError = getCheckoutValidationError(
+      items,
+      productById,
+      serviceAmounts,
+      discountEnabled,
+      discountMode,
+      discountValue,
+    );
+    if (validationError) {
+      showSlideToast(validationError);
+      return null;
+    }
+
+    const itemUnitCosts: Record<string, number> = {};
+    for (const item of items) {
+      const product = productById.get(item.productId);
+      if (product?.type === 'service') {
+        itemUnitCosts[item.productId] = parseAmountInput(serviceAmounts[item.productId]);
+      }
+    }
+
+    const payload: CheckoutCartRequest = {
+      sessionId,
+      isDiscount: discountEnabled,
+    };
+
+    if (Object.keys(itemUnitCosts).length > 0) {
+      payload.itemUnitCosts = itemUnitCosts;
+    }
+
+    if (discountEnabled) {
+      const parsedDiscount = Number.parseFloat(discountValue.replace(/,/g, '').trim());
+      payload.discount = {
+        enabled: true,
+        type: discountMode === 'percentage' ? 'percent' : 'amount',
+        value: parsedDiscount,
+      };
+      payload.discountedAmount = discountPreview.discountAmount;
+    } else {
+      payload.discountedAmount = 0;
+    }
+
+    return payload;
+  }, [
+    discountEnabled,
+    discountMode,
+    discountPreview.discountAmount,
+    discountValue,
+    items,
+    productById,
+    serviceAmounts,
+    sessionId,
+    showSlideToast,
+  ]);
+
   const handleCheckout = useCallback(async () => {
     if (!sessionId || items.length === 0 || checkoutLoading) return;
 
+    const payload = buildCheckoutPayload();
+    if (!payload) return;
+
     try {
-      await dispatch(checkoutCartSession_Service(sessionId)).unwrap();
+      await dispatch(checkoutCartSession_Service(payload)).unwrap();
+      showSlideToast('Checkout completed');
     } catch (err: unknown) {
-      console.log('Checkout cart:', err);
+      const message =
+        err && typeof err === 'object' && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : 'Could not checkout cart';
+      showSlideToast(message);
     }
-  }, [checkoutLoading, dispatch, items.length, sessionId]);
+  }, [buildCheckoutPayload, checkoutLoading, dispatch, items.length, sessionId, showSlideToast]);
 
   const handleGoBackToPending = useCallback(
     async (targetSessionId: string) => {
@@ -334,8 +725,9 @@ export default function CartScreen(_props: Props) {
     const atStockLimit = product ? isAtProductStockLimit(product, item.quantity) : false;
     const isService = product?.type === 'service';
     const accentColor = isService ? paperTheme.colors.tertiary : paperTheme.colors.primary;
-    const unitPrice = product?.amount ?? null;
-    const lineTotal = unitPrice != null ? unitPrice * item.quantity : null;
+    const unitPrice = getItemUnitPrice(item, product);
+    const lineTotal = unitPrice * item.quantity;
+    const serviceAmountInput = serviceAmounts[item.productId] ?? '';
 
     return (
       <View
@@ -374,15 +766,52 @@ export default function CartScreen(_props: Props) {
                     </Text>
                   </View>
                 ) : null}
-                <Text style={[styles.itemMeta, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  {formatAmount(unitPrice)} each
-                </Text>
+                {!isService ? (
+                  <Text style={[styles.itemMeta, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    {formatAmount(product?.amount ?? null)} each
+                  </Text>
+                ) : null}
               </View>
             </View>
-            <Text style={[styles.lineTotal, { color: paperTheme.colors.primary }]}>
-              {lineTotal != null ? formatAmount(lineTotal) : '—'}
+            <Text style={[styles.lineTotal, { color: isService ? accentColor : paperTheme.colors.primary }]}>
+              {isService && !serviceAmountInput.trim() ? '—' : formatCurrency(lineTotal)}
             </Text>
           </View>
+
+          {isService ? (
+            <View style={styles.serviceAmountBlock}>
+              <Text style={[styles.serviceAmountLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                Enter service amount
+              </Text>
+              <View
+                style={[
+                  styles.serviceAmountInputWrap,
+                  {
+                    backgroundColor: paperTheme.colors.surfaceVariant,
+                    borderColor: paperTheme.colors.outlineVariant,
+                  },
+                ]}
+              >
+                <Text style={[styles.serviceAmountPrefix, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  Rs.
+                </Text>
+                <TextInput
+                  value={serviceAmountInput}
+                  onChangeText={(text) => handleServiceAmountChange(item.productId, text)}
+                  onFocus={() => scrollToCartItem(item.productId)}
+                  placeholder="0.00"
+                  placeholderTextColor={paperTheme.colors.onSurfaceVariant}
+                  keyboardType="decimal-pad"
+                  style={[styles.serviceAmountInput, { color: paperTheme.colors.onSurface }]}
+                />
+              </View>
+              {item.quantity > 1 ? (
+                <Text style={[styles.serviceAmountHint, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  {formatCurrency(unitPrice)} × {item.quantity} qty
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
 
           <View style={styles.itemActions}>
             {isEditing ? (
@@ -447,6 +876,44 @@ export default function CartScreen(_props: Props) {
       </View>
     );
   };
+
+  const cartListFooter = useMemo(
+    () => (
+      <CartOrderFooter
+        paperTheme={paperTheme}
+        resolvedTheme={resolvedTheme}
+        discountEnabled={discountEnabled}
+        discountMode={discountMode}
+        discountValue={discountValue}
+        onDiscountEnabledChange={setDiscountEnabled}
+        onDiscountModeChange={setDiscountMode}
+        onDiscountValueChange={setDiscountValue}
+        discountCheckoutTotal={discountPreview.checkoutTotal}
+        discountAmount={discountPreview.discountAmount}
+        totalAmount={totalAmount}
+        checkoutLoading={checkoutLoading}
+        onCheckout={() => {
+          void handleCheckout();
+        }}
+      />
+    ),
+    [
+      checkoutLoading,
+      discountEnabled,
+      discountMode,
+      discountPreview.checkoutTotal,
+      discountPreview.discountAmount,
+      discountValue,
+      handleCheckout,
+      paperTheme,
+      resolvedTheme,
+      totalAmount,
+    ],
+  );
+
+  const handleCartListRef = useCallback((ref: FlatList<CartOrderItem> | null) => {
+    cartListRef.current = ref;
+  }, []);
 
   const screenError = error ?? addedSessionsError ?? checkoutError ?? manageAddedError ?? editCartError;
 
@@ -525,6 +992,7 @@ export default function CartScreen(_props: Props) {
                 </Text>
                 <Text style={[styles.summarySub, { color: paperTheme.colors.onPrimaryContainer }]}>
                   {cartNumber ? `Order #${cartNumber}` : 'Ready to checkout'}
+                  {hasServicesInCart ? ' · Enter service amounts below' : ''}
                 </Text>
               </View>
             </View>
@@ -556,244 +1024,59 @@ export default function CartScreen(_props: Props) {
             </Text>
           </View>
         ) : (
-          <FlatList
+          <KeyboardAwareFlatList
+            innerRef={handleCartListRef}
+            style={styles.cartList}
             data={items}
             keyExtractor={getCartOrderItemKey}
             renderItem={renderCartItem}
             contentContainerStyle={styles.listContent}
             ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+            ListFooterComponent={cartListFooter}
+            keyboardShouldPersistTaps="always"
+            keyboardDismissMode="on-drag"
+            enableOnAndroid
+            enableAutomaticScroll
+            enableResetScrollToCoords={false}
+            extraScrollHeight={Platform.OS === 'ios' ? 32 : 96}
+            keyboardOpeningTime={0}
+            onScrollToIndexFailed={(info) => {
+              setTimeout(() => {
+                cartListRef.current?.scrollToIndex({
+                  index: info.index,
+                  animated: true,
+                  viewPosition: 0.25,
+                });
+              }, 100);
+            }}
           />
         )}
 
-        {items.length > 0 ? (
-          <View
+        {items.length === 0 ? (
+          <TouchableOpacity
+            activeOpacity={0.9}
             style={[
-              styles.discountCard,
-              { backgroundColor: paperTheme.colors.surface },
-              cardShadow(resolvedTheme),
+              styles.checkout,
+              {
+                backgroundColor: paperTheme.colors.surfaceVariant,
+                opacity: checkoutLoading ? 0.75 : 1,
+              },
             ]}
+            disabled
+            onPress={() => {
+              void handleCheckout();
+            }}
           >
-            <View style={styles.discountHeaderRow}>
-              <View style={styles.discountTitleBlock}>
-                <Ionicons name="pricetag-outline" size={18} color={paperTheme.colors.primary} />
-                <Text style={[styles.discountTitle, { color: paperTheme.colors.onSurface }]}>
-                  Customer discount
-                </Text>
-              </View>
-              <Switch
-                value={discountEnabled}
-                onValueChange={setDiscountEnabled}
-                trackColor={{
-                  false: paperTheme.colors.surfaceVariant,
-                  true: `${paperTheme.colors.primary}88`,
-                }}
-                thumbColor={
-                  discountEnabled ? paperTheme.colors.primary : paperTheme.colors.outline
-                }
-              />
+            <View style={styles.checkoutLeft}>
+              <Text style={[styles.checkoutText, { color: paperTheme.colors.onSurfaceDisabled }]}>
+                Checkout
+              </Text>
             </View>
-
-            {discountEnabled ? (
-              <View style={styles.discountBody}>
-                <Text style={[styles.discountLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  Discount type
-                </Text>
-                <View style={styles.discountModeRow}>
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel="Discount by amount"
-                    onPress={() => setDiscountMode('amount')}
-                    style={[
-                      styles.discountModeChip,
-                      {
-                        backgroundColor:
-                          discountMode === 'amount'
-                            ? paperTheme.colors.primary
-                            : paperTheme.colors.surfaceVariant,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.discountModeChipText,
-                        {
-                          color:
-                            discountMode === 'amount'
-                              ? paperTheme.colors.onPrimary
-                              : paperTheme.colors.onSurface,
-                        },
-                      ]}
-                    >
-                      Amount (Rs.)
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel="Discount by percentage"
-                    onPress={() => setDiscountMode('percentage')}
-                    style={[
-                      styles.discountModeChip,
-                      {
-                        backgroundColor:
-                          discountMode === 'percentage'
-                            ? paperTheme.colors.primary
-                            : paperTheme.colors.surfaceVariant,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.discountModeChipText,
-                        {
-                          color:
-                            discountMode === 'percentage'
-                              ? paperTheme.colors.onPrimary
-                              : paperTheme.colors.onSurface,
-                        },
-                      ]}
-                    >
-                      Percentage (%)
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <Text style={[styles.discountLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  {discountMode === 'amount' ? 'Discount amount' : 'Discount percentage'}
-                </Text>
-                <View
-                  style={[
-                    styles.discountInputWrap,
-                    { backgroundColor: paperTheme.colors.surfaceVariant },
-                  ]}
-                >
-                  {discountMode === 'amount' ? (
-                    <Text style={[styles.discountInputPrefix, { color: paperTheme.colors.onSurfaceVariant }]}>
-                      Rs.
-                    </Text>
-                  ) : null}
-                  <TextInput
-                    value={discountValue}
-                    onChangeText={setDiscountValue}
-                    placeholder={discountMode === 'amount' ? '0.00' : '0'}
-                    placeholderTextColor={paperTheme.colors.onSurfaceVariant}
-                    keyboardType="decimal-pad"
-                    style={[styles.discountInput, { color: paperTheme.colors.onSurface }]}
-                  />
-                  {discountMode === 'percentage' ? (
-                    <Text style={[styles.discountInputSuffix, { color: paperTheme.colors.onSurfaceVariant }]}>
-                      %
-                    </Text>
-                  ) : null}
-                </View>
-
-                <View
-                  style={[
-                    styles.discountBreakdown,
-                    { backgroundColor: paperTheme.colors.surfaceVariant },
-                  ]}
-                >
-                  <View style={styles.discountBreakdownRow}>
-                    <Text style={[styles.discountBreakdownLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-                      Subtotal
-                    </Text>
-                    <Text style={[styles.discountBreakdownValue, { color: paperTheme.colors.onSurface }]}>
-                      {formatCurrency(totalAmount)}
-                    </Text>
-                  </View>
-                  <View style={styles.discountBreakdownRow}>
-                    <Text style={[styles.discountBreakdownLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-                      Discount
-                    </Text>
-                    <Text style={[styles.discountBreakdownDiscount, { color: paperTheme.colors.error }]}>
-                      − {formatCurrency(discountPreview.discountAmount)}
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.discountBreakdownDivider,
-                      { backgroundColor: paperTheme.colors.outlineVariant },
-                    ]}
-                  />
-                  <View style={styles.discountBreakdownRow}>
-                    <Text style={[styles.discountBreakdownTotalLabel, { color: paperTheme.colors.onSurface }]}>
-                      Checkout total
-                    </Text>
-                    <Text style={[styles.discountBreakdownTotalValue, { color: paperTheme.colors.primary }]}>
-                      {formatCurrency(discountPreview.checkoutTotal)}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            ) : null}
-          </View>
+            <View style={styles.checkoutArrow}>
+              <Ionicons name="arrow-forward" size={18} color={paperTheme.colors.onSurfaceDisabled} />
+            </View>
+          </TouchableOpacity>
         ) : null}
-
-        <TouchableOpacity
-          activeOpacity={0.9}
-          style={[
-            styles.checkout,
-            {
-              backgroundColor:
-                items.length > 0 ? paperTheme.colors.primary : paperTheme.colors.surfaceVariant,
-              opacity: checkoutLoading ? 0.75 : 1,
-            },
-            items.length > 0 ? softShadow(resolvedTheme) : null,
-          ]}
-          disabled={items.length === 0 || checkoutLoading}
-          onPress={() => {
-            void handleCheckout();
-          }}
-        >
-          {checkoutLoading ? (
-            <ActivityIndicator size="small" color={paperTheme.colors.onPrimary} />
-          ) : (
-            <>
-              <View style={styles.checkoutLeft}>
-                <Text
-                  style={[
-                    styles.checkoutText,
-                    {
-                      color:
-                        items.length > 0
-                          ? paperTheme.colors.onPrimary
-                          : paperTheme.colors.onSurfaceDisabled,
-                    },
-                  ]}
-                >
-                  Checkout
-                </Text>
-                {items.length > 0 ? (
-                  <Text style={[styles.checkoutSub, { color: paperTheme.colors.onPrimary }]}>
-                    {formatCurrency(
-                      discountEnabled && discountPreview.discountAmount > 0
-                        ? discountPreview.checkoutTotal
-                        : totalAmount,
-                    )}
-                  </Text>
-                ) : null}
-              </View>
-              <View
-                style={[
-                  styles.checkoutArrow,
-                  {
-                    backgroundColor:
-                      items.length > 0
-                        ? `${paperTheme.colors.onPrimary}22`
-                        : 'transparent',
-                  },
-                ]}
-              >
-                <Ionicons
-                  name="arrow-forward"
-                  size={18}
-                  color={
-                    items.length > 0 ? paperTheme.colors.onPrimary : paperTheme.colors.onSurfaceDisabled
-                  }
-                />
-              </View>
-            </>
-          )}
-        </TouchableOpacity>
 
         <Modal
           visible={addedModalVisible}
@@ -1043,6 +1326,14 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     flexGrow: 1,
   },
+  cartList: {
+    flex: 1,
+  },
+  cartFooter: {
+    gap: 12,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
   discountCard: {
     borderRadius: 20,
     padding: 14,
@@ -1192,6 +1483,36 @@ const styles = StyleSheet.create({
     fontFamily: fonts.PoppinsBold,
     fontSize: 13,
     flexShrink: 0,
+  },
+  serviceAmountBlock: {
+    gap: 6,
+  },
+  serviceAmountLabel: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 12,
+  },
+  serviceAmountInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    minHeight: 44,
+    gap: 6,
+  },
+  serviceAmountPrefix: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 14,
+  },
+  serviceAmountInput: {
+    flex: 1,
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 16,
+    paddingVertical: 8,
+  },
+  serviceAmountHint: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 11,
   },
   itemActions: {
     flexDirection: 'row',

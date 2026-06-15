@@ -6,6 +6,7 @@ const {
   getCartItems,
   addCartItem,
   updateCartSessionStatus,
+  checkoutCartSession,
   updateCartSessionItem,
   removeCartSessionItem,
   deleteCartSession,
@@ -15,6 +16,7 @@ const router = express.Router();
 
 router.post('/sessions', protect, createCartSession);
 router.get('/sessions', protect, getCartSessions);
+router.post('/sessions/:sessionId/checkout', protect, checkoutCartSession);
 router.patch('/sessions/:sessionId/status', protect, updateCartSessionStatus);
 router.patch('/sessions/:sessionId/items', protect, updateCartSessionItem);
 router.delete('/sessions/:sessionId/items/:productId', protect, removeCartSessionItem);

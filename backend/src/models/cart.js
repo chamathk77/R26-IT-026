@@ -20,6 +20,11 @@ const cartItemSchema = new mongoose.Schema(
       min: 1,
       default: 1,
     },
+    unitCost: {
+      type: Number,
+      default: null,
+      min: 0,
+    },
   },
   { _id: false },
 );
@@ -60,6 +65,28 @@ const cartSchema = new mongoose.Schema(
       type: String,
       enum: CART_STATUSES,
       default: 'pending',
+    },
+    isDiscount: {
+      type: Boolean,
+      default: false,
+    },
+    isDiscountPercentage: {
+      type: Boolean,
+      default: false,
+    },
+    isDiscountAmount: {
+      type: Boolean,
+      default: false,
+    },
+    discount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    discountedAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
   },
   { timestamps: true },

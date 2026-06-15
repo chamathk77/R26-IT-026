@@ -16,7 +16,7 @@ import {
   UpdateAddedCartItemRequest,
   UpdateCartSessionStatusResponse,
 } from '../type/cart';
-import { CheckoutCartResponse } from '../type/history';
+import { CheckoutCartRequest, CheckoutCartResponse } from '../type/history';
 import { getCartNumberForSession } from '../utils/cartSession';
 import { RootState } from '../store/store';
 
@@ -469,16 +469,14 @@ export const removeAddedCartItem_Service = createAsyncThunk(
 
 export const checkoutCartSession_Service = createAsyncThunk(
   'cart/checkoutSession',
-  async (sessionId: string, { dispatch, getState, rejectWithValue }) => {
+  async (payload: CheckoutCartRequest, { dispatch, getState, rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
       const addedSessions = (getState() as RootState).CartReducer.addedSessions.items;
-      const cartNumber = getCartNumberForSession(addedSessions, sessionId);
+      const cartNumber = getCartNumberForSession(addedSessions, payload.sessionId);
 
-      const response = await apiClient.post<CheckoutCartResponse>('/api/history/checkout', {
-        sessionId,
-      });
+      const response = await apiClient.post<CheckoutCartResponse>('/api/history/checkout', payload);
 
       if (isHttpSuccess(response.status) && response.data?.success) {
         await dispatch(fetchAddedCartSessions_Service());

@@ -40,6 +40,9 @@ export interface CheckoutDiscountRequest {
 
 export interface CheckoutCartRequest {
   sessionId: string;
+  isDiscount?: boolean;
+  itemUnitCosts?: Record<string, number>;
+  discountedAmount?: number;
   discount?: CheckoutDiscountRequest;
 }
 

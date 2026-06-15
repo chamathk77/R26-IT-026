@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Cart = require('../models/cart');
 const History = require('../models/history');
+const { proceedCartSession, isCheckoutClientError } = require('./cartController');
 
 function mapHistoryRecord(record) {
   const handledUser =
@@ -99,7 +100,7 @@ const checkoutCart = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Shop id is required' });
     }
 
-    const { sessionId, discount } = req.body;
+    const { sessionId, discount, itemUnitCosts, isDiscount } = req.body;
 
     if (!sessionId || !mongoose.Types.ObjectId.isValid(sessionId)) {
       return res.status(400).json({ success: false, message: 'Valid session id is required' });
@@ -126,6 +127,8 @@ const checkoutCart = async (req, res) => {
       });
     }
 
+    await proceedCartSession(cart, { discount, itemUnitCosts, isDiscount });
+
     const pricing = resolveCheckoutPricing(cart.totalPrice, discount);
     if (pricing.error) {
       return res.status(400).json({ success: false, message: pricing.error });
@@ -139,15 +142,13 @@ const checkoutCart = async (req, res) => {
         productId: item.productId,
         name: item.name,
         quantity: item.quantity,
+        unitCost: item.unitCost ?? null,
       })),
       subtotalPrice: pricing.subtotalPrice,
       discount: pricing.discount,
       totalPrice: pricing.totalPrice,
       checkoutAt,
     });
-
-    cart.status = 'proceed';
-    await cart.save();
 
     const populated = await History.findById(history._id).populate('handledUser', 'name email');
 
@@ -159,6 +160,10 @@ const checkoutCart = async (req, res) => {
       message: 'Cart checked out',
     });
   } catch (error) {
+    if (isCheckoutClientError(error.message)) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
