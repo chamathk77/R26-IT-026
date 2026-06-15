@@ -10,6 +10,7 @@ type SlideToastProps = {
   onDismiss: () => void;
   paperTheme: MD3Theme;
   durationMs?: number;
+  tone?: 'default' | 'success';
 };
 
 const SLIDE_OFFSET = -120;
@@ -19,6 +20,7 @@ export default function SlideToast({
   onDismiss,
   paperTheme,
   durationMs = 2000,
+  tone = 'default',
 }: SlideToastProps) {
   const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(SLIDE_OFFSET)).current;
@@ -66,21 +68,27 @@ export default function SlideToast({
 
   if (!message) return null;
 
+  const isSuccess = tone === 'success';
+  const backgroundColor = isSuccess ? '#dcfce7' : paperTheme.colors.primaryContainer;
+  const borderColor = isSuccess ? '#86efac' : `${paperTheme.colors.primary}44`;
+  const iconColor = isSuccess ? '#15803d' : paperTheme.colors.primary;
+  const textColor = isSuccess ? '#166534' : paperTheme.colors.onPrimaryContainer;
+
   return (
     <View pointerEvents="none" style={[styles.host, { top: insets.top + 8 }]}>
       <Animated.View
         style={[
           styles.toast,
           {
-            backgroundColor: paperTheme.colors.primaryContainer,
-            borderColor: `${paperTheme.colors.primary}44`,
+            backgroundColor,
+            borderColor,
             opacity,
             transform: [{ translateY }],
           },
         ]}
       >
-        <Ionicons name="checkmark-circle" size={18} color={paperTheme.colors.primary} />
-        <Text style={[styles.message, { color: paperTheme.colors.onPrimaryContainer }]} numberOfLines={2}>
+        <Ionicons name="checkmark-circle" size={18} color={iconColor} />
+        <Text style={[styles.message, { color: textColor }]} numberOfLines={2}>
           {message}
         </Text>
       </Animated.View>

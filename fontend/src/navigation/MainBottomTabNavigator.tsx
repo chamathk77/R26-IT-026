@@ -8,7 +8,7 @@ import { MainBottomTabParamList } from './MainBottomTabParamList';
 import HomeScreen from '../screens/pos/HomeScreen';
 import InventoryScreen from '../screens/pos/InventoryScreen';
 import CartScreen from '../screens/pos/CartScreen';
-import HistoryScreen from '../screens/pos/HistoryScreen';
+import HistoryStackNavigator from './HistoryStackNavigator';
 
 const Tab = createBottomTabNavigator<MainBottomTabParamList>();
 
@@ -130,7 +130,7 @@ export default function MainBottomTabNavigator() {
       />
       <Tab.Screen
         name="History"
-        component={HistoryScreen}
+        component={HistoryStackNavigator}
         options={{
           tabBarLabel: ({ focused }) => (
             <Text

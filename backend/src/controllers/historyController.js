@@ -1,169 +1,352 @@
 const mongoose = require('mongoose');
 const Cart = require('../models/cart');
 const History = require('../models/history');
-const { proceedCartSession, isCheckoutClientError } = require('./cartController');
+const User = require('../models/user');
 
-function mapHistoryRecord(record) {
-  const handledUser =
-    record.handledUser && typeof record.handledUser === 'object'
-      ? {
-          _id: record.handledUser._id,
-          name: record.handledUser.name,
-          email: record.handledUser.email,
-        }
-      : record.handledUser;
+const PAYMENT_OPTIONS = History.PAYMENT_OPTIONS;
 
-  return {
-    _id: record._id,
-    handledUser,
-    cartSessionId: record.cartSessionId,
-    items: record.items,
-    subtotalPrice:
-      record.subtotalPrice != null
-        ? Number(record.subtotalPrice.toFixed(2))
-        : Number(record.totalPrice.toFixed(2)),
-    discount: {
-      enabled: Boolean(record.discount?.enabled),
-      type: record.discount?.type ?? null,
-      value: record.discount?.value ?? null,
-      amount: Number((record.discount?.amount ?? 0).toFixed(2)),
-    },
-    totalPrice: Number(record.totalPrice.toFixed(2)),
-    checkoutAt: record.checkoutAt,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-  };
+function normalizeShopId(value) {
+  return value ? String(value).trim().toUpperCase() : '';
+}
+
+function requireShopId(req, res) {
+  const shopId = normalizeShopId(req.user?.shopId);
+  if (!shopId) {
+    res.status(400).json({ success: false, message: 'Shop id is required' });
+    return null;
+  }
+  return shopId;
 }
 
 function roundMoney(value) {
   return Number(Math.max(0, value).toFixed(2));
 }
 
-function resolveCheckoutPricing(cartTotalPrice, discountInput) {
-  const subtotal = roundMoney(cartTotalPrice);
+function parsePagination(query) {
+  const pageRaw = parseInt(String(query?.page ?? '1'), 10);
+  const limitRaw = parseInt(String(query?.limit ?? '20'), 10);
 
-  if (!discountInput?.enabled) {
-    return {
-      subtotalPrice: subtotal,
-      discount: {
-        enabled: false,
-        type: null,
-        value: null,
-        amount: 0,
-      },
-      totalPrice: subtotal,
-    };
+  const page = Number.isNaN(pageRaw) ? 1 : Math.max(1, pageRaw);
+  const limit = Number.isNaN(limitRaw) ? 20 : Math.min(100, Math.max(1, limitRaw));
+  const skip = (page - 1) * limit;
+
+  return { page, limit, skip };
+}
+
+function parseDate(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
   }
 
-  const discountType = String(discountInput.type ?? '').trim().toLowerCase();
-  const discountValue = Number(discountInput.value);
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
-  if (!['amount', 'percent'].includes(discountType)) {
-    return { error: 'Discount type must be amount or percent' };
+function startOfDay(date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function endOfDay(date) {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+}
+
+const ORDER_ID_MIN_LENGTH = 6;
+const ORDER_ID_LENGTH = 8;
+const ORDER_ID_CHARS = '0123456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+
+function buildRandomOrderId(length = ORDER_ID_LENGTH) {
+  let value = '';
+  for (let index = 0; index < length; index += 1) {
+    value += ORDER_ID_CHARS[Math.floor(Math.random() * ORDER_ID_CHARS.length)];
   }
+  return value;
+}
 
-  if (!Number.isFinite(discountValue) || discountValue < 0) {
-    return { error: 'Discount value must be a non-negative number' };
-  }
+async function generateShopOrderId(shopId) {
+  const normalizedShopId = normalizeShopId(shopId);
+  const MAX_ATTEMPTS = 12;
 
-  let discountAmount = 0;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    const candidate = buildRandomOrderId(ORDER_ID_LENGTH);
+    if (candidate.length < ORDER_ID_MIN_LENGTH) continue;
 
-  if (discountType === 'percent') {
-    if (discountValue > 100) {
-      return { error: 'Percentage discount cannot exceed 100' };
+    const exists = await History.exists({ shopId: normalizedShopId, orderId: candidate });
+    if (!exists) {
+      return candidate;
     }
-    discountAmount = roundMoney((subtotal * discountValue) / 100);
-  } else if (discountValue > subtotal) {
-    return { error: 'Discount amount cannot exceed subtotal' };
-  } else {
-    discountAmount = roundMoney(discountValue);
   }
 
-  const totalPrice = roundMoney(subtotal - discountAmount);
+  const fallback = `${Date.now().toString(36).toUpperCase()}${buildRandomOrderId(2)}`.slice(-ORDER_ID_LENGTH);
+  const exists = await History.exists({ shopId: normalizedShopId, orderId: fallback });
+  if (exists) {
+    throw new Error('Could not generate a unique order id for this shop');
+  }
 
+  return fallback;
+}
+
+function sanitizeMobile(value) {
+  return String(value ?? '')
+    .replace(/\D/g, '')
+    .trim();
+}
+
+function normalizePaymentOption(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  return PAYMENT_OPTIONS.includes(normalized) ? normalized : null;
+}
+
+function mapHistoryRecord(record) {
   return {
-    subtotalPrice: subtotal,
-    discount: {
-      enabled: true,
-      type: discountType,
-      value: discountValue,
-      amount: discountAmount,
-    },
-    totalPrice,
+    _id: record._id,
+    shopId: record.shopId,
+    cartId: record.cartId,
+    cartNumber: record.cartNumber,
+    orderId: record.orderId,
+    checkOutTime: record.checkOutTime,
+    amount: roundMoney(record.amount),
+    isDiscount: Boolean(record.isDiscount),
+    discountedAmount: roundMoney(record.discountedAmount ?? 0),
+    items: (record.items ?? []).map((item) => ({
+      productId: item.productId,
+      productName: item.productName,
+      qty: item.qty,
+      unitCost: item.unitCost ?? null,
+    })),
+    totalAmount: roundMoney(record.totalAmount),
+    customerName: record.customerName ?? '',
+    customerMobile: record.customerMobile ?? '',
+    userId: record.userId,
+    submittedUserId: record.submittedUserId,
+    submittedUserName: record.submittedUserName ?? '',
+    paymentOption: record.paymentOption,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
   };
 }
 
-const checkoutCart = async (req, res) => {
-  try {
-    const shopId = req.user?.shopId ? String(req.user.shopId).trim().toUpperCase() : '';
-    if (!shopId) {
-      return res.status(400).json({ success: false, message: 'Shop id is required' });
-    }
+function buildHistoryListFilter(req, shopId) {
+  const filter = { shopId };
 
-    const { sessionId, discount, itemUnitCosts, isDiscount } = req.body;
+  const scopeRaw = req.query?.scope;
+  const scope =
+    scopeRaw === undefined || scopeRaw === null ? 'mine' : String(scopeRaw).trim().toLowerCase();
+
+  if (scope !== 'mine' && scope !== 'all') {
+    return { error: 'Scope must be mine or all' };
+  }
+
+  if (scope === 'mine') {
+    filter.submittedUserId = req.user.id;
+  }
+
+  const from = parseDate(req.query?.from);
+  const to = parseDate(req.query?.to);
+
+  if (from || to) {
+    filter.checkOutTime = {};
+    if (from) {
+      filter.checkOutTime.$gte = startOfDay(from);
+    }
+    if (to) {
+      filter.checkOutTime.$lte = endOfDay(to);
+    }
+  }
+
+  const paymentOption = normalizePaymentOption(req.query?.paymentOption);
+  if (req.query?.paymentOption !== undefined && req.query?.paymentOption !== null && req.query?.paymentOption !== '') {
+    if (!paymentOption) {
+      return { error: `Payment option must be one of: ${PAYMENT_OPTIONS.join(', ')}` };
+    }
+    filter.paymentOption = paymentOption;
+  }
+
+  const orderIdRaw = req.query?.orderId;
+  if (orderIdRaw !== undefined && orderIdRaw !== null && String(orderIdRaw).trim() !== '') {
+    const orderIdText = String(orderIdRaw).trim().toUpperCase();
+    if (orderIdText.length < ORDER_ID_MIN_LENGTH) {
+      return { error: `Order id filter must be at least ${ORDER_ID_MIN_LENGTH} characters` };
+    }
+    filter.orderId = orderIdText;
+  }
+
+  const cartNumberRaw = req.query?.cartNumber;
+  if (cartNumberRaw !== undefined && cartNumberRaw !== null && String(cartNumberRaw).trim() !== '') {
+    const cartNumberText = String(cartNumberRaw).trim();
+    const cartNumber = Number.parseInt(cartNumberText, 10);
+
+    if (Number.isInteger(cartNumber) && cartNumber > 0 && String(cartNumber) === cartNumberText) {
+      filter.cartNumber = cartNumber;
+    } else {
+      return { error: 'Cart number filter must be a positive whole number' };
+    }
+  }
+
+  const mobileRaw = req.query?.mobile ?? req.query?.customerMobile;
+  if (mobileRaw !== undefined && mobileRaw !== null && String(mobileRaw).trim() !== '') {
+    const mobile = sanitizeMobile(mobileRaw);
+    if (!mobile) {
+      return { error: 'Mobile number filter must contain digits' };
+    }
+    filter.customerMobile = { $regex: mobile, $options: 'i' };
+  }
+
+  return { filter, scope };
+}
+
+const createHistory = async (req, res) => {
+  try {
+    const shopId = requireShopId(req, res);
+    if (!shopId) return;
+
+    const {
+      sessionId,
+      customerName,
+      customerMobile,
+      paymentOption: paymentOptionRaw,
+    } = req.body;
 
     if (!sessionId || !mongoose.Types.ObjectId.isValid(sessionId)) {
       return res.status(400).json({ success: false, message: 'Valid session id is required' });
+    }
+
+    const mobile = sanitizeMobile(customerMobile);
+    if (!mobile) {
+      return res.status(400).json({ success: false, message: 'Customer phone number is required' });
+    }
+
+    const paymentOption = normalizePaymentOption(paymentOptionRaw ?? 'cash');
+    if (!paymentOption) {
+      return res.status(400).json({
+        success: false,
+        message: `Payment option must be one of: ${PAYMENT_OPTIONS.join(', ')}`,
+      });
     }
 
     const cart = await Cart.findOne({
       shopId,
       user: req.user.id,
       sessionId,
-      status: 'added',
+      status: 'proceed',
     });
 
     if (!cart) {
       return res.status(404).json({
         success: false,
-        message: 'Added cart session not found',
+        message: 'Proceed cart session not found. Complete cart checkout first.',
       });
     }
 
     if (!Array.isArray(cart.items) || cart.items.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Cart has no items to checkout',
+        message: 'Cart has no items for history',
       });
     }
 
-    await proceedCartSession(cart, { discount, itemUnitCosts, isDiscount });
-
-    const pricing = resolveCheckoutPricing(cart.totalPrice, discount);
-    if (pricing.error) {
-      return res.status(400).json({ success: false, message: pricing.error });
+    const existingHistory = await History.findOne({ shopId, cartId: cart.sessionId }).lean();
+    if (existingHistory) {
+      return res.status(409).json({
+        success: false,
+        message: 'History record already exists for this cart',
+        data: mapHistoryRecord(existingHistory),
+      });
     }
 
-    const checkoutAt = new Date();
+    const submittedUser = await User.findById(req.user.id).select('name').lean();
+    const submittedUserName = submittedUser?.name?.trim() || 'User';
+
+    const amount = roundMoney(cart.totalPrice);
+    const discountedAmount = roundMoney(cart.discountedAmount ?? 0);
+    const totalAmount = roundMoney(amount - discountedAmount);
+    const checkOutTime = new Date();
+    const orderId = await generateShopOrderId(shopId);
+
     const history = await History.create({
-      handledUser: req.user.id,
-      cartSessionId: cart.sessionId,
+      shopId,
+      cartId: cart.sessionId,
+      cartNumber: cart.cartNumber,
+      orderId,
+      checkOutTime,
+      amount,
+      isDiscount: Boolean(cart.isDiscount),
+      discountedAmount,
       items: cart.items.map((item) => ({
         productId: item.productId,
-        name: item.name,
-        quantity: item.quantity,
+        productName: item.name,
+        qty: item.quantity,
         unitCost: item.unitCost ?? null,
       })),
-      subtotalPrice: pricing.subtotalPrice,
-      discount: pricing.discount,
-      totalPrice: pricing.totalPrice,
-      checkoutAt,
+      totalAmount,
+      customerName: String(customerName ?? '').trim(),
+      customerMobile: mobile,
+      userId: cart.user,
+      submittedUserId: req.user.id,
+      submittedUserName,
+      paymentOption,
     });
-
-    const populated = await History.findById(history._id).populate('handledUser', 'name email');
 
     res.status(201).json({
       success: true,
       sessionId,
-      status: 'proceed',
-      data: mapHistoryRecord(populated),
-      message: 'Cart checked out',
+      data: mapHistoryRecord(history),
+      message: 'History record created',
     });
   } catch (error) {
-    if (isCheckoutClientError(error.message)) {
-      return res.status(400).json({ success: false, message: error.message });
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: 'History record already exists for this cart',
+      });
     }
 
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getHistory = async (req, res) => {
+  try {
+    const shopId = requireShopId(req, res);
+    if (!shopId) return;
+
+    const listQuery = buildHistoryListFilter(req, shopId);
+    if (listQuery.error) {
+      return res.status(400).json({ success: false, message: listQuery.error });
+    }
+
+    const { filter, scope } = listQuery;
+    const { page, limit, skip } = parsePagination(req.query);
+
+    const [total, records] = await Promise.all([
+      History.countDocuments(filter),
+      History.find(filter).sort({ checkOutTime: -1 }).skip(skip).limit(limit).lean(),
+    ]);
+
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+
+    res.status(200).json({
+      success: true,
+      scope,
+      data: records.map(mapHistoryRecord),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+      message: 'History loaded',
+    });
+  } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -178,18 +361,9 @@ function getTodayCheckoutRange() {
   return { start, end };
 }
 
-function parseStatsDate(value) {
-  if (value === undefined || value === null || value === '') {
-    return null;
-  }
-
-  const date = new Date(String(value));
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
 function getStatsDateRange(query) {
-  const start = parseStatsDate(query?.from);
-  const end = parseStatsDate(query?.to);
+  const start = parseDate(query?.from);
+  const end = parseDate(query?.to);
 
   if (start && end && end > start) {
     return { start, end };
@@ -202,24 +376,30 @@ function mapSalesStats(rows) {
   const row = rows[0];
 
   return {
-    totalSales: Number((row?.totalSales ?? 0).toFixed(2)),
+    totalSales: roundMoney(row?.totalSales ?? 0),
     orderCount: row?.orderCount ?? 0,
   };
 }
 
 const getTodayStats = async (req, res) => {
   try {
+    const shopId = requireShopId(req, res);
+    if (!shopId) return;
+
     const { start, end } = getStatsDateRange(req.query);
     const userId = new mongoose.Types.ObjectId(req.user.id);
-    const dateFilter = { checkoutAt: { $gte: start, $lt: end } };
+    const dateFilter = {
+      shopId,
+      checkOutTime: { $gte: start, $lt: end },
+    };
 
     const [mineRows, allRows] = await Promise.all([
       History.aggregate([
-        { $match: { ...dateFilter, handledUser: userId } },
+        { $match: { ...dateFilter, submittedUserId: userId } },
         {
           $group: {
             _id: null,
-            totalSales: { $sum: '$totalPrice' },
+            totalSales: { $sum: '$totalAmount' },
             orderCount: { $sum: 1 },
           },
         },
@@ -229,7 +409,7 @@ const getTodayStats = async (req, res) => {
         {
           $group: {
             _id: null,
-            totalSales: { $sum: '$totalPrice' },
+            totalSales: { $sum: '$totalAmount' },
             orderCount: { $sum: 1 },
           },
         },
@@ -249,39 +429,8 @@ const getTodayStats = async (req, res) => {
   }
 };
 
-const getHistory = async (req, res) => {
-  try {
-    const scopeRaw = req.query?.scope;
-    const scope =
-      scopeRaw === undefined || scopeRaw === null
-        ? 'mine'
-        : String(scopeRaw).trim().toLowerCase();
-
-    if (scope !== 'mine' && scope !== 'all') {
-      return res.status(400).json({
-        success: false,
-        message: 'Scope must be mine or all',
-      });
-    }
-
-    const filter = scope === 'all' ? {} : { handledUser: req.user.id };
-    const records = await History.find(filter)
-      .populate('handledUser', 'name email')
-      .sort({ checkoutAt: -1 });
-
-    res.status(200).json({
-      success: true,
-      scope,
-      data: records.map(mapHistoryRecord),
-      message: 'History loaded',
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
 module.exports = {
-  checkoutCart,
-  getTodayStats,
+  createHistory,
   getHistory,
+  getTodayStats,
 };

@@ -1,33 +1,32 @@
+import { CheckoutPaymentMethod } from './checkoutPayment';
+
+export type HistoryPaymentOption = CheckoutPaymentMethod;
+
 export interface HistoryItem {
   productId: string;
-  name: string;
-  quantity: number;
-}
-
-export type HistoryDiscountType = 'amount' | 'percent';
-
-export interface HistoryDiscount {
-  enabled: boolean;
-  type: HistoryDiscountType | null;
-  value: number | null;
-  amount: number;
-}
-
-export interface HistoryHandledUser {
-  _id: string;
-  name: string;
-  email?: string;
+  productName: string;
+  qty: number;
+  unitCost: number | null;
 }
 
 export interface HistoryRecord {
   _id: string;
-  handledUser: HistoryHandledUser | string;
-  cartSessionId: string;
+  shopId: string;
+  cartId: string;
+  cartNumber: number;
+  orderId?: string;
+  checkOutTime: string;
+  amount: number;
+  isDiscount: boolean;
+  discountedAmount: number;
   items: HistoryItem[];
-  subtotalPrice?: number;
-  discount?: HistoryDiscount;
-  totalPrice: number;
-  checkoutAt: string;
+  totalAmount: number;
+  customerName: string;
+  customerMobile: string;
+  userId: string;
+  submittedUserId: string;
+  submittedUserName: string;
+  paymentOption: HistoryPaymentOption;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -46,15 +45,75 @@ export interface CheckoutCartRequest {
   discount?: CheckoutDiscountRequest;
 }
 
+export interface CompleteCheckoutRequest extends CheckoutCartRequest {
+  customerName?: string;
+  customerMobile: string;
+  paymentOption: HistoryPaymentOption;
+}
+
+export interface CreateHistoryRequest {
+  sessionId: string;
+  customerName?: string;
+  customerMobile: string;
+  paymentOption: HistoryPaymentOption;
+}
+
+export interface CreateHistoryResponse {
+  success: boolean;
+  sessionId: string;
+  data: HistoryRecord;
+  message: string;
+}
+
+export interface CheckoutCartSessionResponse {
+  success: boolean;
+  sessionId: string;
+  cartNumber: number;
+  status: string;
+  isDiscount: boolean;
+  discountedAmount: number;
+  totalPrice: number;
+  message: string;
+}
+
+export interface CompleteCheckoutResponse {
+  sessionId: string;
+  cartNumber: number | null;
+  history: HistoryRecord;
+}
+
 export type HistoryScope = 'mine' | 'all';
+
+export interface HistoryPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+
+export interface HistoryFilters {
+  scope?: HistoryScope;
+  page?: number;
+  limit?: number;
+  from?: string;
+  to?: string;
+  paymentOption?: HistoryPaymentOption | '';
+  orderId?: string;
+  mobile?: string;
+  append?: boolean;
+}
 
 export interface GetHistoryResponse {
   success: boolean;
   scope: HistoryScope;
   data: HistoryRecord[];
+  pagination: HistoryPagination;
   message: string;
 }
 
+/** @deprecated Use CompleteCheckoutResponse */
 export interface CheckoutCartResponse {
   success: boolean;
   sessionId: string;

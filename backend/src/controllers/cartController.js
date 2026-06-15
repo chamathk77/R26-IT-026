@@ -4,8 +4,12 @@ const Product = require('../models/product');
 
 const CART_STATUSES = Cart.CART_STATUSES;
 
+function normalizeShopId(value) {
+  return value ? String(value).trim().toUpperCase() : '';
+}
+
 function getRequestShopId(req) {
-  return req.user?.shopId ? String(req.user.shopId).trim().toUpperCase() : '';
+  return normalizeShopId(req.user?.shopId);
 }
 
 function requireShopId(req, res) {
@@ -18,7 +22,24 @@ function requireShopId(req, res) {
 }
 
 function buildShopCartFilter(shopId, userId, extra = {}) {
-  return { shopId, user: userId, ...extra };
+  return { shopId: normalizeShopId(shopId), user: userId, ...extra };
+}
+
+function assertCartAccess(cart, shopId, userId) {
+  if (!cart) {
+    throw new Error('Cart session not found');
+  }
+
+  const normalizedShopId = normalizeShopId(shopId);
+  const cartShopId = normalizeShopId(cart.shopId);
+
+  if (!normalizedShopId || cartShopId !== normalizedShopId) {
+    throw new Error('Cart session not found for this shop');
+  }
+
+  if (String(cart.user) !== String(userId)) {
+    throw new Error('Cart session not found for this user');
+  }
 }
 
 function getProductUnitPrice(product) {
@@ -113,14 +134,109 @@ function isCheckoutClientError(message) {
     message === 'Cart has no items to proceed' ||
     message.startsWith('Service amount is required for ') ||
     message.startsWith('Valid service amount is required for ') ||
+    message.startsWith('Insufficient stock for ') ||
     message === 'Discount value is required when discount is enabled' ||
     message === 'Discount type must be amount or percentage when discount is enabled' ||
     message === 'Percentage discount cannot exceed 100'
   );
 }
 
+function aggregateInventoryRequirements(cart) {
+  const requirements = new Map();
+
+  cart.items.forEach((item) => {
+    const productId = String(item.productId);
+    const quantity = Number(item.quantity);
+    const existing = requirements.get(productId);
+
+    if (existing) {
+      existing.quantity += quantity;
+      return;
+    }
+
+    requirements.set(productId, {
+      productId,
+      quantity,
+      itemName: item.name,
+    });
+  });
+
+  return requirements;
+}
+
+function getInventoryProductLabel(product, fallbackName) {
+  return product?.productName?.trim() || fallbackName || 'Product';
+}
+
+async function rollbackInventoryDeductions(shopId, deductions) {
+  if (!deductions.length) return;
+
+  await Promise.all(
+    deductions.map(({ productId, quantity }) =>
+      Product.updateOne({ _id: productId, shopId }, { $inc: { qty: quantity } }),
+    ),
+  );
+}
+
+async function validateAndDeductInventory(cart, productMap) {
+  const shopId = normalizeShopId(cart.shopId);
+  const requirements = aggregateInventoryRequirements(cart);
+  const deductions = [];
+
+  try {
+    for (const requirement of requirements.values()) {
+      const product = productMap.get(requirement.productId);
+      if (!product?.isInventoryAvailable) continue;
+
+      const availableQty = product.qty == null ? 0 : Number(product.qty);
+      const label = getInventoryProductLabel(product, requirement.itemName);
+
+      if (!Number.isFinite(requirement.quantity) || requirement.quantity <= 0) {
+        throw new Error(`Invalid quantity for ${label}`);
+      }
+
+      if (requirement.quantity > availableQty) {
+        throw new Error(
+          `Insufficient stock for ${label}. Available: ${availableQty}, requested: ${requirement.quantity}`,
+        );
+      }
+    }
+
+    for (const requirement of requirements.values()) {
+      const product = productMap.get(requirement.productId);
+      if (!product?.isInventoryAvailable) continue;
+
+      const label = getInventoryProductLabel(product, requirement.itemName);
+      const updated = await Product.findOneAndUpdate(
+        {
+          _id: requirement.productId,
+          shopId,
+          isInventoryAvailable: true,
+          qty: { $gte: requirement.quantity },
+        },
+        { $inc: { qty: -requirement.quantity } },
+        { new: true },
+      );
+
+      if (!updated) {
+        throw new Error(
+          `Insufficient stock for ${label}. Please refresh and try again.`,
+        );
+      }
+
+      deductions.push({
+        productId: requirement.productId,
+        quantity: requirement.quantity,
+      });
+    }
+  } catch (error) {
+    await rollbackInventoryDeductions(shopId, deductions);
+    throw error;
+  }
+}
+
 async function validateCheckoutOptions(cart, options = {}) {
-  const shopId = String(cart.shopId).trim().toUpperCase();
+  const shopId = normalizeShopId(cart.shopId);
   const productMap = await buildProductDetailsMap(
     cart.items.map((item) => item.productId),
     shopId,
@@ -177,18 +293,19 @@ async function validateCheckoutOptions(cart, options = {}) {
 }
 
 async function buildProductDetailsMap(productIds, shopId) {
+  const normalizedShopId = normalizeShopId(shopId);
   const uniqueIds = [...new Set(productIds.map((id) => String(id)))];
-  if (uniqueIds.length === 0) return new Map();
+  if (uniqueIds.length === 0 || !normalizedShopId) return new Map();
 
-  const products = await Product.find({ _id: { $in: uniqueIds }, shopId })
-    .select('amount cost type')
+  const products = await Product.find({ _id: { $in: uniqueIds }, shopId: normalizedShopId })
+    .select('amount cost type isInventoryAvailable qty productName')
     .lean();
 
   return new Map(products.map((product) => [String(product._id), product]));
 }
 
 async function finalizeCartForProceed(cart, options = {}) {
-  const shopId = String(cart.shopId).trim().toUpperCase();
+  const shopId = normalizeShopId(cart.shopId);
   const { productMap, discount } = await validateCheckoutOptions(cart, options);
   const itemUnitCosts = options.itemUnitCosts ?? {};
 
@@ -216,10 +333,14 @@ async function finalizeCartForProceed(cart, options = {}) {
   applyDiscountFlags(cart, discount ?? { enabled: false });
   cart.totalPrice = calculateTotalFromItemUnitCosts(cart.items);
   cart.discountedAmount = calculateDiscountedAmount(cart.totalPrice, discount);
-  return cart;
+  return { cart, productMap };
 }
 
 async function proceedCartSession(cart, options = {}) {
+  if (options.shopId && options.userId) {
+    assertCartAccess(cart, options.shopId, options.userId);
+  }
+
   if (cart.status !== 'added') {
     throw new Error('Only added carts can proceed to checkout');
   }
@@ -228,14 +349,19 @@ async function proceedCartSession(cart, options = {}) {
     throw new Error('Cart has no items to proceed');
   }
 
-  await finalizeCartForProceed(cart, options);
+  const { productMap } = await finalizeCartForProceed(cart, options);
+  await validateAndDeductInventory(cart, productMap);
   cart.status = 'proceed';
   await cart.save();
   return cart;
 }
 
 async function getNextCartNumber(shopId) {
-  const normalizedShopId = String(shopId).trim().toUpperCase();
+  const normalizedShopId = normalizeShopId(shopId);
+  if (!normalizedShopId) {
+    throw new Error('Shop id is required');
+  }
+
   const latest = await Cart.findOne({ shopId: normalizedShopId })
     .sort({ cartNumber: -1 })
     .select('cartNumber')
@@ -252,14 +378,19 @@ async function getNextCartNumber(shopId) {
 }
 
 async function createPendingCart({ shopId, userId, sessionId }) {
+  const normalizedShopId = normalizeShopId(shopId);
+  if (!normalizedShopId) {
+    throw new Error('Shop id is required');
+  }
+
   const MAX_ATTEMPTS = 5;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-    const cartNumber = await getNextCartNumber(shopId);
+    const cartNumber = await getNextCartNumber(normalizedShopId);
 
     try {
       return await Cart.create({
-        shopId,
+        shopId: normalizedShopId,
         user: userId,
         sessionId,
         cartNumber,
@@ -321,10 +452,20 @@ function mapCartSessionSummary(cart) {
   };
 }
 
-async function flattenCartItems(carts) {
+async function flattenCartItems(carts, shopId) {
+  const normalizedShopId = normalizeShopId(shopId);
+  if (!normalizedShopId || !Array.isArray(carts) || carts.length === 0) {
+    return [];
+  }
+
+  for (const cart of carts) {
+    if (normalizeShopId(cart.shopId) !== normalizedShopId) {
+      throw new Error('Cart data shop mismatch');
+    }
+  }
+
   const productIds = carts.flatMap((cart) => cart.items.map((item) => item.productId));
-  const shopId = carts[0]?.shopId ? String(carts[0].shopId).trim().toUpperCase() : '';
-  const productMap = await buildProductDetailsMap(productIds, shopId);
+  const productMap = await buildProductDetailsMap(productIds, normalizedShopId);
 
   return carts.flatMap((cart) =>
     cart.items.map((item) => {
@@ -450,7 +591,7 @@ const getCartItems = async (req, res) => {
     }
 
     const carts = await Cart.find(filter).sort({ cartNumber: 1 });
-    const items = await flattenCartItems(carts);
+    const items = await flattenCartItems(carts, shopId);
 
     res.status(200).json({
       success: true,
@@ -459,6 +600,9 @@ const getCartItems = async (req, res) => {
       message: 'Cart items loaded',
     });
   } catch (error) {
+    if (error.message === 'Cart data shop mismatch') {
+      return res.status(403).json({ success: false, message: error.message });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -498,6 +642,8 @@ const addCartItem = async (req, res) => {
       });
     }
 
+    assertCartAccess(cart, shopId, req.user.id);
+
     if (cart.status !== 'pending') {
       return res.status(400).json({
         success: false,
@@ -505,7 +651,7 @@ const addCartItem = async (req, res) => {
       });
     }
 
-    const product = await Product.findOne({ _id: productId, shopId }).lean();
+    const product = await Product.findOne({ _id: productId, shopId: normalizeShopId(shopId) }).lean();
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -534,7 +680,7 @@ const addCartItem = async (req, res) => {
     cart.totalPrice = await calculateCartTotalPrice(cart.items, shopId);
     await cart.save();
 
-    const [flattenedItem] = await flattenCartItems([cart]);
+    const [flattenedItem] = await flattenCartItems([cart], shopId);
     const responseItem =
       flattenedItem && String(flattenedItem.product) === String(productId)
         ? flattenedItem
@@ -562,6 +708,13 @@ const addCartItem = async (req, res) => {
       message: isUpdate ? 'Cart item updated' : 'Cart item added',
     });
   } catch (error) {
+    if (
+      error.message === 'Cart session not found for this shop' ||
+      error.message === 'Cart session not found for this user' ||
+      error.message === 'Cart data shop mismatch'
+    ) {
+      return res.status(403).json({ success: false, message: error.message });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -607,7 +760,7 @@ const updateCartSessionStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Cart session not found' });
     }
 
-    const items = await flattenCartItems([cart]);
+    const items = await flattenCartItems([cart], shopId);
 
     res.status(200).json({
       success: true,
@@ -618,6 +771,13 @@ const updateCartSessionStatus = async (req, res) => {
       message: 'Cart session status updated',
     });
   } catch (error) {
+    if (
+      error.message === 'Cart session not found for this shop' ||
+      error.message === 'Cart session not found for this user' ||
+      error.message === 'Cart data shop mismatch'
+    ) {
+      return res.status(403).json({ success: false, message: error.message });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -646,12 +806,14 @@ const checkoutCartSession = async (req, res) => {
     }
 
     await proceedCartSession(cart, {
+      shopId,
+      userId: req.user.id,
       discount: req.body?.discount,
       isDiscount: req.body?.isDiscount,
       itemUnitCosts: req.body?.itemUnitCosts,
     });
 
-    const items = await flattenCartItems([cart]);
+    const items = await flattenCartItems([cart], shopId);
 
     res.status(200).json({
       success: true,
@@ -670,6 +832,13 @@ const checkoutCartSession = async (req, res) => {
   } catch (error) {
     if (isCheckoutClientError(error.message)) {
       return res.status(400).json({ success: false, message: error.message });
+    }
+    if (
+      error.message === 'Cart session not found for this shop' ||
+      error.message === 'Cart session not found for this user' ||
+      error.message === 'Cart data shop mismatch'
+    ) {
+      return res.status(403).json({ success: false, message: error.message });
     }
 
     res.status(500).json({ success: false, message: error.message });
@@ -705,12 +874,14 @@ const updateCartSessionItem = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Cart session not found' });
     }
 
+    assertCartAccess(cart, shopId, req.user.id);
+
     const itemIndex = cart.items.findIndex((item) => String(item.productId) === String(productId));
     if (itemIndex < 0) {
       return res.status(404).json({ success: false, message: 'Cart item not found' });
     }
 
-    const product = await Product.findOne({ _id: productId, shopId }).lean();
+    const product = await Product.findOne({ _id: productId, shopId: normalizeShopId(shopId) }).lean();
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found for this shop' });
     }
@@ -721,7 +892,7 @@ const updateCartSessionItem = async (req, res) => {
     cart.totalPrice = await calculateCartTotalPrice(cart.items, shopId);
     await cart.save();
 
-    const items = await flattenCartItems([cart]);
+    const items = await flattenCartItems([cart], shopId);
 
     res.status(200).json({
       success: true,
@@ -732,11 +903,20 @@ const updateCartSessionItem = async (req, res) => {
       message: 'Cart item updated',
     });
   } catch (error) {
+    if (
+      error.message === 'Cart session not found for this shop' ||
+      error.message === 'Cart session not found for this user' ||
+      error.message === 'Cart data shop mismatch'
+    ) {
+      return res.status(403).json({ success: false, message: error.message });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-async function removeItemFromCart(cart, productId, shopId) {
+async function removeItemFromCart(cart, productId, shopId, userId) {
+  assertCartAccess(cart, shopId, userId);
+
   const nextItems = cart.items.filter((item) => String(item.productId) !== String(productId));
 
   if (nextItems.length === cart.items.length) {
@@ -744,7 +924,13 @@ async function removeItemFromCart(cart, productId, shopId) {
   }
 
   if (nextItems.length === 0) {
-    await Cart.findByIdAndDelete(cart._id);
+    const deleted = await Cart.findOneAndDelete(
+      buildShopCartFilter(shopId, userId, { sessionId: cart.sessionId }),
+    );
+    if (!deleted) {
+      return { found: false };
+    }
+
     return {
       found: true,
       sessionId: cart.sessionId,
@@ -760,7 +946,7 @@ async function removeItemFromCart(cart, productId, shopId) {
   cart.totalPrice = await calculateCartTotalPrice(cart.items, shopId);
   await cart.save();
 
-  const items = await flattenCartItems([cart]);
+  const items = await flattenCartItems([cart], shopId);
 
   return {
     found: true,
@@ -793,7 +979,7 @@ const removeCartSessionItem = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Cart session not found' });
     }
 
-    const result = await removeItemFromCart(cart, productId, shopId);
+    const result = await removeItemFromCart(cart, productId, shopId, req.user.id);
     if (!result.found) {
       return res.status(404).json({ success: false, message: 'Cart item not found' });
     }
@@ -808,6 +994,13 @@ const removeCartSessionItem = async (req, res) => {
       message: result.message,
     });
   } catch (error) {
+    if (
+      error.message === 'Cart session not found for this shop' ||
+      error.message === 'Cart session not found for this user' ||
+      error.message === 'Cart data shop mismatch'
+    ) {
+      return res.status(403).json({ success: false, message: error.message });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };

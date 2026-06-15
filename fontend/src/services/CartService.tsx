@@ -16,7 +16,10 @@ import {
   UpdateAddedCartItemRequest,
   UpdateCartSessionStatusResponse,
 } from '../type/cart';
-import { CheckoutCartRequest, CheckoutCartResponse } from '../type/history';
+import {
+  CheckoutCartRequest,
+  CheckoutCartSessionResponse,
+} from '../type/history';
 import { getCartNumberForSession } from '../utils/cartSession';
 import { RootState } from '../store/store';
 
@@ -476,19 +479,28 @@ export const checkoutCartSession_Service = createAsyncThunk(
       const addedSessions = (getState() as RootState).CartReducer.addedSessions.items;
       const cartNumber = getCartNumberForSession(addedSessions, payload.sessionId);
 
-      const response = await apiClient.post<CheckoutCartResponse>('/api/history/checkout', payload);
+      const response = await apiClient.post<CheckoutCartSessionResponse>(
+        `/api/cart/sessions/${payload.sessionId}/checkout`,
+        {
+          discount: payload.discount,
+          isDiscount: payload.isDiscount,
+          itemUnitCosts: payload.itemUnitCosts,
+        },
+      );
 
       if (isHttpSuccess(response.status) && response.data?.success) {
         await dispatch(fetchAddedCartSessions_Service());
         return {
           ...response.data,
-          cartNumber,
+          cartNumber: response.data.cartNumber ?? cartNumber,
         };
       }
 
       const apiError: ApiErrorResponse = {
         error: 'Error',
-        message: 'Could not checkout cart',
+        message:
+          (response.data as CheckoutCartSessionResponse & { message?: string })?.message ||
+          'Could not checkout cart',
         status: response.status,
         timestamp: new Date().toISOString(),
       };

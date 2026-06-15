@@ -32,6 +32,7 @@ import {
   revertAddedCartToPending_Service,
   updateAddedCartItemQuantity_Service,
 } from '../../services/CartService';
+import { createHistory_Service } from '../../services/HistoryService';
 import { fetchProducts_Service } from '../../services/ProductService';
 import { clearCartTabSelection, setCartTabSelection } from '../../store/reducers/CartReducer';
 import { AppDispatch, RootState, store } from '../../store/store';
@@ -39,13 +40,16 @@ import { CartOrderItem, CartSessionSummary } from '../../type/cart';
 import { Product } from '../../type/product';
 import { getCartOrderItemKey } from '../../utils/cartOrder';
 import { getCartNumberForSession, filterAddedSessionsForShop } from '../../utils/cartSession';
-import { getStockLimitToastMessage, isAtProductStockLimit } from '../../utils/productStock';
+import { getCheckoutInventoryError, getStockLimitToastMessage, isAtProductStockLimit } from '../../utils/productStock';
 import { CheckoutCartRequest } from '../../type/history';
 import SlideToast from '../../components/SlideToast/SlideToast';
 import CheckoutPaymentModal from '../../components/CheckoutPaymentModal/CheckoutPaymentModal';
+import CommonAlert from '../../components/CommonAlert/CommonAlert';
+import { useCommonAlert } from '../../hooks/useCommonAlert';
+import { handleSessionExpiredApiError } from '../../utils/apiErrorAlert';
 import { cardShadow } from '../settings/shared/settingsDetailStyles';
 import { softShadow } from './ManageInventory/inventoryUiStyles';
-import { CheckoutPaymentMethod } from '../../type/checkoutPayment';
+import { CheckoutPaymentMethod, isValidCheckoutPhone, sanitizeCheckoutPhone } from '../../type/checkoutPayment';
 
 type Props = BottomTabScreenProps<MainBottomTabParamList, 'Cart'>;
 
@@ -89,6 +93,11 @@ function getCheckoutValidationError(
     if (amount <= 0) {
       return `Enter service amount for ${item.name}`;
     }
+  }
+
+  const inventoryError = getCheckoutInventoryError(items, productById);
+  if (inventoryError) {
+    return inventoryError;
   }
 
   if (discountEnabled) {
@@ -331,9 +340,10 @@ const CartOrderFooter = React.memo(function CartOrderFooter({
   );
 });
 
-export default function CartScreen(_props: Props) {
+export default function CartScreen({ navigation }: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
   const dispatch = useDispatch<AppDispatch>();
+  const { alertConfig, visible, show_Alert , hideAlert} = useCommonAlert();
   const {
     items: addedSessions,
     loading: addedSessionsLoading,
@@ -360,6 +370,7 @@ export default function CartScreen(_props: Props) {
   );
   const [addedModalVisible, setAddedModalVisible] = useState(false);
   const [slideToastMessage, setSlideToastMessage] = useState<string | null>(null);
+  const [slideToastTone, setSlideToastTone] = useState<'default' | 'success'>('default');
   const [discountEnabled, setDiscountEnabled] = useState(false);
   const [discountMode, setDiscountMode] = useState<DiscountMode>('amount');
   const [discountValue, setDiscountValue] = useState('');
@@ -376,12 +387,17 @@ export default function CartScreen(_props: Props) {
     [addedSessions, shopId],
   );
 
-  const showSlideToast = useCallback((message: string) => {
-    setSlideToastMessage(message);
-  }, []);
+  const showSlideToast = useCallback(
+    (message: string, tone: 'default' | 'success' = 'default') => {
+      setSlideToastTone(tone);
+      setSlideToastMessage(message);
+    },
+    [],
+  );
 
   const hideSlideToast = useCallback(() => {
     setSlideToastMessage(null);
+    setSlideToastTone('default');
   }, []);
 
   const handleServiceAmountChange = useCallback((productId: string, value: string) => {
@@ -644,21 +660,113 @@ export default function CartScreen(_props: Props) {
   const handleConfirmCheckout = useCallback(async () => {
     if (!sessionId || items.length === 0 || checkoutLoading) return;
 
+    if (!hasShop) {
+      setTimeout(() => {
+        show_Alert(
+          'error',
+          'Error',
+          'Shop not found. Please log in again.',
+          1,
+          false,
+          'OK',
+          () => {},
+        );
+      }, 150);
+      return;
+    }
+
+    if (!isValidCheckoutPhone(customerPhone)) {
+      setTimeout(() => {
+        show_Alert(
+          'error',
+          'Phone required',
+          'Customer phone number must be 10 digits.',
+          1,
+          false,
+          'OK',
+          () => {},
+        );
+      }, 150);
+      return;
+    }
+
     const payload = buildCheckoutPayload();
     if (!payload) return;
 
     try {
       await dispatch(checkoutCartSession_Service(payload)).unwrap();
+
+      const historyResponse = await dispatch(
+        createHistory_Service({
+          sessionId,
+          customerName: customerName.trim(),
+          customerMobile: sanitizeCheckoutPhone(customerPhone),
+          paymentOption: selectedPaymentMethod,
+        }),
+      ).unwrap();
+
+      console.log('response in handleConfirmCheckout', historyResponse);
+
       setPaymentModalVisible(false);
-      showSlideToast('Checkout completed');
-    } catch (err: unknown) {
-      const message =
-        err && typeof err === 'object' && 'message' in err
-          ? String((err as { message: unknown }).message)
-          : 'Could not checkout cart';
-      showSlideToast(message);
+      setCustomerName('');
+      setCustomerPhone('');
+
+      showSlideToast(
+        `Order ${historyResponse.data.orderId ?? `#${historyResponse.data.cartNumber}`} completed successfully.`,
+        'success',
+      );
+
+      setTimeout(() => {
+        navigation.navigate('History');
+      }, 1600);
+
+      if (hasShop) {
+        void dispatch(fetchProducts_Service());
+      }
+    } catch (error: unknown) {
+      console.log('error in handleConfirmCheckout', error);
+
+      if (hasShop) {
+        void dispatch(fetchProducts_Service());
+      }
+
+      const handled = await handleSessionExpiredApiError(error, show_Alert);
+      if (handled) return;
+
+      setTimeout(() => {
+        const message =
+          error && typeof error === 'object' && 'message' in error
+            ? String((error as { message?: string }).message)
+            : 'Could not complete checkout. Please try again.';
+        show_Alert(
+          'error',
+          'Checkout failed',
+          message,
+          2,
+          false,
+          'Retry',
+          () => {
+            void handleConfirmCheckout();
+          },
+          'Cancel',
+          () => {},
+        );
+      }, 150);
     }
-  }, [buildCheckoutPayload, checkoutLoading, dispatch, items.length, sessionId, showSlideToast]);
+  }, [
+    buildCheckoutPayload,
+    checkoutLoading,
+    customerName,
+    customerPhone,
+    dispatch,
+    hasShop,
+    items.length,
+    navigation,
+    selectedPaymentMethod,
+    sessionId,
+    show_Alert,
+    showSlideToast,
+  ]);
 
   const handleGoBackToPending = useCallback(
     async (targetSessionId: string) => {
@@ -964,7 +1072,8 @@ export default function CartScreen(_props: Props) {
           message={slideToastMessage}
           onDismiss={hideSlideToast}
           paperTheme={paperTheme}
-          durationMs={2000}
+          tone={slideToastTone}
+          durationMs={2200}
         />
 
         <View style={styles.titleRow}>
@@ -1122,6 +1231,7 @@ export default function CartScreen(_props: Props) {
           onCustomerPhoneChange={setCustomerPhone}
           onSelectMethod={setSelectedPaymentMethod}
           onClose={closePaymentModal}
+          proceedDisabled={!isValidCheckoutPhone(customerPhone)}
           onProceed={() => {
             void handleConfirmCheckout();
           }}
@@ -1253,6 +1363,25 @@ export default function CartScreen(_props: Props) {
           </TouchableOpacity>
         </Modal>
       </SafeAreaView>
+
+      {alertConfig ? (
+        <CommonAlert
+          visible={visible}
+          type={alertConfig.type}
+          title={alertConfig.title}
+          message={alertConfig.message}
+          buttons={alertConfig.buttons}
+          positiveButtonText={alertConfig.positiveButtonText}
+          negativeButtonText={alertConfig.negativeButtonText}
+          onPositivePress={alertConfig.onPositivePress}
+          onNegativePress={alertConfig.onNegativePress}
+          MoreDetails={alertConfig.MoreDetails}
+          OtherDescirption={alertConfig.OtherDescirption}
+          OtherButtonPress={alertConfig.OtherButtonPress}
+          OtherButtonText={alertConfig.OtherButtonText}
+          onClose={hideAlert}
+        />
+      ) : null}
     </>
   );
 }

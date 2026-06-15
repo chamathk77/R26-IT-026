@@ -13,8 +13,14 @@ export const EMPTY_CHECKOUT_CUSTOMER: CheckoutCustomerDetails = {
   phone: '',
 };
 
+export const CHECKOUT_PHONE_DIGIT_COUNT = 10;
+
 export function sanitizeCheckoutPhone(value: string): string {
-  return value.replace(/\D/g, '').slice(0, 15);
+  return value.replace(/\D/g, '').slice(0, CHECKOUT_PHONE_DIGIT_COUNT);
+}
+
+export function isValidCheckoutPhone(value: string): boolean {
+  return sanitizeCheckoutPhone(value).length === CHECKOUT_PHONE_DIGIT_COUNT;
 }
 
 export type CheckoutPaymentOption = {

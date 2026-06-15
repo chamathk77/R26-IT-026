@@ -28,6 +28,7 @@ type CheckoutPaymentModalProps = {
   customerPhone: string;
   selectedMethod: CheckoutPaymentMethod;
   loading?: boolean;
+  proceedDisabled?: boolean;
   paperTheme: MD3Theme;
   resolvedTheme: 'light' | 'dark';
   onCustomerNameChange: (value: string) => void;
@@ -44,6 +45,7 @@ export default function CheckoutPaymentModal({
   customerPhone,
   selectedMethod,
   loading = false,
+  proceedDisabled = false,
   paperTheme,
   resolvedTheme,
   onCustomerNameChange,
@@ -103,7 +105,7 @@ export default function CheckoutPaymentModal({
               </View>
 
               <Text style={[styles.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-                Phone number
+                Phone number <Text style={{ color: paperTheme.colors.error }}>*</Text>
               </Text>
               <View
                 style={[
@@ -118,9 +120,10 @@ export default function CheckoutPaymentModal({
                 <TextInput
                   value={customerPhone}
                   onChangeText={(text) => onCustomerPhoneChange(sanitizeCheckoutPhone(text))}
-                  placeholder="07X XXX XXXX"
+                  placeholder="07XXXXXXXX"
                   placeholderTextColor={paperTheme.colors.onSurfaceVariant}
                   keyboardType="phone-pad"
+                  maxLength={10}
                   autoComplete={Platform.OS === 'android' ? 'tel' : 'tel-device'}
                   textContentType="telephoneNumber"
                   editable={!loading}
@@ -224,12 +227,12 @@ export default function CheckoutPaymentModal({
               accessibilityRole="button"
               accessibilityLabel="Proceed with checkout"
               onPress={onProceed}
-              disabled={loading}
+              disabled={loading || proceedDisabled}
               style={[
                 styles.proceedBtn,
                 {
                   backgroundColor: paperTheme.colors.primary,
-                  opacity: loading ? 0.75 : 1,
+                  opacity: loading || proceedDisabled ? 0.55 : 1,
                 },
                 softShadow(resolvedTheme),
               ]}

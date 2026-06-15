@@ -15,6 +15,7 @@ import {
   revertAddedCartToPending_Service,
   updateAddedCartItemQuantity_Service,
 } from '../../services/CartService';
+import { createHistory_Service } from '../../services/HistoryService';
 import { CartOrder, CartSessionSummary } from '../../type/cart';
 import { buildCartOrderFromLines } from '../../utils/cartOrder';
 
@@ -370,6 +371,21 @@ export const CartSlice = createSlice({
       const payload = action.payload as { message?: string } | undefined;
       state.checkout.error =
         payload?.message || action.error.message || 'Could not checkout cart';
+    });
+
+    builder.addCase(createHistory_Service.pending, (state) => {
+      state.checkout.loading = true;
+      state.checkout.error = null;
+    });
+    builder.addCase(createHistory_Service.fulfilled, (state) => {
+      state.checkout.loading = false;
+      state.checkout.error = null;
+    });
+    builder.addCase(createHistory_Service.rejected, (state, action) => {
+      state.checkout.loading = false;
+      const payload = action.payload as { message?: string } | undefined;
+      state.checkout.error =
+        payload?.message || action.error.message || 'Could not save checkout history';
     });
 
     builder.addCase(revertAddedCartToPending_Service.pending, (state, action) => {

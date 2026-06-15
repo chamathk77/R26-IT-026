@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 
+const PAYMENT_OPTIONS = ['cash', 'card', 'online'];
+
 const historyItemSchema = new mongoose.Schema(
   {
     productId: {
@@ -7,16 +9,21 @@ const historyItemSchema = new mongoose.Schema(
       ref: 'Product',
       required: true,
     },
-    name: {
+    productName: {
       type: String,
       required: true,
       trim: true,
     },
-    quantity: {
+    qty: {
       type: Number,
       required: true,
       min: 1,
       default: 1,
+    },
+    unitCost: {
+      type: Number,
+      default: null,
+      min: 0,
     },
   },
   { _id: false },
@@ -24,64 +31,117 @@ const historyItemSchema = new mongoose.Schema(
 
 const historySchema = new mongoose.Schema(
   {
-    handledUser: {
+    shopId: {
+      type: String,
+      required: true,
+      trim: true,
+      uppercase: true,
+      index: true,
+    },
+    cartId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
       required: true,
       index: true,
     },
-    cartSessionId: {
-      type: mongoose.Schema.Types.ObjectId,
+    cartNumber: {
+      type: Number,
       required: true,
+      min: 1,
       index: true,
+    },
+    orderId: {
+      type: String,
+      required: true,
+      trim: true,
+      uppercase: true,
+      minlength: 6,
+      index: true,
+    },
+    checkOutTime: {
+      type: Date,
+      required: true,
+      default: Date.now,
+      index: true,
+    },
+    amount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    isDiscount: {
+      type: Boolean,
+      default: false,
+    },
+    discountedAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     items: {
       type: [historyItemSchema],
       default: [],
     },
-    totalPrice: {
+    totalAmount: {
       type: Number,
       required: true,
       min: 0,
     },
-    subtotalPrice: {
-      type: Number,
-      min: 0,
-      default: null,
+    customerName: {
+      type: String,
+      default: '',
+      trim: true,
     },
-    discount: {
-      enabled: {
-        type: Boolean,
-        default: false,
-      },
-      type: {
-        type: String,
-        enum: ['amount', 'percent', null],
-        default: null,
-      },
-      value: {
-        type: Number,
-        min: 0,
-        default: null,
-      },
-      amount: {
-        type: Number,
-        min: 0,
-        default: 0,
-      },
-    },
-    checkoutAt: {
-      type: Date,
+    customerMobile: {
+      type: String,
       required: true,
-      default: Date.now,
+      trim: true,
+      index: true,
+    },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true,
+    },
+    submittedUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true,
+    },
+    submittedUserName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    paymentOption: {
+      type: String,
+      enum: PAYMENT_OPTIONS,
+      required: true,
       index: true,
     },
   },
   { timestamps: true },
 );
 
-historySchema.index({ handledUser: 1, checkoutAt: -1 });
+historySchema.pre('validate', function normalizeHistoryFields() {
+  if (this.shopId) {
+    this.shopId = String(this.shopId).trim().toUpperCase();
+  }
+  if (this.orderId) {
+    this.orderId = String(this.orderId).trim().toUpperCase();
+  }
+});
+
+historySchema.index({ shopId: 1, checkOutTime: -1 });
+historySchema.index({ shopId: 1, cartNumber: 1 });
+historySchema.index({ shopId: 1, paymentOption: 1, checkOutTime: -1 });
+historySchema.index({ shopId: 1, submittedUserId: 1, checkOutTime: -1 });
+historySchema.index({ shopId: 1, cartId: 1 }, { unique: true });
+historySchema.index({ shopId: 1, orderId: 1 }, { unique: true });
 
 const History = mongoose.model('History', historySchema);
+
+History.PAYMENT_OPTIONS = PAYMENT_OPTIONS;
 
 module.exports = History;
