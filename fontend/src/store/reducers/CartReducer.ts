@@ -1,4 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { clearLoginSession } from './AuthReducer';
 import {
   addCartItem_Service,
   addProductToPendingCart_Service,
@@ -185,6 +186,16 @@ export const CartSlice = createSlice({
       state.addedSessions.loading = false;
       state.addedSessions.error = null;
       state.addedSessions.items = Array.isArray(action.payload?.data) ? action.payload.data : [];
+
+      if (state.cartTab.sessionId) {
+        const stillAdded = state.addedSessions.items.some(
+          (session) =>
+            session.sessionId === state.cartTab.sessionId && session.status === 'added',
+        );
+        if (!stillAdded) {
+          state.cartTab = initialState.cartTab;
+        }
+      }
     });
     builder.addCase(fetchAddedCartSessions_Service.rejected, (state, action) => {
       state.addedSessions.loading = false;
@@ -215,6 +226,12 @@ export const CartSlice = createSlice({
       if (action.meta.arg.status === 'added') {
         state.cartTab.loading = false;
         state.cartTab.error = null;
+
+        if (lines.length === 0 || order?.status !== 'added') {
+          state.cartTab = initialState.cartTab;
+          return;
+        }
+
         state.cartTab.sessionId = sessionId;
         state.cartTab.order = order;
         return;
@@ -434,6 +451,8 @@ export const CartSlice = createSlice({
       state.editCart.error =
         payload?.message || action.error.message || 'Could not remove cart item';
     });
+
+    builder.addCase(clearLoginSession, () => initialState);
   },
 });
 

@@ -47,6 +47,7 @@ import { handleSessionExpiredApiError } from '../../utils/apiErrorAlert';
 import { getCartOrderItemKey } from '../../utils/cartOrder';
 import { getCartNumberForSession } from '../../utils/cartSession';
 import { devLog } from '../../utils/devLog';
+import { getStockLimitToastMessage, isAtProductStockLimit } from '../../utils/productStock';
 import { resolveProductImageUri } from '../../utils/productImage';
 import CommonAlert from '../../components/CommonAlert/CommonAlert';
 import SlideToast from '../../components/SlideToast/SlideToast';
@@ -62,24 +63,6 @@ function getCategoryColor(categories: Category[], product: Product): string {
 function formatAmount(amount: number | null): string {
   if (amount == null) return '—';
   return `Rs. ${amount.toLocaleString('en-LK')}`;
-}
-
-function getStockLimitToastMessage(product: Product, cartQty: number): string | null {
-  if (!product.isInventoryAvailable) return null;
-
-  const stockQty = product.qty ?? 0;
-  if (stockQty <= 0) {
-    return `${product.productName} is out of stock`;
-  }
-  if (cartQty >= stockQty) {
-    return `Only ${stockQty} in stock for ${product.productName}`;
-  }
-  return null;
-}
-
-function isAtProductStockLimit(product: Product, cartQty: number): boolean {
-  if (!product.isInventoryAvailable) return false;
-  return cartQty >= (product.qty ?? 0);
 }
 
 function thunkErrorMessage(err: unknown, fallback: string): string {
@@ -381,10 +364,26 @@ export default function ProductsScreen({ navigation }: Props) {
     [closeCategoryDropdown],
   );
 
-  const openPendingModal = useCallback(() => {
+  const openPendingModal = useCallback(async () => {
     setPendingModalVisible(true);
-    void dispatch(fetchPendingCartSessions_Service());
-  }, [dispatch]);
+    try {
+      await dispatch(fetchPendingCartSessions_Service()).unwrap();
+    } catch (err: unknown) {
+      devLog('Load pending carts:', err);
+
+      const handled = await handleSessionExpiredApiError(err, show_Alert);
+      if (handled) return;
+
+      show_Alert(
+        'error',
+        'Error',
+        thunkErrorMessage(err, 'Could not load pending carts'),
+        1,
+        true,
+        'OK',
+      );
+    }
+  }, [dispatch, show_Alert]);
 
   const closePendingModal = useCallback(() => {
     setPendingModalVisible(false);
@@ -507,6 +506,7 @@ export default function ProductsScreen({ navigation }: Props) {
     const isAdjusting = adjustingProductId === item._id || addingProductId === item._id;
     const atStockLimit = isAtProductStockLimit(item, cartQuantity);
     const categoryColor = getCategoryColor(categories, item);
+    const isService = item.type === 'service';
     const categoryLabel =
       item.categoryName ||
       categories.find((entry) => entry._id === getProductCategoryId(item))?.name ||
@@ -516,20 +516,18 @@ export default function ProductsScreen({ navigation }: Props) {
       <View
         style={[
           styles.productCard,
-          {
-            backgroundColor: paperTheme.colors.surface,
-            borderColor: paperTheme.colors.outlineVariant,
-          },
+          { backgroundColor: paperTheme.colors.surface },
           cardShadow(resolvedTheme),
         ]}
       >
+        <View style={[styles.productAccent, { backgroundColor: categoryColor }]} />
         <View style={styles.productRow}>
           <View style={styles.thumbWrap}>
             {imageUri ? (
               <Image source={{ uri: imageUri }} style={styles.thumb} resizeMode="cover" />
             ) : (
               <View style={[styles.thumbPlaceholder, { backgroundColor: `${categoryColor}18` }]}>
-                <Ionicons name="cube-outline" size={22} color={categoryColor} />
+                <Ionicons name="cube-outline" size={18} color={categoryColor} />
               </View>
             )}
             {item.isInventoryAvailable ? (
@@ -564,25 +562,70 @@ export default function ProductsScreen({ navigation }: Props) {
                 </Text>
               </View>
             </View>
-            <View style={styles.categoryRow}>
-              <View style={[styles.categoryDot, { backgroundColor: categoryColor }]} />
-              <Text style={[styles.categoryLabel, { color: paperTheme.colors.onSurfaceVariant }]} numberOfLines={1}>
-                {categoryLabel}
-              </Text>
+            <View style={styles.metaRow}>
+              <View style={styles.categoryRow}>
+                <View style={[styles.categoryDot, { backgroundColor: categoryColor }]} />
+                <Text style={[styles.categoryLabel, { color: paperTheme.colors.onSurfaceVariant }]} numberOfLines={1}>
+                  {categoryLabel}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.metaChip,
+                  {
+                    backgroundColor: isService
+                      ? `${paperTheme.colors.tertiary}22`
+                      : `${paperTheme.colors.primary}14`,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={isService ? 'construct-outline' : 'pricetag-outline'}
+                  size={10}
+                  color={isService ? paperTheme.colors.tertiary : paperTheme.colors.primary}
+                />
+                <Text
+                  style={[
+                    styles.metaChipText,
+                    {
+                      color: isService ? paperTheme.colors.tertiary : paperTheme.colors.primary,
+                    },
+                  ]}
+                >
+                  {isService ? 'Service' : 'Product'}
+                </Text>
+              </View>
             </View>
           </View>
 
           <View style={styles.productActions}>
             {isAdjusting ? (
               <ActivityIndicator size="small" color={paperTheme.colors.primary} />
+            ) : cartQuantity === 0 ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`Add ${item.productName} to cart`}
+                onPress={() => {
+                  void handleAdjustProductQuantity(item, 1);
+                }}
+                disabled={addToCartLoading}
+                style={[
+                  styles.quickAddBtn,
+                  { backgroundColor: paperTheme.colors.primary },
+                  softShadow(resolvedTheme),
+                ]}
+              >
+                <Ionicons name="add" size={20} color={paperTheme.colors.onPrimary} />
+              </TouchableOpacity>
             ) : (
               <View
                 style={[
                   styles.qtyStepper,
                   {
-                    backgroundColor: paperTheme.colors.surfaceVariant,
-                    borderColor: paperTheme.colors.outlineVariant,
+                    backgroundColor: paperTheme.colors.surface,
+                    borderColor: `${paperTheme.colors.outlineVariant}88`,
                   },
+                  softShadow(resolvedTheme),
                 ]}
               >
                 <TouchableOpacity
@@ -597,7 +640,7 @@ export default function ProductsScreen({ navigation }: Props) {
                     { opacity: cartQuantity <= 0 ? 0.35 : 1 },
                   ]}
                 >
-                  <Ionicons name="remove" size={15} color={paperTheme.colors.onSurface} />
+                  <Ionicons name="remove" size={13} color={paperTheme.colors.onSurface} />
                 </TouchableOpacity>
                 <Text style={[styles.qtyValue, { color: paperTheme.colors.onSurface }]}>{cartQuantity}</Text>
                 <TouchableOpacity
@@ -616,7 +659,7 @@ export default function ProductsScreen({ navigation }: Props) {
                     },
                   ]}
                 >
-                  <Ionicons name="add" size={15} color={paperTheme.colors.onPrimary} />
+                  <Ionicons name="add" size={13} color={paperTheme.colors.onPrimary} />
                 </TouchableOpacity>
               </View>
             )}
@@ -654,7 +697,9 @@ export default function ProductsScreen({ navigation }: Props) {
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="View pending carts"
-              onPress={openPendingModal}
+              onPress={() => {
+                void openPendingModal();
+              }}
               style={[
                 styles.cartFab,
                 { backgroundColor: paperTheme.colors.primary },
@@ -676,26 +721,33 @@ export default function ProductsScreen({ navigation }: Props) {
             <View
               style={[
                 styles.summaryStrip,
-                {
-                  backgroundColor: paperTheme.colors.surfaceVariant,
-                  borderColor: paperTheme.colors.outlineVariant,
-                },
+                { backgroundColor: paperTheme.colors.surface },
+                cardShadow(resolvedTheme),
               ]}
             >
               <View style={styles.summaryItem}>
-                <Text style={[styles.summaryValue, { color: paperTheme.colors.primary }]}>
+                <View style={[inventoryUi.statIconWrap, { backgroundColor: `${paperTheme.colors.primary}16` }]}>
+                  <Ionicons name="options-outline" size={14} color={paperTheme.colors.primary} />
+                </View>
+                <Text style={[styles.summaryValue, { color: paperTheme.colors.onSurface }]}>
                   {filteredProducts.length}
                 </Text>
                 <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>Showing</Text>
               </View>
               <View style={[styles.summaryDivider, { backgroundColor: paperTheme.colors.outlineVariant }]} />
               <View style={styles.summaryItem}>
-                <Text style={[styles.summaryValue, { color: paperTheme.colors.primary }]}>{products.length}</Text>
+                <View style={[inventoryUi.statIconWrap, { backgroundColor: `${paperTheme.colors.secondary}22` }]}>
+                  <Ionicons name="layers-outline" size={14} color={paperTheme.colors.secondary} />
+                </View>
+                <Text style={[styles.summaryValue, { color: paperTheme.colors.onSurface }]}>{products.length}</Text>
                 <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>Total</Text>
               </View>
               <View style={[styles.summaryDivider, { backgroundColor: paperTheme.colors.outlineVariant }]} />
               <View style={styles.summaryItem}>
-                <Text style={[styles.summaryValue, { color: paperTheme.colors.primary }]}>{pendingCartCount}</Text>
+                <View style={[inventoryUi.statIconWrap, { backgroundColor: `${paperTheme.colors.tertiary}22` }]}>
+                  <Ionicons name="cart-outline" size={14} color={paperTheme.colors.tertiary} />
+                </View>
+                <Text style={[styles.summaryValue, { color: paperTheme.colors.onSurface }]}>{pendingCartCount}</Text>
                 <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>Pending</Text>
               </View>
             </View>
@@ -712,10 +764,7 @@ export default function ProductsScreen({ navigation }: Props) {
         <View
           style={[
             styles.filtersCard,
-            {
-              backgroundColor: paperTheme.colors.surface,
-              borderColor: paperTheme.colors.outlineVariant,
-            },
+            { backgroundColor: paperTheme.colors.surface },
             cardShadow(resolvedTheme),
           ]}
         >
@@ -724,10 +773,7 @@ export default function ProductsScreen({ navigation }: Props) {
               style={[
                 styles.searchWrap,
                 styles.searchWrapFlex,
-                {
-                  backgroundColor: paperTheme.colors.surfaceVariant,
-                  borderColor: paperTheme.colors.outlineVariant,
-                },
+                { backgroundColor: paperTheme.colors.surfaceVariant },
               ]}
             >
               <Ionicons name="search-outline" size={18} color={paperTheme.colors.onSurfaceVariant} />
@@ -809,10 +855,7 @@ export default function ProductsScreen({ navigation }: Props) {
                 activeOpacity={0.85}
                 style={[
                   styles.categoryDropdown,
-                  {
-                    backgroundColor: paperTheme.colors.surfaceVariant,
-                    borderColor: paperTheme.colors.outlineVariant,
-                  },
+                  { backgroundColor: paperTheme.colors.surfaceVariant },
                 ]}
               >
                 {selectedCategory ? (
@@ -851,15 +894,12 @@ export default function ProductsScreen({ navigation }: Props) {
           <View
             style={[
               styles.activeCartBanner,
-              {
-                backgroundColor: paperTheme.colors.primaryContainer,
-                borderColor: `${paperTheme.colors.primary}44`,
-              },
-              softShadow(resolvedTheme),
+              { backgroundColor: paperTheme.colors.primaryContainer },
+              cardShadow(resolvedTheme),
             ]}
           >
             <View style={[styles.activeCartIconWrap, { backgroundColor: paperTheme.colors.primary }]}>
-              <Ionicons name="cart" size={14} color={paperTheme.colors.onPrimary} />
+              <Ionicons name="cart" size={16} color={paperTheme.colors.onPrimary} />
             </View>
             <View style={styles.activeCartTextBlock}>
               <Text style={[styles.activeCartTitle, { color: paperTheme.colors.onPrimaryContainer }]}>
@@ -915,7 +955,7 @@ export default function ProductsScreen({ navigation }: Props) {
                 </Text>
               </View>
             }
-            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+            ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
             showsVerticalScrollIndicator={false}
           />
         )}
@@ -1258,36 +1298,36 @@ const styles = StyleSheet.create({
   summaryStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
   },
   summaryItem: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 1,
   },
   summaryValue: {
     fontFamily: fonts.PoppinsBold,
-    fontSize: 15,
+    fontSize: 17,
+    letterSpacing: -0.2,
   },
   summaryLabel: {
     fontFamily: fonts.PoppinsMedium,
-    fontSize: 11,
+    fontSize: 10,
+    letterSpacing: 0.2,
   },
   summaryDivider: {
-    width: 1,
-    height: 18,
+    width: StyleSheet.hairlineWidth,
+    height: 44,
+    opacity: 0.8,
   },
   filtersCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 12,
-    marginBottom: 10,
-    gap: 10,
+    borderRadius: 22,
+    padding: 14,
+    marginBottom: 12,
+    gap: 12,
   },
   searchTopRow: {
     flexDirection: 'row',
@@ -1298,10 +1338,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   searchWrapFlex: { flex: 1 },
   searchInput: {
@@ -1311,9 +1350,9 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   scanBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1334,17 +1373,17 @@ const styles = StyleSheet.create({
   activeCartBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 10,
+    gap: 12,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+    overflow: 'hidden',
   },
   activeCartIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1374,10 +1413,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     gap: 8,
   },
   categoryDropdownInner: {
@@ -1417,71 +1455,76 @@ const styles = StyleSheet.create({
   productList: { flex: 1 },
   listContent: { paddingBottom: 28, flexGrow: 1 },
   productCard: {
-    borderRadius: 20,
-    borderWidth: 1,
+    flexDirection: 'row',
+    borderRadius: 18,
     overflow: 'hidden',
   },
+  productAccent: {
+    width: 4,
+  },
   productRow: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 12,
+    paddingLeft: 10,
   },
   thumbWrap: {
-    width: 56,
-    height: 56,
+    width: 48,
+    height: 48,
     position: 'relative',
   },
   thumb: {
-    width: 56,
-    height: 56,
+    width: 48,
+    height: 48,
     borderRadius: 14,
   },
   thumbPlaceholder: {
-    width: 56,
-    height: 56,
+    width: 48,
+    height: 48,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cartBadge: {
     position: 'absolute',
-    bottom: -4,
-    right: -4,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
+    bottom: -3,
+    right: -3,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
   },
   stockBadge: {
     position: 'absolute',
-    top: -4,
-    left: -4,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
+    top: -3,
+    left: -3,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
   },
   stockBadgeText: {
     fontFamily: fonts.PoppinsBold,
-    fontSize: 10,
+    fontSize: 9,
     color: '#fff',
   },
   cartBadgeText: {
     fontFamily: fonts.PoppinsBold,
-    fontSize: 10,
+    fontSize: 9,
   },
   productBody: {
     flex: 1,
     minWidth: 0,
-    gap: 5,
+    gap: 3,
   },
   productTitleRow: {
     flexDirection: 'row',
@@ -1490,35 +1533,70 @@ const styles = StyleSheet.create({
   },
   productName: {
     fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 13,
+    lineHeight: 16,
     flex: 1,
   },
   pricePill: {
     borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
   priceText: {
     fontFamily: fonts.PoppinsBold,
-    fontSize: 11,
+    fontSize: 10,
   },
   categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
+    flex: 1,
+    minWidth: 0,
   },
   categoryDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   categoryLabel: {
     fontFamily: fonts.PoppinsRegular,
-    fontSize: 11,
-    flex: 1,
+    fontSize: 10,
+    flexShrink: 1,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  metaChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    maxWidth: '100%',
+  },
+  metaChipText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 9,
+    flexShrink: 1,
   },
   productActions: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingRight: 2,
+  },
+  quickAddBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1526,22 +1604,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 999,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: 3,
     gap: 2,
   },
   qtyBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qtyBtnAdd: {},
   qtyValue: {
     fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 13,
-    minWidth: 20,
+    fontSize: 12,
+    minWidth: 18,
     textAlign: 'center',
   },
   emptyList: {

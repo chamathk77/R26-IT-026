@@ -17,24 +17,25 @@ export const inventoryUi = StyleSheet.create({
   sectionEyebrow: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 11,
-    letterSpacing: 1.2,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   sectionCard: {
-    borderRadius: 20,
-    borderWidth: 1,
+    borderRadius: 22,
+    borderWidth: 0,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   fieldLabel: {
-    fontFamily: fonts.PoppinsMedium,
-    fontSize: 13,
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 12,
+    letterSpacing: 0.2,
     marginBottom: 8,
   },
   fieldInput: {
-    borderRadius: 14,
-    borderWidth: 1,
+    borderRadius: 16,
+    borderWidth: 0,
     paddingHorizontal: 14,
     paddingVertical: Platform.OS === 'ios' ? 14 : 12,
     fontFamily: fonts.PoppinsRegular,
@@ -43,5 +44,13 @@ export const inventoryUi = StyleSheet.create({
   },
   fieldInputLast: {
     marginBottom: 0,
+  },
+  statIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
   },
 });

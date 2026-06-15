@@ -44,6 +44,32 @@ const historySchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    subtotalPrice: {
+      type: Number,
+      min: 0,
+      default: null,
+    },
+    discount: {
+      enabled: {
+        type: Boolean,
+        default: false,
+      },
+      type: {
+        type: String,
+        enum: ['amount', 'percent', null],
+        default: null,
+      },
+      value: {
+        type: Number,
+        min: 0,
+        default: null,
+      },
+      amount: {
+        type: Number,
+        min: 0,
+        default: 0,
+      },
+    },
     checkoutAt: {
       type: Date,
       required: true,

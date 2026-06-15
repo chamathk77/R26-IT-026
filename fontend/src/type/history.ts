@@ -4,6 +4,15 @@ export interface HistoryItem {
   quantity: number;
 }
 
+export type HistoryDiscountType = 'amount' | 'percent';
+
+export interface HistoryDiscount {
+  enabled: boolean;
+  type: HistoryDiscountType | null;
+  value: number | null;
+  amount: number;
+}
+
 export interface HistoryHandledUser {
   _id: string;
   name: string;
@@ -15,10 +24,23 @@ export interface HistoryRecord {
   handledUser: HistoryHandledUser | string;
   cartSessionId: string;
   items: HistoryItem[];
+  subtotalPrice?: number;
+  discount?: HistoryDiscount;
   totalPrice: number;
   checkoutAt: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface CheckoutDiscountRequest {
+  enabled: boolean;
+  type: 'amount' | 'percent';
+  value: number;
+}
+
+export interface CheckoutCartRequest {
+  sessionId: string;
+  discount?: CheckoutDiscountRequest;
 }
 
 export type HistoryScope = 'mine' | 'all';

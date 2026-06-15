@@ -1,5 +1,31 @@
 import { CartSessionSummary } from '../type/cart';
 
+export function normalizeShopId(shopId: string | null | undefined): string {
+  return shopId?.trim().toUpperCase() ?? '';
+}
+
+/** Client-side guard: only added carts for the logged-in shop. */
+export function filterAddedSessionsForShop(
+  sessions: CartSessionSummary[],
+  shopId: string | null | undefined,
+): CartSessionSummary[] {
+  const normalizedShopId = normalizeShopId(shopId);
+  if (!normalizedShopId) return [];
+
+  return sessions.filter((session) => {
+    if (session.status !== 'added') return false;
+    if (!session.shopId) return true;
+    return normalizeShopId(session.shopId) === normalizedShopId;
+  });
+}
+
+export function isAddedSessionForShop(
+  session: CartSessionSummary,
+  shopId: string | null | undefined,
+): boolean {
+  return filterAddedSessionsForShop([session], shopId).length > 0;
+}
+
 export function sortCartSessionsByNumber(
   sessions: CartSessionSummary[],
 ): CartSessionSummary[] {

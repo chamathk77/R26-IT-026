@@ -17,10 +17,78 @@ function mapHistoryRecord(record) {
     handledUser,
     cartSessionId: record.cartSessionId,
     items: record.items,
+    subtotalPrice:
+      record.subtotalPrice != null
+        ? Number(record.subtotalPrice.toFixed(2))
+        : Number(record.totalPrice.toFixed(2)),
+    discount: {
+      enabled: Boolean(record.discount?.enabled),
+      type: record.discount?.type ?? null,
+      value: record.discount?.value ?? null,
+      amount: Number((record.discount?.amount ?? 0).toFixed(2)),
+    },
     totalPrice: Number(record.totalPrice.toFixed(2)),
     checkoutAt: record.checkoutAt,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
+  };
+}
+
+function roundMoney(value) {
+  return Number(Math.max(0, value).toFixed(2));
+}
+
+function resolveCheckoutPricing(cartTotalPrice, discountInput) {
+  const subtotal = roundMoney(cartTotalPrice);
+
+  if (!discountInput?.enabled) {
+    return {
+      subtotalPrice: subtotal,
+      discount: {
+        enabled: false,
+        type: null,
+        value: null,
+        amount: 0,
+      },
+      totalPrice: subtotal,
+    };
+  }
+
+  const discountType = String(discountInput.type ?? '').trim().toLowerCase();
+  const discountValue = Number(discountInput.value);
+
+  if (!['amount', 'percent'].includes(discountType)) {
+    return { error: 'Discount type must be amount or percent' };
+  }
+
+  if (!Number.isFinite(discountValue) || discountValue < 0) {
+    return { error: 'Discount value must be a non-negative number' };
+  }
+
+  let discountAmount = 0;
+
+  if (discountType === 'percent') {
+    if (discountValue > 100) {
+      return { error: 'Percentage discount cannot exceed 100' };
+    }
+    discountAmount = roundMoney((subtotal * discountValue) / 100);
+  } else if (discountValue > subtotal) {
+    return { error: 'Discount amount cannot exceed subtotal' };
+  } else {
+    discountAmount = roundMoney(discountValue);
+  }
+
+  const totalPrice = roundMoney(subtotal - discountAmount);
+
+  return {
+    subtotalPrice: subtotal,
+    discount: {
+      enabled: true,
+      type: discountType,
+      value: discountValue,
+      amount: discountAmount,
+    },
+    totalPrice,
   };
 }
 
@@ -31,7 +99,7 @@ const checkoutCart = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Shop id is required' });
     }
 
-    const { sessionId } = req.body;
+    const { sessionId, discount } = req.body;
 
     if (!sessionId || !mongoose.Types.ObjectId.isValid(sessionId)) {
       return res.status(400).json({ success: false, message: 'Valid session id is required' });
@@ -58,6 +126,11 @@ const checkoutCart = async (req, res) => {
       });
     }
 
+    const pricing = resolveCheckoutPricing(cart.totalPrice, discount);
+    if (pricing.error) {
+      return res.status(400).json({ success: false, message: pricing.error });
+    }
+
     const checkoutAt = new Date();
     const history = await History.create({
       handledUser: req.user.id,
@@ -67,7 +140,9 @@ const checkoutCart = async (req, res) => {
         name: item.name,
         quantity: item.quantity,
       })),
-      totalPrice: cart.totalPrice,
+      subtotalPrice: pricing.subtotalPrice,
+      discount: pricing.discount,
+      totalPrice: pricing.totalPrice,
       checkoutAt,
     });
 

@@ -7,7 +7,7 @@ function resolveProductId(product: CartLineItem['product']): string {
 export function buildCartOrderFromLines(
   sessionId: string,
   lines: CartLineItem[],
-  summary?: Pick<CartSessionSummary, 'totalAmount' | 'status'>,
+  summary?: Partial<Pick<CartSessionSummary, 'totalAmount' | 'status'>>,
 ): CartOrder {
   const items: CartOrderItem[] = lines.map((line) => ({
     productId: resolveProductId(line.product),
