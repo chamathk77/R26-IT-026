@@ -42,8 +42,10 @@ import { getCartNumberForSession, filterAddedSessionsForShop } from '../../utils
 import { getStockLimitToastMessage, isAtProductStockLimit } from '../../utils/productStock';
 import { CheckoutCartRequest } from '../../type/history';
 import SlideToast from '../../components/SlideToast/SlideToast';
+import CheckoutPaymentModal from '../../components/CheckoutPaymentModal/CheckoutPaymentModal';
 import { cardShadow } from '../settings/shared/settingsDetailStyles';
 import { softShadow } from './ManageInventory/inventoryUiStyles';
+import { CheckoutPaymentMethod } from '../../type/checkoutPayment';
 
 type Props = BottomTabScreenProps<MainBottomTabParamList, 'Cart'>;
 
@@ -362,6 +364,10 @@ export default function CartScreen(_props: Props) {
   const [discountMode, setDiscountMode] = useState<DiscountMode>('amount');
   const [discountValue, setDiscountValue] = useState('');
   const [serviceAmounts, setServiceAmounts] = useState<Record<string, string>>({});
+  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<CheckoutPaymentMethod>('cash');
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
   const previousShopIdRef = useRef(shopId);
   const cartListRef = useRef<FlatList<CartOrderItem> | null>(null);
 
@@ -610,7 +616,32 @@ export default function CartScreen(_props: Props) {
     showSlideToast,
   ]);
 
-  const handleCheckout = useCallback(async () => {
+  const checkoutTotal = useMemo(
+    () =>
+      discountEnabled && discountPreview.discountAmount > 0
+        ? discountPreview.checkoutTotal
+        : totalAmount,
+    [discountEnabled, discountPreview.checkoutTotal, discountPreview.discountAmount, totalAmount],
+  );
+
+  const closePaymentModal = useCallback(() => {
+    if (checkoutLoading) return;
+    setPaymentModalVisible(false);
+  }, [checkoutLoading]);
+
+  const openPaymentModal = useCallback(() => {
+    if (!sessionId || items.length === 0 || checkoutLoading) return;
+
+    const payload = buildCheckoutPayload();
+    if (!payload) return;
+
+    setSelectedPaymentMethod('cash');
+    setCustomerName('');
+    setCustomerPhone('');
+    setPaymentModalVisible(true);
+  }, [buildCheckoutPayload, checkoutLoading, items.length, sessionId]);
+
+  const handleConfirmCheckout = useCallback(async () => {
     if (!sessionId || items.length === 0 || checkoutLoading) return;
 
     const payload = buildCheckoutPayload();
@@ -618,6 +649,7 @@ export default function CartScreen(_props: Props) {
 
     try {
       await dispatch(checkoutCartSession_Service(payload)).unwrap();
+      setPaymentModalVisible(false);
       showSlideToast('Checkout completed');
     } catch (err: unknown) {
       const message =
@@ -893,7 +925,7 @@ export default function CartScreen(_props: Props) {
         totalAmount={totalAmount}
         checkoutLoading={checkoutLoading}
         onCheckout={() => {
-          void handleCheckout();
+          openPaymentModal();
         }}
       />
     ),
@@ -904,7 +936,8 @@ export default function CartScreen(_props: Props) {
       discountPreview.checkoutTotal,
       discountPreview.discountAmount,
       discountValue,
-      handleCheckout,
+      handleConfirmCheckout,
+      openPaymentModal,
       paperTheme,
       resolvedTheme,
       totalAmount,
@@ -1063,9 +1096,7 @@ export default function CartScreen(_props: Props) {
               },
             ]}
             disabled
-            onPress={() => {
-              void handleCheckout();
-            }}
+            onPress={openPaymentModal}
           >
             <View style={styles.checkoutLeft}>
               <Text style={[styles.checkoutText, { color: paperTheme.colors.onSurfaceDisabled }]}>
@@ -1077,6 +1108,24 @@ export default function CartScreen(_props: Props) {
             </View>
           </TouchableOpacity>
         ) : null}
+
+        <CheckoutPaymentModal
+          visible={paymentModalVisible}
+          amount={checkoutTotal}
+          customerName={customerName}
+          customerPhone={customerPhone}
+          selectedMethod={selectedPaymentMethod}
+          loading={checkoutLoading}
+          paperTheme={paperTheme}
+          resolvedTheme={resolvedTheme}
+          onCustomerNameChange={setCustomerName}
+          onCustomerPhoneChange={setCustomerPhone}
+          onSelectMethod={setSelectedPaymentMethod}
+          onClose={closePaymentModal}
+          onProceed={() => {
+            void handleConfirmCheckout();
+          }}
+        />
 
         <Modal
           visible={addedModalVisible}
