@@ -26,7 +26,7 @@ function formatCurrency(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
-function canManageShopInventory(role?: string): boolean {
+function isOwnerOrAdmin(role?: string): boolean {
   return role === 'owner' || role === 'admin';
 }
 
@@ -34,7 +34,8 @@ export default function HomeScreen(_props: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
   const userRole = useSelector((state: RootState) => state.AuthReducer.Login.userData?.role);
-  const showManageButtons = canManageShopInventory(userRole);
+  const showManageButtons = isOwnerOrAdmin(userRole);
+  const showManageEmployees = isOwnerOrAdmin(userRole);
   const [todayStats, setTodayStats] = useState<TodayHomeStats>(EMPTY_TODAY_STATS);
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
@@ -221,7 +222,10 @@ export default function HomeScreen(_props: Props) {
                   Manage Inventory
                 </Text>
               </TouchableOpacity>
+            </>
+          ) : null}
 
+          {showManageEmployees ? (
               <TouchableOpacity
                 style={[styles.manageEmployeesBtn, { backgroundColor: paperTheme.colors.secondaryContainer }]}
                 onPress={() => {
@@ -240,7 +244,6 @@ export default function HomeScreen(_props: Props) {
                   Manage Employees
                 </Text>
               </TouchableOpacity>
-            </>
           ) : null}
 
           <View style={{ height: 24 }} />
