@@ -27,6 +27,8 @@ import ManageCatogoryScreen from '../screens/pos/ManageCatogory/ManageCatogorySc
 import CreateCatogoryScreen from '../screens/pos/ManageCatogory/CreateCatogoryScreen';
 import ManageInventoryScreen from '../screens/pos/ManageInventory/ManageInventoryScreen';
 import { AddProductScreen, EditProductScreen } from '../screens/pos/ManageInventory/ProductFormScreen';
+import ManageEmployeesScreen from '../screens/pos/ManageEmployes/ManageEmployeesScreen';
+import AddEmployeeScreen from '../screens/pos/ManageEmployes/AddEmployeeScreen';
 import { RootStackParamList } from './RootStackParamsList';
 
 
@@ -50,6 +52,8 @@ export default function AppNavigator() {
         <Stack.Screen name="PosMain" component={MainBottomTabNavigator} />
         <Stack.Screen name="ManageCatogory" component={ManageCatogoryScreen} />
         <Stack.Screen name="ManageInventory" component={ManageInventoryScreen} />
+        <Stack.Screen name="ManageEmployees" component={ManageEmployeesScreen} />
+        <Stack.Screen name="AddEmployee" component={AddEmployeeScreen} />
         <Stack.Screen name="AddProduct" component={AddProductScreen} />
         <Stack.Screen name="EditProduct" component={EditProductScreen} />
         <Stack.Screen name="CreateCatogory" component={CreateCatogoryScreen} />

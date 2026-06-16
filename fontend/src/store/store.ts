@@ -9,6 +9,7 @@ import HistoryReducer from '../store/reducers/HistoryReducer';
 import ShopOnboardingReducer from '../store/reducers/ShopOnboardingReducer';
 import TrialReducer from '../store/reducers/TrialReducer';
 import PaymentReducer from '../store/reducers/PaymentReducer';
+import SalePersonReducer from '../store/reducers/SalePersonReducer';
 
 export const store = configureStore({
   reducer: {
@@ -21,6 +22,7 @@ export const store = configureStore({
     shopOnboarding: ShopOnboardingReducer,
     TrialReducer,
     PaymentReducer,
+    SalePersonReducer,
   },
 });
 

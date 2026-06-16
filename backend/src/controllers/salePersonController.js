@@ -6,12 +6,10 @@ const {
   unlinkSalePersonImageIfLocal,
 } = require('../middleware/uploadSalePersonImage');
 
+const SALE_PERSON_MANAGER_ROLES = ['admin', 'owner'];
+
 function invalidIdResponse(res) {
   return res.status(400).json({ message: 'Invalid sale person id', success: false });
-}
-
-function getRequestShopId(req) {
-  return req.user?.shopId ? String(req.user.shopId).trim().toUpperCase() : '';
 }
 
 function normalizeSalePersonId(value) {
@@ -72,18 +70,34 @@ function duplicateSalePersonIdMessage() {
   return 'A sales person with this salePersonId already exists for this shop';
 }
 
+async function getSalePersonAccessContext(userId) {
+  const user = await User.findById(userId).select('role shopId').lean();
+  if (!user) {
+    return { error: { status: 401, message: 'Not authorized, user not found' } };
+  }
+  if (!SALE_PERSON_MANAGER_ROLES.includes(user.role)) {
+    return { error: { status: 403, message: 'Only admin and owner can manage sales persons' } };
+  }
+  const shopId = user.shopId ? String(user.shopId).trim().toUpperCase() : '';
+  if (!shopId) {
+    return { error: { status: 400, message: 'Shop id is required' } };
+  }
+  return { shopId };
+}
+
+function sendAccessError(res, error) {
+  return res.status(error.status).json({ message: error.message, success: false });
+}
+
 const createSalePerson = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('shopId').lean();
-    if (!user) {
-      return res.status(401).json({ message: 'Not authorized, user not found', success: false });
+    const access = await getSalePersonAccessContext(req.user.id);
+    if (access.error) {
+      rollbackUploadedFile(req);
+      return sendAccessError(res, access.error);
     }
 
-    const shopId = user.shopId ? String(user.shopId).trim().toUpperCase() : '';
-    if (!shopId) {
-      return res.status(400).json({ message: 'Shop id is required', success: false });
-    }
-
+    const { shopId } = access;
     const { salePersonId, firstName, lastName, position } = req.body;
     const normalizedSalePersonId = normalizeSalePersonId(salePersonId);
     const firstNameTrimmed = firstName != null ? String(firstName).trim() : '';
@@ -128,10 +142,12 @@ const createSalePerson = async (req, res) => {
 
 const getSalePersons = async (req, res) => {
   try {
-    const shopId = getRequestShopId(req);
-    if (!shopId) {
-      return res.status(400).json({ message: 'Shop id is required', success: false });
+    const access = await getSalePersonAccessContext(req.user.id);
+    if (access.error) {
+      return sendAccessError(res, access.error);
     }
+
+    const { shopId } = access;
 
     const salePersons = await SalePerson.find({ shopId }).sort({ createdAt: -1 }).lean();
 
@@ -152,10 +168,12 @@ const getSalePersonById = async (req, res) => {
       return invalidIdResponse(res);
     }
 
-    const shopId = getRequestShopId(req);
-    if (!shopId) {
-      return res.status(400).json({ message: 'Shop id is required', success: false });
+    const access = await getSalePersonAccessContext(req.user.id);
+    if (access.error) {
+      return sendAccessError(res, access.error);
     }
+
+    const { shopId } = access;
 
     const salePerson = await SalePerson.findOne({ _id: id, shopId }).lean();
     if (!salePerson) {
@@ -176,11 +194,13 @@ const updateSalePerson = async (req, res) => {
       return invalidIdResponse(res);
     }
 
-    const shopId = getRequestShopId(req);
-    if (!shopId) {
+    const access = await getSalePersonAccessContext(req.user.id);
+    if (access.error) {
       rollbackUploadedFile(req);
-      return res.status(400).json({ message: 'Shop id is required', success: false });
+      return sendAccessError(res, access.error);
     }
+
+    const { shopId } = access;
 
     const existing = await SalePerson.findOne({ _id: id, shopId });
     if (!existing) {
@@ -256,10 +276,12 @@ const deleteSalePerson = async (req, res) => {
       return invalidIdResponse(res);
     }
 
-    const shopId = getRequestShopId(req);
-    if (!shopId) {
-      return res.status(400).json({ message: 'Shop id is required', success: false });
+    const access = await getSalePersonAccessContext(req.user.id);
+    if (access.error) {
+      return sendAccessError(res, access.error);
     }
+
+    const { shopId } = access;
 
     const salePerson = await SalePerson.findOneAndDelete({ _id: id, shopId });
     if (!salePerson) {

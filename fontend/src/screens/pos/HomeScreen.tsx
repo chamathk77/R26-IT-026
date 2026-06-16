@@ -221,6 +221,25 @@ export default function HomeScreen(_props: Props) {
                   Manage Inventory
                 </Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.manageEmployeesBtn, { backgroundColor: paperTheme.colors.secondaryContainer }]}
+                onPress={() => {
+                  if (navigationRef.isReady()) {
+                    navigationRef.navigate('ManageEmployees');
+                  }
+                }}
+              >
+                <Ionicons name="people-outline" size={18} color={paperTheme.colors.onSecondaryContainer} />
+                <Text
+                  style={[
+                    styles.manageEmployeesBtnText,
+                    { color: paperTheme.colors.onSecondaryContainer },
+                  ]}
+                >
+                  Manage Employees
+                </Text>
+              </TouchableOpacity>
             </>
           ) : null}
 
@@ -328,6 +347,19 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   manageInventoryBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 15,
+  },
+  manageEmployeesBtn: {
+    marginTop: 12,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  manageEmployeesBtnText: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 15,
   },

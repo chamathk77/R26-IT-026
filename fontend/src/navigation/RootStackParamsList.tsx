@@ -33,6 +33,8 @@ export type RootStackParamList = {
   PosMain: undefined;
   ManageCatogory: undefined;
   ManageInventory: undefined;
+  ManageEmployees: undefined;
+  AddEmployee: { salePersonId?: string } | undefined;
   AddProduct: undefined;
   EditProduct: InventoryProductFormParams;
   CreateCatogory: { category?: Category; categoryId?: string };
