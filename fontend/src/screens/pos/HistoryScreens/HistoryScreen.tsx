@@ -305,8 +305,9 @@ export default function HistoryScreen({ navigation }: Props) {
     );
   };
 
-  const listHeader = () => (
-    <View>
+  const listHeader = useMemo(
+    () => (
+      <View>
       <Text style={[styles.title, { color: paperTheme.colors.onBackground }]}>History</Text>
       <Text style={[styles.sub, { color: paperTheme.colors.onSurfaceVariant }]}>
         All checkout history for your shop.
@@ -496,7 +497,33 @@ export default function HistoryScreen({ navigation }: Props) {
           </View>
         </View>
       ) : null}
-    </View>
+      </View>
+    ),
+    [
+      activeFilterCount,
+      draftFilters.from,
+      draftFilters.mobile,
+      draftFilters.orderId,
+      draftFilters.paymentOption,
+      draftFilters.to,
+      filtersExpanded,
+      handleApplyFilters,
+      handleResetFilters,
+      openFiltersPanel,
+      paperTheme.colors.error,
+      paperTheme.colors.errorContainer,
+      paperTheme.colors.onBackground,
+      paperTheme.colors.onPrimary,
+      paperTheme.colors.onSecondaryContainer,
+      paperTheme.colors.onSurface,
+      paperTheme.colors.onSurfaceVariant,
+      paperTheme.colors.outline,
+      paperTheme.colors.outlineVariant,
+      paperTheme.colors.primary,
+      paperTheme.colors.secondaryContainer,
+      paperTheme.colors.surface,
+      paperTheme.colors.surfaceVariant,
+    ],
   );
 
   return (
