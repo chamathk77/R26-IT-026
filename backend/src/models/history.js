@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const PAYMENT_OPTIONS = ['cash', 'card', 'online'];
+const HISTORY_STATUS_OPTIONS = ['submited', 'reversed', 'canceled'];
 
 const historyItemSchema = new mongoose.Schema(
   {
@@ -120,6 +121,29 @@ const historySchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    status: {
+      type: String,
+      enum: HISTORY_STATUS_OPTIONS,
+      default: 'submited',
+      index: true,
+    },
+    isReversed: {
+      type: Boolean,
+      default: false,
+    },
+    reversedAt: {
+      type: Date,
+      default: null,
+    },
+    reversedUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    reversedUserName: {
+      type: String,
+      default: null,
+    },
   },
   { timestamps: true },
 );
@@ -143,5 +167,6 @@ historySchema.index({ shopId: 1, orderId: 1 }, { unique: true });
 const History = mongoose.model('History', historySchema);
 
 History.PAYMENT_OPTIONS = PAYMENT_OPTIONS;
+History.HISTORY_STATUS_OPTIONS = HISTORY_STATUS_OPTIONS;
 
 module.exports = History;

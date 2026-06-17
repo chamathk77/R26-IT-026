@@ -31,7 +31,12 @@ import { useCommonAlert } from '../../../hooks/useCommonAlert';
 import { handleSessionExpiredApiError } from '../../../utils/apiErrorAlert';
 import { formatCheckoutAmount } from '../../../type/checkoutPayment';
 import { HistoryPaymentOption, HistoryRecord } from '../../../type/history';
-import { formatCheckoutTime, getPaymentLabel } from './historyFormat';
+import {
+  formatCheckoutTime,
+  getHistoryStatusLabel,
+  getPaymentLabel,
+  normalizeHistoryStatus,
+} from './historyFormat';
 import { HistoryFilterState } from '../../../store/reducers/HistoryReducer';
 
 type Props = NativeStackScreenProps<HistoryStackParamList, 'HistoryList'>;
@@ -205,18 +210,53 @@ export default function HistoryScreen({ navigation }: Props) {
     const isExpanded = expandedHistoryId === item._id;
     const previewItems = item.items.slice(0, 3);
     const displayOrderId = item.orderId?.trim() || `#${item.cartNumber}`;
+    const normalizedStatus = normalizeHistoryStatus(item.status);
+    const isReversed = normalizedStatus === 'reversed';
+    const isCanceled = normalizedStatus === 'canceled';
+    const statusChip = {
+      bg: isReversed
+        ? paperTheme.colors.errorContainer
+        : isCanceled
+          ? paperTheme.colors.tertiaryContainer
+          : paperTheme.colors.primaryContainer,
+      text: isReversed
+        ? paperTheme.colors.error
+        : isCanceled
+          ? paperTheme.colors.tertiary
+          : paperTheme.colors.primary,
+    };
+    const paymentChip = (() => {
+      switch (item.paymentOption) {
+        case 'cash':
+          return { bg: '#DCFCE7', text: '#15803D' };
+        case 'card':
+          return { bg: '#DBEAFE', text: '#1D4ED8' };
+        case 'online':
+          return { bg: '#EDE9FE', text: '#6D28D9' };
+        default:
+          return { bg: paperTheme.colors.surfaceVariant, text: paperTheme.colors.onSurface };
+      }
+    })();
 
     return (
       <View
         style={[
           styles.rowCard,
           {
-            backgroundColor: isExpanded
-              ? paperTheme.colors.primaryContainer
-              : paperTheme.colors.surface,
-            borderColor: isExpanded
-              ? `${paperTheme.colors.primary}44`
-              : paperTheme.colors.outlineVariant,
+            backgroundColor: isReversed
+              ? paperTheme.colors.errorContainer
+              : isCanceled
+                ? paperTheme.colors.tertiaryContainer
+              : isExpanded
+                ? paperTheme.colors.primaryContainer
+                : paperTheme.colors.surface,
+            borderColor: isReversed
+              ? `${paperTheme.colors.error}44`
+              : isCanceled
+                ? `${paperTheme.colors.tertiary}44`
+              : isExpanded
+                ? `${paperTheme.colors.primary}44`
+                : paperTheme.colors.outlineVariant,
           },
         ]}
       >
@@ -235,12 +275,23 @@ export default function HistoryScreen({ navigation }: Props) {
             <Text style={[styles.rowMeta, { color: paperTheme.colors.onSurfaceVariant }]}>
               Cart #{item.cartNumber}
             </Text>
+            <View style={styles.rowChipWrap}>
+              <View style={[styles.rowChip, { backgroundColor: paymentChip.bg }]}>
+                <Text style={[styles.rowChipText, { color: paymentChip.text }]}>
+                  {getPaymentLabel(item.paymentOption)}
+                </Text>
+              </View>
+              <View style={[styles.rowChip, { backgroundColor: statusChip.bg }]}>
+                <Text style={[styles.rowChipText, { color: statusChip.text }]}>
+                  {getHistoryStatusLabel(item.status)}
+                </Text>
+              </View>
+            </View>
             <Text style={[styles.rowTime, { color: paperTheme.colors.onSurfaceVariant }]}>
               {formatCheckoutTime(item.checkOutTime)}
             </Text>
             <Text style={[styles.rowMeta, { color: paperTheme.colors.onSurfaceVariant }]}>
-              {getPaymentLabel(item.paymentOption)}
-              {item.customerMobile ? ` · ${item.customerMobile}` : ''}
+              {item.customerMobile ? item.customerMobile : '—'}
             </Text>
             {item.submittedUserName ? (
               <Text style={[styles.rowMeta, { color: paperTheme.colors.onSurfaceVariant }]}>
@@ -746,6 +797,21 @@ const styles = StyleSheet.create({
   rowMeta: {
     fontFamily: fonts.PoppinsMedium,
     fontSize: 12,
+  },
+  rowChipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+  },
+  rowChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  rowChipText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
   },
   rowItems: {
     fontFamily: fonts.PoppinsRegular,

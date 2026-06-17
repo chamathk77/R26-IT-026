@@ -1,6 +1,7 @@
 import { CheckoutPaymentMethod } from './checkoutPayment';
 
 export type HistoryPaymentOption = CheckoutPaymentMethod;
+export type HistoryStatus = 'submited' | 'reversed' | 'canceled';
 
 export interface HistoryItem {
   productId: string;
@@ -27,6 +28,11 @@ export interface HistoryRecord {
   submittedUserId: string;
   submittedUserName: string;
   paymentOption: HistoryPaymentOption;
+  status?: HistoryStatus | 'submitted';
+  isReversed?: boolean;
+  reversedAt?: string | null;
+  reversedUserId?: string | null;
+  reversedUserName?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -110,6 +116,17 @@ export interface GetHistoryResponse {
   scope: HistoryScope;
   data: HistoryRecord[];
   pagination: HistoryPagination;
+  message: string;
+}
+
+export interface ReverseHistoryRequest {
+  id: string;
+  status: 'reversed' | 'canceled';
+}
+
+export interface ReverseHistoryResponse {
+  success: boolean;
+  data: HistoryRecord;
   message: string;
 }
 

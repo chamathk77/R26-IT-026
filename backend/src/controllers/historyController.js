@@ -2,6 +2,13 @@ const mongoose = require('mongoose');
 const Cart = require('../models/cart');
 const History = require('../models/history');
 const User = require('../models/user');
+const Product = require('../models/product');
+const ShopsData = require('../models/shopsData');
+const { sendSms } = require('../services/smsService');
+const {
+  buildDigitalReceiptUrl,
+  buildHistoryReceiptSmsMessage,
+} = require('../utils/historyReceiptSms');
 
 const PAYMENT_OPTIONS = History.PAYMENT_OPTIONS;
 
@@ -104,6 +111,52 @@ function normalizePaymentOption(value) {
   return PAYMENT_OPTIONS.includes(normalized) ? normalized : null;
 }
 
+function normalizeReverseStatus(value) {
+  if (value === undefined || value === null || value === '') return null;
+
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === 'reversed' || normalized === 'canceled') return normalized;
+  return null;
+}
+
+async function sendHistoryReceiptSms({
+  shopId,
+  customerMobile,
+  historyRecord,
+  amount,
+  totalAmount,
+  isDiscount,
+  discountedAmount,
+  orderId,
+}) {
+  const shop = await ShopsData.findOne({ shopId }).select('shopName sms').lean();
+  if (!shop?.sms) {
+    return { sent: false, reason: 'SMS disabled for shop' };
+  }
+
+  const receiptUrl = buildDigitalReceiptUrl(historyRecord._id);
+  if (!receiptUrl) {
+    return { sent: false, reason: 'DIGITAL_RECEIPT_BASE_URL is not configured' };
+  }
+
+  const message = buildHistoryReceiptSmsMessage({
+    shopName: shop.shopName,
+    orderId,
+    amount,
+    totalAmount,
+    isDiscount,
+    discountedAmount,
+    receiptUrl,
+  });
+
+  await sendSms({
+    to: customerMobile,
+    message,
+  });
+
+  return { sent: true };
+}
+
 function mapHistoryRecord(record) {
   return {
     _id: record._id,
@@ -128,6 +181,11 @@ function mapHistoryRecord(record) {
     submittedUserId: record.submittedUserId,
     submittedUserName: record.submittedUserName ?? '',
     paymentOption: record.paymentOption,
+    status: record.status ?? 'submited',
+    isReversed: Boolean(record.isReversed),
+    reversedAt: record.reversedAt ?? null,
+    reversedUserId: record.reversedUserId ?? null,
+    reversedUserName: record.reversedUserName ?? null,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -294,11 +352,29 @@ const createHistory = async (req, res) => {
       paymentOption,
     });
 
+    let smsStatus = { sent: false, reason: 'Not attempted' };
+    try {
+      smsStatus = await sendHistoryReceiptSms({
+        shopId,
+        customerMobile: mobile,
+        historyRecord: history,
+        amount,
+        totalAmount,
+        isDiscount: Boolean(cart.isDiscount),
+        discountedAmount,
+        orderId,
+      });
+    } catch (smsError) {
+      console.log('error in createHistory receipt SMS', smsError.message);
+      smsStatus = { sent: false, reason: smsError.message || 'SMS send failed' };
+    }
+
     res.status(201).json({
       success: true,
       sessionId,
       data: mapHistoryRecord(history),
       message: 'History record created',
+      sms: smsStatus,
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -429,8 +505,105 @@ const getTodayStats = async (req, res) => {
   }
 };
 
+const reversedSalesData = async (req, res) => {
+  const session = await mongoose.startSession();
+  try {
+    const shopId = requireShopId(req, res);
+    if (!shopId) return;
+
+    const historyId = req.params?.id ?? req.body?.id ?? req.body?.historyId;
+    if (!historyId || !mongoose.Types.ObjectId.isValid(String(historyId))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid history id is required',
+      });
+    }
+
+    const requestedStatus = normalizeReverseStatus(req.body?.status);
+    if (!requestedStatus) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status must be canceled or reversed',
+      });
+    }
+
+    const reversedUser = await User.findById(req.user.id).select('name').lean();
+    const reversedUserName = reversedUser?.name?.trim() || 'User';
+    const reversedAt = new Date();
+
+    let updatedHistory = null;
+    await session.withTransaction(async () => {
+      const history = await History.findOne({
+        _id: historyId,
+        shopId,
+      }).session(session);
+
+      if (!history) {
+        throw new Error('HISTORY_NOT_FOUND');
+      }
+
+      if (history.isReversed || history.status === 'reversed' || history.status === 'canceled') {
+        throw new Error('HISTORY_ALREADY_REVERSED');
+      }
+
+      const itemEntries = Array.isArray(history.items) ? history.items : [];
+      for (const item of itemEntries) {
+        if (!item?.productId) continue;
+
+        const product = await Product.findOne({
+          _id: item.productId,
+          shopId,
+        }).session(session);
+        if (!product) continue;
+
+        if (!product.isInventoryAvailable) continue;
+
+        const restoreQty = Number(item.qty) || 0;
+        if (restoreQty <= 0) continue;
+
+        const currentQty = Number(product.qty) || 0;
+        product.qty = currentQty + restoreQty;
+        await product.save({ session });
+      }
+
+      history.status = requestedStatus;
+      history.isReversed = true;
+      history.reversedAt = reversedAt;
+      history.reversedUserId = req.user.id;
+      history.reversedUserName = reversedUserName;
+      await history.save({ session });
+
+      updatedHistory = history.toObject();
+    });
+
+    if (!updatedHistory) {
+      return res.status(500).json({
+        success: false,
+        message: 'Could not reverse sales data',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: mapHistoryRecord(updatedHistory),
+      message: 'Sales data reversed successfully',
+    });
+  } catch (error) {
+    if (error?.message === 'HISTORY_NOT_FOUND') {
+      return res.status(404).json({ success: false, message: 'History record not found' });
+    }
+    if (error?.message === 'HISTORY_ALREADY_REVERSED') {
+      return res.status(409).json({ success: false, message: 'History record already reversed' });
+    }
+    return res.status(500).json({ success: false, message: error.message });
+  } finally {
+    await session.endSession();
+  }
+};
+
 module.exports = {
   createHistory,
   getHistory,
   getTodayStats,
+  reversedSalesData,
 };

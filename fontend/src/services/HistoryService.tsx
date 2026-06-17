@@ -3,7 +3,14 @@ import { apiClient } from '../../config/apiConfig';
 import { ensureInternetConnection } from '../utils/checkInternetConnection';
 import { ApiErrorResponse } from '../type/common';
 import { toApiErrorResponse } from '../utils/apiErrorAlert';
-import { GetHistoryResponse, CreateHistoryRequest, CreateHistoryResponse, HistoryFilters } from '../type/history';
+import {
+  GetHistoryResponse,
+  CreateHistoryRequest,
+  CreateHistoryResponse,
+  HistoryFilters,
+  ReverseHistoryRequest,
+  ReverseHistoryResponse,
+} from '../type/history';
 
 function isHttpSuccess(status: number): boolean {
   return status >= 200 && status < 300;
@@ -80,6 +87,34 @@ export const createHistory_Service = createAsyncThunk(
       const apiError: ApiErrorResponse = {
         error: 'Error',
         message: 'Could not save checkout history',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const reverseHistory_Service = createAsyncThunk(
+  'history/reverse',
+  async (payload: ReverseHistoryRequest, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.post<ReverseHistoryResponse>(
+        `/api/history/${encodeURIComponent(payload.id)}/reverse`,
+        { status: payload.status },
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: 'Could not reverse history record',
         status: response.status,
         timestamp: new Date().toISOString(),
       };
