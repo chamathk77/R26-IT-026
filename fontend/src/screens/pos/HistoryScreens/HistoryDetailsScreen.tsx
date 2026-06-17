@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -15,7 +16,8 @@ import { HistoryStackParamList } from '../../../navigation/HistoryStackParamList
 import CommonHeader from '../../../components/CommonHeader/CommonHeader';
 import { fonts } from '../../../constants/fonts';
 import { useTheme } from '../../../context/ThemeContext';
-import { formatCheckoutAmount } from '../../../type/checkoutPayment';
+import { formatCheckoutAmount, sanitizeCheckoutPhone } from '../../../type/checkoutPayment';
+import { HistoryRecord } from '../../../type/history';
 import {
   formatCheckoutTime,
   getHistoryStatusLabel,
@@ -24,9 +26,10 @@ import {
 } from './historyFormat';
 import { AppDispatch, RootState } from '../../../store/store';
 import HistoryReceiptModal from './HistoryReceiptModal';
+import ResendBillModal from './ResendBillModal';
 import { useCommonAlert } from '../../../hooks/useCommonAlert';
 import CommonAlert from '../../../components/CommonAlert/CommonAlert';
-import { reverseHistory_Service } from '../../../services/HistoryService';
+import { resendBillSms_Service, reverseHistory_Service } from '../../../services/HistoryService';
 import {
   getApiErrorMessage,
   handleSessionExpiredApiError,
@@ -57,10 +60,12 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
   const dispatch = useDispatch<AppDispatch>();
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
-  const record = route.params.record;
+  const [record, setRecord] = useState<HistoryRecord>(route.params.record);
   const displayOrderId = record.orderId?.trim() || `#${record.cartNumber}`;
   const [submittingAction, setSubmittingAction] = useState<'reversed' | 'canceled' | null>(null);
   const [receiptVisible, setReceiptVisible] = useState(false);
+  const [resendModalVisible, setResendModalVisible] = useState(false);
+  const [resendingBill, setResendingBill] = useState(false);
   const shop = useSelector((state: RootState) => state.AuthReducer.Login.shopData);
   const normalizedStatus = normalizeHistoryStatus(record.status);
   const isSubmittedStatus = normalizedStatus === 'submited';
@@ -173,6 +178,52 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
       );
     },
     [show_Alert, submitReverseAction],
+  );
+
+  const handleResendBill = useCallback(
+    async (customerMobile: string) => {
+      if (resendingBill) return;
+
+      setResendingBill(true);
+      try {
+        const response = await dispatch(
+          resendBillSms_Service({
+            id: record._id,
+            customerMobile,
+          }),
+        ).unwrap();
+
+        setRecord(response.data);
+        navigation.setParams({ record: response.data });
+        setResendModalVisible(false);
+
+        show_Alert(
+          'success',
+          'SMS sent',
+          'Bill SMS has been sent to the customer.',
+          1,
+          false,
+          'OK',
+          () => {},
+        );
+      } catch (error: unknown) {
+        const handled = await handleSessionExpiredApiError(error, show_Alert);
+        if (handled) return;
+
+        show_Alert(
+          'error',
+          'Send failed',
+          getApiErrorMessage(error, 'Could not resend bill SMS. Please try again.'),
+          1,
+          false,
+          'OK',
+          () => {},
+        );
+      } finally {
+        setResendingBill(false);
+      }
+    },
+    [dispatch, navigation, record._id, resendingBill, show_Alert],
   );
 
   return (
@@ -398,6 +449,40 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
             </Text>
           </TouchableOpacity>
 
+          <TouchableOpacity
+            activeOpacity={0.9}
+            disabled={resendingBill}
+            onPress={() => setResendModalVisible(true)}
+            style={[
+              styles.resendBtn,
+              {
+                backgroundColor: paperTheme.colors.secondaryContainer,
+                borderColor: paperTheme.colors.secondary,
+                opacity: resendingBill ? 0.7 : 1,
+              },
+            ]}
+          >
+            {resendingBill ? (
+              <ActivityIndicator color={paperTheme.colors.onSecondaryContainer} />
+            ) : (
+              <>
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={18}
+                  color={paperTheme.colors.onSecondaryContainer}
+                />
+                <Text
+                  style={[
+                    styles.resendBtnText,
+                    { color: paperTheme.colors.onSecondaryContainer },
+                  ]}
+                >
+                  Resend bill
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
           {isSubmittedStatus ? (
             <View style={styles.statusActionsRow}>
               <TouchableOpacity
@@ -443,6 +528,19 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
         onClose={() => setReceiptVisible(false)}
         record={record}
         shop={shop}
+      />
+
+      <ResendBillModal
+        visible={resendModalVisible}
+        initialMobile={sanitizeCheckoutPhone(record.customerMobile)}
+        loading={resendingBill}
+        onClose={() => {
+          if (!resendingBill) setResendModalVisible(false);
+        }}
+        onSend={(mobile) => {
+          void handleResendBill(mobile);
+        }}
+        paperTheme={paperTheme}
       />
 
       {alertConfig ? (
@@ -589,6 +687,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   receiptBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
+  },
+  resendBtn: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 48,
+  },
+  resendBtnText: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 14,
   },

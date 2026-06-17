@@ -10,6 +10,8 @@ import {
   HistoryFilters,
   ReverseHistoryRequest,
   ReverseHistoryResponse,
+  ResendBillSmsRequest,
+  ResendBillSmsResponse,
 } from '../type/history';
 
 function isHttpSuccess(status: number): boolean {
@@ -115,6 +117,34 @@ export const reverseHistory_Service = createAsyncThunk(
       const apiError: ApiErrorResponse = {
         error: 'Error',
         message: 'Could not reverse history record',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const resendBillSms_Service = createAsyncThunk(
+  'history/resendBillSms',
+  async (payload: ResendBillSmsRequest, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.post<ResendBillSmsResponse>(
+        `/api/history/${encodeURIComponent(payload.id)}/resend-bill`,
+        { customerMobile: payload.customerMobile },
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: 'Could not resend bill SMS',
         status: response.status,
         timestamp: new Date().toISOString(),
       };

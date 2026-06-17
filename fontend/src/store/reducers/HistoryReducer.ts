@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { fetchHistory_Service } from '../../services/HistoryService';
+import { fetchHistory_Service, resendBillSms_Service } from '../../services/HistoryService';
 import { HistoryFilters, HistoryRecord, HistoryScope } from '../../type/history';
 
 export interface HistoryFilterState {
@@ -94,6 +94,14 @@ export const HistorySlice = createSlice({
       const payload = action.payload as { message?: string } | undefined;
       state.list.error =
         payload?.message || action.error.message || 'Could not load history';
+    });
+
+    builder.addCase(resendBillSms_Service.fulfilled, (state, action) => {
+      const updated = action.payload?.data;
+      if (!updated?._id) return;
+      state.list.items = state.list.items.map((item) =>
+        item._id === updated._id ? { ...item, ...updated } : item,
+      );
     });
   },
 });

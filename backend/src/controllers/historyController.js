@@ -164,13 +164,16 @@ async function sendHistoryReceiptSms({
     discountedAmount,
     receiptUrl,
   });
-  console.log("1111178887872823723823823923823872893729782738927", message);
   await sendSms({
     to: customerMobile,
     message,
   });
 
   return { sent: true };
+}
+
+function isValidCustomerMobile(mobile) {
+  return /^0\d{9}$/.test(mobile);
 }
 
 function mapHistoryRecord(record) {
@@ -304,7 +307,6 @@ function buildHistoryListFilter(req, shopId) {
 
 const createHistory = async (req, res) => {
   try {
-    console.log("1111178887872823723823823923823872893729782738927", req.body);
     const shopId = requireShopId(req, res);
     if (!shopId) return;
 
@@ -671,9 +673,80 @@ const reversedSalesData = async (req, res) => {
   }
 };
 
+const resendBillSms = async (req, res) => {
+  try {
+    const shopId = requireShopId(req, res);
+    if (!shopId) return;
+
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid history id' });
+    }
+
+    const mobile = sanitizeMobile(req.body?.customerMobile);
+    if (!mobile) {
+      return res.status(400).json({
+        success: false,
+        message: 'Customer phone number is required',
+      });
+    }
+    if (!isValidCustomerMobile(mobile)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Customer phone number must be 10 digits and start with 0',
+      });
+    }
+
+    const history = await History.findOne({ _id: id, shopId });
+    if (!history) {
+      return res.status(404).json({ success: false, message: 'History record not found' });
+    }
+
+    const smsResult = await sendHistoryReceiptSms({
+      shopId,
+      customerMobile: mobile,
+      historyRecord: history,
+      amount: history.amount,
+      totalAmount: history.totalAmount,
+      isDiscount: history.isDiscount,
+      discountedAmount: history.discountedAmount,
+      orderId: history.orderId,
+    });
+
+    if (!smsResult.sent) {
+      return res.status(400).json({
+        success: false,
+        message: smsResult.reason || 'Could not send bill SMS',
+      });
+    }
+
+    const previousMobile = sanitizeMobile(history.customerMobile);
+    if (mobile !== previousMobile) {
+      history.customerMobile = mobile;
+      await history.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: mapHistoryRecord(history),
+      message: 'Bill SMS sent successfully',
+    });
+  } catch (error) {
+    if (error.code === 'SMS_API_ERROR') {
+      return res.status(error.httpStatus || 500).json({
+        success: false,
+        message: error.message || 'Failed to send bill SMS',
+        code: 'SMS_SEND_FAILED',
+      });
+    }
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   createHistory,
   getHistory,
   getTodayStats,
   reversedSalesData,
+  resendBillSms,
 };

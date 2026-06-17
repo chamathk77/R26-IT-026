@@ -130,6 +130,17 @@ export interface ReverseHistoryResponse {
   message: string;
 }
 
+export interface ResendBillSmsRequest {
+  id: string;
+  customerMobile: string;
+}
+
+export interface ResendBillSmsResponse {
+  success: boolean;
+  data: HistoryRecord;
+  message: string;
+}
+
 /** @deprecated Use CompleteCheckoutResponse */
 export interface CheckoutCartResponse {
   success: boolean;
