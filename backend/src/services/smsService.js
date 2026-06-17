@@ -51,12 +51,14 @@ async function sendSms({ to, message }) {
       const smsError = extractSmsErrorMessage(response.data) || 'SMS send failed';
       const err = new Error(smsError);
       err.code = 'SMS_API_ERROR';
+      console.log('sms error', smsError);
       throw err;
     }
 
     return response.data;
   } catch (error) {
     if (error.code === 'SMS_API_ERROR') {
+      console.log('sms error', error.message);
       throw error;
     }
 
@@ -65,9 +67,11 @@ async function sendSms({ to, message }) {
       const err = new Error(smsError);
       err.code = 'SMS_API_ERROR';
       err.httpStatus = error.response?.status;
+      console.log('sms error', error.message);
       throw err;
     }
 
+    console.log('sms error', error.message);
     throw error;
   }
 }

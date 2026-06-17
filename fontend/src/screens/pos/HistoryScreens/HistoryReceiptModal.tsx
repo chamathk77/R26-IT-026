@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   Modal,
+  Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -17,7 +19,9 @@ import {
   formatCheckoutTime,
   getHistoryStatusLabel,
   getPaymentLabel,
+  normalizeHistoryStatus,
 } from './historyFormat';
+import { buildReceiptShareMessage } from './historyReceiptShare';
 
 type Props = {
   visible: boolean;
@@ -34,15 +38,24 @@ function ReceiptRow({
   label,
   value,
   bold = false,
+  valueColor,
 }: {
   label: string;
   value: string;
   bold?: boolean;
+  valueColor?: string;
 }) {
   return (
     <View style={styles.receiptRow}>
       <Text style={[styles.receiptLabel, bold && styles.receiptBold]}>{label}</Text>
-      <Text style={[styles.receiptValue, bold && styles.receiptBold]} numberOfLines={3}>
+      <Text
+        style={[
+          styles.receiptValue,
+          bold && styles.receiptBold,
+          valueColor ? { color: valueColor } : null,
+        ]}
+        numberOfLines={3}
+      >
         {value}
       </Text>
     </View>
@@ -59,6 +72,31 @@ export default function HistoryReceiptModal({ visible, onClose, record, shop }: 
   const customerName = record.customerName?.trim() || '—';
   const customerPhone = record.customerMobile?.trim() || '—';
   const hasDiscount = record.isDiscount && record.discountedAmount > 0;
+  const normalizedStatus = normalizeHistoryStatus(record.status);
+  const isCanceled = normalizedStatus === 'canceled';
+  const isReversed = normalizedStatus === 'reversed';
+  const isVoided = isCanceled || isReversed;
+  const statusColor = isCanceled ? '#DC2626' : isReversed ? '#C2410C' : undefined;
+  const thankYouMessage = isCanceled
+    ? 'This receipt is canceled and is no longer valid.'
+    : isReversed
+      ? 'This receipt is reversed and is no longer valid.'
+      : 'Thank you for shopping with us. Come again!';
+
+  const handleShare = useCallback(async () => {
+    const { title, message, url } = buildReceiptShareMessage({ record, shop });
+    const linkBlock = `\n\nView digital receipt:\n${url}`;
+
+    try {
+      await Share.share(
+        Platform.OS === 'ios'
+          ? { title, message, url }
+          : { title, message: `${message}${linkBlock}` },
+      );
+    } catch {
+      // User dismissed the share sheet.
+    }
+  }, [record, shop]);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -66,16 +104,52 @@ export default function HistoryReceiptModal({ visible, onClose, record, shop }: 
         <Pressable style={styles.sheetWrap} onPress={(event) => event.stopPropagation()}>
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>Sales receipt</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={12} accessibilityLabel="Close receipt">
-              <Ionicons name="close" size={22} color="#334155" />
-            </TouchableOpacity>
+            <View style={styles.sheetHeaderActions}>
+              <TouchableOpacity
+                onPress={() => void handleShare()}
+                hitSlop={12}
+                accessibilityLabel="Share receipt"
+                style={styles.headerActionBtn}
+              >
+                <Ionicons name="share-outline" size={22} color="#334155" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onClose} hitSlop={12} accessibilityLabel="Close receipt">
+                <Ionicons name="close" size={22} color="#334155" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <ScrollView
             contentContainerStyle={styles.receiptScroll}
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.receiptPaper}>
+            <View style={[styles.receiptPaper, isVoided && styles.receiptPaperVoided]}>
+              {isVoided ? (
+                <View
+                  style={[
+                    styles.statusBanner,
+                    isCanceled ? styles.statusBannerCanceled : styles.statusBannerReversed,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.statusBannerTitle,
+                      isCanceled ? styles.statusBannerTitleCanceled : styles.statusBannerTitleReversed,
+                    ]}
+                  >
+                    {isCanceled ? 'CANCELED' : 'REVERSED'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.statusBannerText,
+                      isCanceled ? styles.statusBannerTextCanceled : styles.statusBannerTextReversed,
+                    ]}
+                  >
+                    {isCanceled ? 'This sale has been canceled.' : 'This sale has been reversed.'}
+                  </Text>
+                </View>
+              ) : null}
+
               <Text style={styles.shopName}>{shopName}</Text>
               <Text style={styles.shopMeta}>{shopAddress}</Text>
               <Text style={styles.shopMeta}>{contactLine}</Text>
@@ -89,7 +163,24 @@ export default function HistoryReceiptModal({ visible, onClose, record, shop }: 
 
               <ReceiptRow label="Date" value={formatCheckoutTime(record.checkOutTime)} />
               <ReceiptRow label="Payment" value={getPaymentLabel(record.paymentOption)} />
-              <ReceiptRow label="Status" value={getHistoryStatusLabel(record.status)} />
+              <ReceiptRow
+                label="Status"
+                value={getHistoryStatusLabel(record.status)}
+                valueColor={statusColor}
+                bold={isVoided}
+              />
+              {isVoided ? (
+                <>
+                  <ReceiptRow
+                    label={isCanceled ? 'Canceled at' : 'Reversed at'}
+                    value={record.reversedAt ? formatCheckoutTime(record.reversedAt) : '—'}
+                  />
+                  <ReceiptRow
+                    label={isCanceled ? 'Canceled by' : 'Reversed by'}
+                    value={record.reversedUserName?.trim() || '—'}
+                  />
+                </>
+              ) : null}
               <ReceiptRow label="Handled by" value={record.submittedUserName || '—'} />
               <ReceiptRow label="Customer name" value={customerName} />
               <ReceiptRow label="Customer phone" value={customerPhone} />
@@ -143,7 +234,16 @@ export default function HistoryReceiptModal({ visible, onClose, record, shop }: 
 
               <ReceiptDivider />
 
-              <Text style={styles.thankYou}>Thank you for shopping with us. Come again!</Text>
+              <Text style={styles.thankYou}>{thankYouMessage}</Text>
+
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => void handleShare()}
+                style={styles.shareBtn}
+              >
+                <Ionicons name="share-social-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.shareBtnText}>Share receipt</Text>
+              </TouchableOpacity>
             </View>
           </ScrollView>
         </Pressable>
@@ -180,6 +280,15 @@ const styles = StyleSheet.create({
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 16,
     color: '#0F172A',
+    flex: 1,
+  },
+  sheetHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerActionBtn: {
+    padding: 2,
   },
   receiptScroll: {
     padding: 16,
@@ -191,6 +300,48 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     paddingHorizontal: 16,
     paddingVertical: 18,
+  },
+  receiptPaperVoided: {
+    borderColor: '#FECACA',
+  },
+  statusBanner: {
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  statusBannerReversed: {
+    backgroundColor: '#FFF7ED',
+    borderColor: '#FDBA74',
+  },
+  statusBannerCanceled: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FCA5A5',
+  },
+  statusBannerTitle: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 13,
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  statusBannerTitleReversed: {
+    color: '#9A3412',
+  },
+  statusBannerTitleCanceled: {
+    color: '#B91C1C',
+  },
+  statusBannerText: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  statusBannerTextReversed: {
+    color: '#9A3412',
+  },
+  statusBannerTextCanceled: {
+    color: '#B91C1C',
   },
   shopName: {
     fontFamily: fonts.PoppinsBold,
@@ -305,5 +456,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#0F172A',
     textAlign: 'center',
+  },
+  shareBtn: {
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#0F172A',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  shareBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
+    color: '#FFFFFF',
   },
 });

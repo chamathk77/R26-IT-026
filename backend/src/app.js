@@ -12,6 +12,7 @@ const shopsDataRoutes = require('./routes/shopsDataRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const salePersonRoutes = require('./routes/salePersonRoutes');
 const dashboardRoutes = require('./routes/dashboard');
+const receiptRoutes = require('./routes/receiptRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -29,6 +30,7 @@ app.use('/api/shops', shopsDataRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/sale-persons', salePersonRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/receipt', receiptRoutes);
 app.use('/api', routes);
 
 app.use((req, res) => {
