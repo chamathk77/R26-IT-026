@@ -19,7 +19,7 @@ import SettingsScreen from '../screens/settings/hub/SettingsScreen';
 import ProfileDetailsScreen from '../screens/settings/account/ProfileDetailsScreen';
 import ShopDetailsScreen from '../screens/settings/account/ShopDetailsScreen';
 import ManageAccountScreen from '../screens/settings/account/ManageAccountScreen';
-import EditUserScreen from '../screens/settings/account/EditUserScreen';
+import ManageUserFormScreen from '../screens/settings/account/ManageUserFormScreen';
 import ThemePreferenceScreen from '../screens/settings/preferences/ThemePreferenceScreen';
 import SubscriptionPaymentsScreen from '../screens/settings/payments/SubscriptionPaymentsScreen';
 import PayNowScreen from '../screens/settings/payments/PayNowScreen';
@@ -64,7 +64,7 @@ export default function AppNavigator() {
         <Stack.Screen name="ProfileDetails" component={ProfileDetailsScreen} />
         <Stack.Screen name="ShopDetails" component={ShopDetailsScreen} />
         <Stack.Screen name="ManageAccount" component={ManageAccountScreen} />
-        <Stack.Screen name="EditUser" component={EditUserScreen} />
+        <Stack.Screen name="ManageUserForm" component={ManageUserFormScreen} />
         <Stack.Screen name="ThemePreference" component={ThemePreferenceScreen} />
         <Stack.Screen name="SubscriptionPayments" component={SubscriptionPaymentsScreen} />
         <Stack.Screen name="PayNow" component={PayNowScreen} />

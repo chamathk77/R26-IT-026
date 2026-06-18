@@ -166,7 +166,7 @@ export default function SettingsScreen({ navigation }: Props) {
   const displayRole = user?.role ?? 'staff';
   const shopLabel = shop?.shopName?.trim() || shop?.shopId || 'No shop linked';
   const subscriptionBadge = getSubscriptionBadge(shop);
-  const showManage = displayRole === 'owner' || displayRole === 'admin';
+  const showManageUsers = displayRole === 'owner';
 
   const confirmLogout = () => {
     Alert.alert('Log out', 'Are you sure you want to log out?', [
@@ -218,13 +218,12 @@ export default function SettingsScreen({ navigation }: Props) {
       iconColor: '#1d4ed8',
       onPress: () => navigation.navigate('SubscriptionPayments'),
     },
-    ...(showManage
+    ...(showManageUsers
       ? [
           {
             key: 'manage',
             title: 'Manage account',
-            description:
-              displayRole === 'owner' ? 'Admins & staff' : 'Staff accounts',
+            description: 'Admins & staff for your shop',
             icon: 'people-outline' as const,
             iconBg: paperTheme.colors.tertiaryContainer,
             iconColor: paperTheme.colors.tertiary,

@@ -46,7 +46,7 @@ export type RootStackParamList = {
   ProfileDetails: undefined;
   ShopDetails: undefined;
   ManageAccount: undefined;
-  EditUser: { userId: string };
+  ManageUserForm: { userId?: string } | undefined;
   ThemePreference: undefined;
   SubscriptionPayments: undefined;
   PayNow: { payment: PaymentRecord };
