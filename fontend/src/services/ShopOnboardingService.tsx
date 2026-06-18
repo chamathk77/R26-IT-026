@@ -147,7 +147,7 @@ export const signupOnboarding_Service = createAsyncThunk(
       await ensureInternetConnection();
 
       const response = await apiClient.post<SignupOnboardingResponse>(
-        "/api/auth/signupOnbading",
+        "/api/auth/signupOnboarding",
         payload,
       );
 
