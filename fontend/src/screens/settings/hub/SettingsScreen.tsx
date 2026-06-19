@@ -3,6 +3,7 @@ import {
   Alert,
   ScrollView,
   StatusBar,
+  StyleSheet,
   Text,
   TouchableOpacity,
   View,
@@ -10,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { Portal } from 'react-native-paper';
 import { RootStackParamList } from '../../../navigation/RootStackParamsList';
 import { useDispatch, useSelector } from 'react-redux';
 import { useTheme } from '../../../context/ThemeContext';
@@ -18,8 +20,11 @@ import { AppDispatch, RootState } from '../../../store/store';
 import { clearLoginSession } from '../../../store/reducers/AuthReducer';
 import { clearSavedToken } from '../../../utils/secureStorage';
 import CommonHeader from '../../../components/CommonHeader/CommonHeader';
+import CommonAlert from '../../../components/CommonAlert/CommonAlert';
+import { useCommonAlert } from '../../../hooks/useCommonAlert';
 import type { LoginShop } from '../../../type/auth';
 import { cardShadow, settingsMenuStyles as styles } from '../shared/settingsDetailStyles';
+import { fonts } from '../../../constants/fonts';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -74,6 +79,7 @@ type MenuItem = {
   iconColor: string;
   onPress: () => void;
   danger?: boolean;
+  comingSoon?: boolean;
 };
 
 function SettingsMenuGroup({
@@ -115,18 +121,37 @@ function SettingsMenuGroup({
                 <Ionicons name={item.icon} size={20} color={item.iconColor} />
               </View>
               <View style={styles.cardBody}>
-                <Text
-                  style={[
-                    styles.cardTitle,
-                    {
-                      color: item.danger
-                        ? '#dc2626'
-                        : paperTheme.colors.onSurface,
-                    },
-                  ]}
-                >
-                  {item.title}
-                </Text>
+                <View style={moduleStyles.titleRow}>
+                  <Text
+                    style={[
+                      styles.cardTitle,
+                      {
+                        color: item.danger
+                          ? '#dc2626'
+                          : paperTheme.colors.onSurface,
+                      },
+                    ]}
+                  >
+                    {item.title}
+                  </Text>
+                  {item.comingSoon ? (
+                    <View
+                      style={[
+                        moduleStyles.soonBadge,
+                        { backgroundColor: paperTheme.colors.tertiaryContainer },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          moduleStyles.soonBadgeText,
+                          { color: paperTheme.colors.tertiary },
+                        ]}
+                      >
+                        Soon
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
                 <Text
                   style={[styles.cardDesc, { color: paperTheme.colors.onSurfaceVariant }]}
                 >
@@ -158,6 +183,7 @@ export default function SettingsScreen({ navigation }: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
   const dispatch = useDispatch<AppDispatch>();
   const { logoutSession } = useDummySession();
+  const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
   const user = useSelector((state: RootState) => state.AuthReducer.Login.userData);
   const shop = useSelector((state: RootState) => state.AuthReducer.Login.shopData);
 
@@ -167,6 +193,18 @@ export default function SettingsScreen({ navigation }: Props) {
   const shopLabel = shop?.shopName?.trim() || shop?.shopId || 'No shop linked';
   const subscriptionBadge = getSubscriptionBadge(shop);
   const showManageUsers = displayRole === 'owner';
+
+  const showComingSoonAlert = (moduleName: string) => {
+    show_Alert(
+      'pending',
+      'Coming soon',
+      `${moduleName} will be available in a future release.`,
+      1,
+      false,
+      'OK',
+      () => {},
+    );
+  };
 
   const confirmLogout = () => {
     Alert.alert('Log out', 'Are you sure you want to log out?', [
@@ -183,11 +221,12 @@ export default function SettingsScreen({ navigation }: Props) {
     ]);
   };
 
-  const goToModuleHub = () => {
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'ModuleHub' }],
-    });
+  const goToPos = () => {
+    navigation.reset({ index: 0, routes: [{ name: 'PosMain' }] });
+  };
+
+  const goToCostManagement = () => {
+    navigation.reset({ index: 0, routes: [{ name: 'CostDashboard' }] });
   };
 
   const accountItems: MenuItem[] = [
@@ -233,6 +272,67 @@ export default function SettingsScreen({ navigation }: Props) {
       : []),
   ];
 
+  const moduleItems: MenuItem[] = [
+    {
+      key: 'pos',
+      title: 'POS System',
+      description: 'Sales counter, cart, checkout & inventory',
+      icon: 'cart-outline',
+      iconBg: paperTheme.colors.primaryContainer,
+      iconColor: primary,
+      onPress: goToPos,
+    },
+    {
+      key: 'cost',
+      title: 'Cost Management',
+      description: 'Track spending, margins & financial insights',
+      icon: 'calculator-outline',
+      iconBg: '#ede9fe',
+      iconColor: '#6d28d9',
+      onPress: goToCostManagement,
+    },
+    {
+      key: 'analytics',
+      title: 'Analytics',
+      description: 'Business trends, insights & data visualization',
+      icon: 'analytics-outline',
+      iconBg: '#ccfbf1',
+      iconColor: '#0f766e',
+      comingSoon: true,
+      onPress: () => showComingSoonAlert('Analytics'),
+    },
+    {
+      key: 'kpi',
+      title: 'Key Performance Indicators',
+      description: 'KPI dashboard, metrics & performance tracking',
+      icon: 'stats-chart-outline',
+      iconBg: '#fef3c7',
+      iconColor: '#b45309',
+      comingSoon: true,
+      onPress: () => showComingSoonAlert('Key Performance Indicators'),
+    },
+    {
+      key: 'customer-marketing',
+      title: 'Customer & Marketing',
+      description: 'Customer engagement, campaigns & outreach',
+      icon: 'megaphone-outline',
+      iconBg: '#fce7f3',
+      iconColor: '#db2777',
+      comingSoon: true,
+      onPress: () => showComingSoonAlert('Customer & Marketing'),
+    },
+    {
+      key: 'reports',
+      title: 'Reports',
+      description: 'Sales summaries, exports & business reports',
+      icon: 'document-text-outline',
+      iconBg: '#dbeafe',
+      iconColor: '#1d4ed8',
+      comingSoon: true,
+      onPress: () => showComingSoonAlert('Reports'),
+    },
+  ];
+
   const preferenceItems: MenuItem[] = [
     {
       key: 'theme',
@@ -242,15 +342,6 @@ export default function SettingsScreen({ navigation }: Props) {
       iconBg: paperTheme.colors.primaryContainer,
       iconColor: primary,
       onPress: () => navigation.navigate('ThemePreference'),
-    },
-    {
-      key: 'module',
-      title: 'Change module',
-      description: 'Back to hub — POS or Cost Management',
-      icon: 'grid-outline',
-      iconBg: paperTheme.colors.surfaceVariant,
-      iconColor: primary,
-      onPress: goToModuleHub,
     },
   ];
 
@@ -409,6 +500,12 @@ export default function SettingsScreen({ navigation }: Props) {
             resolvedTheme={resolvedTheme}
           />
           <SettingsMenuGroup
+            label="Modules"
+            items={moduleItems}
+            paperTheme={paperTheme}
+            resolvedTheme={resolvedTheme}
+          />
+          <SettingsMenuGroup
             label="Preferences"
             items={preferenceItems}
             paperTheme={paperTheme}
@@ -422,6 +519,46 @@ export default function SettingsScreen({ navigation }: Props) {
           />
         </ScrollView>
       </SafeAreaView>
+
+      {alertConfig ? (
+        <Portal>
+          <CommonAlert
+            visible={visible}
+            type={alertConfig.type}
+            title={alertConfig.title}
+            message={alertConfig.message}
+            buttons={alertConfig.buttons}
+            positiveButtonText={alertConfig.positiveButtonText}
+            negativeButtonText={alertConfig.negativeButtonText}
+            onPositivePress={alertConfig.onPositivePress}
+            onNegativePress={alertConfig.onNegativePress}
+            onClose={hideAlert}
+            MoreDetails={alertConfig.MoreDetails}
+            OtherDescirption={alertConfig.OtherDescirption}
+            OtherButtonPress={alertConfig.OtherButtonPress}
+            OtherButtonText={alertConfig.OtherButtonText}
+          />
+        </Portal>
+      ) : null}
     </>
   );
 }
+
+const moduleStyles = StyleSheet.create({
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  soonBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  soonBadgeText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 10,
+    letterSpacing: 0.3,
+  },
+});

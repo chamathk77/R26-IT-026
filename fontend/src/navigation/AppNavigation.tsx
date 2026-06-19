@@ -11,8 +11,8 @@ import OtpValidationScreen from '../screens/loginScreens/OtpValidationScreen';
 import LoginScreen from '../screens/loginScreens/LoginScreen';
 import SignUpScreen from '../screens/loginScreens/SignUpScreen';
 import MainBottomTabNavigator from './MainBottomTabNavigator';
-import ModuleHubScreen from '../screens/hub/ModuleHubScreen';
 import CostModuleHubScreen from '../screens/cost/CostModuleHubScreen';
+import CostDashboardScreen from '../screens/cost/dashboard/CostDashboardScreen';
 import CostAnalysisScreen from '../screens/cost/CostAnalysisScreen';
 import CostManagementScreen from '../screens/cost/CostManagementScreen';
 import SettingsScreen from '../screens/settings/hub/SettingsScreen';
@@ -48,7 +48,6 @@ export default function AppNavigator() {
         <Stack.Screen name="OtpValidationScreen" component={OtpValidationScreen} />
         <Stack.Screen name="LoginScreen" component={LoginScreen} />
         <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
-        <Stack.Screen name="ModuleHub" component={ModuleHubScreen} />
         <Stack.Screen name="PosMain" component={MainBottomTabNavigator} />
         <Stack.Screen name="ManageCatogory" component={ManageCatogoryScreen} />
         <Stack.Screen name="ManageInventory" component={ManageInventoryScreen} />
@@ -58,6 +57,7 @@ export default function AppNavigator() {
         <Stack.Screen name="EditProduct" component={EditProductScreen} />
         <Stack.Screen name="CreateCatogory" component={CreateCatogoryScreen} />
         <Stack.Screen name="CostModuleHub" component={CostModuleHubScreen} />
+        <Stack.Screen name="CostDashboard" component={CostDashboardScreen} />
         <Stack.Screen name="CostAnalysis" component={CostAnalysisScreen} />
         <Stack.Screen name="CostManagementMain" component={CostManagementScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />

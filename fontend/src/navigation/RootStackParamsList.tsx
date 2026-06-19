@@ -29,7 +29,6 @@ export type RootStackParamList = {
   };
   LoginScreen: undefined;
   SignUpScreen: undefined;
-  ModuleHub: undefined;
   PosMain: undefined;
   ManageCatogory: undefined;
   ManageInventory: undefined;
@@ -39,6 +38,7 @@ export type RootStackParamList = {
   EditProduct: InventoryProductFormParams;
   CreateCatogory: { category?: Category; categoryId?: string };
   CostModuleHub: undefined;
+  CostDashboard: undefined;
   CostAnalysis: undefined;
   CostManagementMain: undefined;
   EnterEmailScreen: undefined;

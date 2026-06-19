@@ -12,6 +12,7 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { Ionicons } from '@expo/vector-icons';
 import { MD3Theme } from 'react-native-paper';
 import { fonts } from '../../constants/fonts';
+import { useTheme } from '../../context/ThemeContext';
 
 type DatePickerFieldProps = {
   label: string;
@@ -60,27 +61,47 @@ export default function DatePickerField({
   minimumDate,
   paperTheme,
 }: DatePickerFieldProps) {
+  const { resolvedTheme } = useTheme();
   const [showPicker, setShowPicker] = useState(false);
+  const [draftDate, setDraftDate] = useState<Date>(() => parseDateValue(value) ?? new Date());
 
-  const pickerValue = useMemo(() => {
-    return parseDateValue(value) ?? new Date();
-  }, [value]);
+  const pickerValue = useMemo(() => parseDateValue(value) ?? new Date(), [value]);
 
-  const handleChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
-    if (Platform.OS === 'android') {
-      setShowPicker(false);
-    }
+  const pickerTextColor = resolvedTheme === 'dark' ? '#FFFFFF' : '#1C1B1F';
 
-    if (event.type === 'dismissed' || !selectedDate) {
+  const openPicker = () => {
+    setDraftDate(parseDateValue(value) ?? new Date());
+    setShowPicker(true);
+  };
+
+  const closePicker = () => {
+    setShowPicker(false);
+  };
+
+  const commitDate = (selectedDate: Date) => {
+    onChange(formatDateValue(selectedDate));
+    closePicker();
+  };
+
+  const handleAndroidChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (event.type === 'dismissed') {
+      closePicker();
       return;
     }
+    if (selectedDate) {
+      commitDate(selectedDate);
+    }
+  };
 
-    onChange(formatDateValue(selectedDate));
+  const handleIosChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (selectedDate) {
+      setDraftDate(selectedDate);
+    }
   };
 
   const clearValue = () => {
     onChange('');
-    setShowPicker(false);
+    closePicker();
   };
 
   return (
@@ -89,7 +110,7 @@ export default function DatePickerField({
       <TouchableOpacity
         activeOpacity={0.85}
         disabled={disabled}
-        onPress={() => setShowPicker(true)}
+        onPress={openPicker}
         style={[
           styles.field,
           {
@@ -126,26 +147,39 @@ export default function DatePickerField({
       </TouchableOpacity>
 
       {Platform.OS === 'ios' ? (
-        <Modal visible={showPicker} transparent animationType="fade" onRequestClose={() => setShowPicker(false)}>
-          <Pressable style={styles.backdrop} onPress={() => setShowPicker(false)}>
+        <Modal visible={showPicker} transparent animationType="fade" onRequestClose={closePicker}>
+          <Pressable style={styles.backdrop} onPress={closePicker}>
             <Pressable
               style={[styles.sheet, { backgroundColor: paperTheme.colors.surface }]}
               onPress={(event) => event.stopPropagation()}
             >
               <View style={styles.sheetHeader}>
-                <Text style={[styles.sheetTitle, { color: paperTheme.colors.onSurface }]}>{label}</Text>
-                <TouchableOpacity onPress={() => setShowPicker(false)}>
+                <Text style={[styles.sheetTitle, { color: paperTheme.colors.onSurface }]}>
+                  {label}
+                </Text>
+                <TouchableOpacity onPress={() => commitDate(draftDate)}>
                   <Text style={[styles.doneText, { color: paperTheme.colors.primary }]}>Done</Text>
                 </TouchableOpacity>
               </View>
-              <DateTimePicker
-                value={pickerValue}
-                mode="date"
-                display="spinner"
-                maximumDate={maximumDate}
-                minimumDate={minimumDate}
-                onChange={handleChange}
-              />
+              <View
+                style={[
+                  styles.pickerWrap,
+                  { backgroundColor: paperTheme.colors.surface },
+                ]}
+              >
+                <DateTimePicker
+                  value={draftDate}
+                  mode="date"
+                  display="spinner"
+                  maximumDate={maximumDate}
+                  minimumDate={minimumDate}
+                  onChange={handleIosChange}
+                  themeVariant={resolvedTheme}
+                  textColor={pickerTextColor}
+                  accentColor={paperTheme.colors.primary}
+                  style={styles.picker}
+                />
+              </View>
             </Pressable>
           </Pressable>
         </Modal>
@@ -155,10 +189,12 @@ export default function DatePickerField({
         <DateTimePicker
           value={pickerValue}
           mode="date"
-          display="default"
+          display="calendar"
           maximumDate={maximumDate}
           minimumDate={minimumDate}
-          onChange={handleChange}
+          onChange={handleAndroidChange}
+          positiveButton={{ label: 'OK', textColor: paperTheme.colors.primary }}
+          negativeButton={{ label: 'Cancel', textColor: paperTheme.colors.onSurfaceVariant }}
         />
       ) : null}
     </View>
@@ -191,7 +227,7 @@ const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
   sheet: {
     borderTopLeftRadius: 18,
@@ -213,6 +249,15 @@ const styles = StyleSheet.create({
   doneText: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 14,
+  },
+  pickerWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  picker: {
+    width: '100%',
+    height: 216,
   },
 });
 
