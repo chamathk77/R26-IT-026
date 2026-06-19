@@ -8,6 +8,7 @@ import CostDashboardTabNavigator from '../../../navigation/CostDashboardTabNavig
 import CostDashboardTopBar, {
   CostDashboardWelcomeBanner,
 } from './components/CostDashboardTopBar';
+import CostDashboardQuickActions from './components/CostDashboardQuickActions';
 import { costDashboardStyles as styles } from './shared/costDashboardStyles';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CostDashboard'>;
@@ -27,10 +28,13 @@ export default function CostDashboardScreen({ navigation }: Props) {
       >
         <View style={styles.shell}>
           <CostDashboardTopBar
-            onPressBack={() => navigation.goBack()}
+            onPressBack={() =>
+              navigation.reset({ index: 0, routes: [{ name: 'PosMain' }] })
+            }
             onPressSettings={() => navigation.navigate('Settings')}
           />
           <CostDashboardWelcomeBanner />
+          <CostDashboardQuickActions />
           <CostDashboardTabNavigator />
         </View>
       </SafeAreaView>

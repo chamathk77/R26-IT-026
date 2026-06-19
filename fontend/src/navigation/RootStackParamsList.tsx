@@ -39,7 +39,8 @@ export type RootStackParamList = {
   CreateCatogory: { category?: Category; categoryId?: string };
   CostModuleHub: undefined;
   CostDashboard: undefined;
-  CostAnalysis: undefined;
+  ManageCostCategories: undefined;
+  CostCategoryForm: { categoryId?: string } | undefined;
   CostManagementMain: undefined;
   EnterEmailScreen: undefined;
   Settings: undefined;

@@ -69,6 +69,10 @@ export const costDashboardStyles = StyleSheet.create({
     fontSize: 14,
     marginTop: 6,
   },
+  quickActionsWrap: {
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
   tabContent: {
     flex: 1,
     paddingHorizontal: 16,
@@ -90,6 +94,23 @@ export const costDashboardStyles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginBottom: 4,
+  },
+  dateFilterRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  clearRangeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+    marginLeft: 2,
+  },
+  clearRangeText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 12,
   },
   periodChip: {
     borderRadius: 999,
@@ -130,6 +151,7 @@ export const costDashboardStyles = StyleSheet.create({
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
+    gap: 6,
   },
   statLabel: {
     fontFamily: fonts.PoppinsRegular,

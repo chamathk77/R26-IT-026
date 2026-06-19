@@ -13,7 +13,8 @@ import SignUpScreen from '../screens/loginScreens/SignUpScreen';
 import MainBottomTabNavigator from './MainBottomTabNavigator';
 import CostModuleHubScreen from '../screens/cost/CostModuleHubScreen';
 import CostDashboardScreen from '../screens/cost/dashboard/CostDashboardScreen';
-import CostAnalysisScreen from '../screens/cost/CostAnalysisScreen';
+import ManageCostCategoriesScreen from '../screens/cost/categories/ManageCostCategoriesScreen';
+import CostCategoryFormScreen from '../screens/cost/categories/CostCategoryFormScreen';
 import CostManagementScreen from '../screens/cost/CostManagementScreen';
 import SettingsScreen from '../screens/settings/hub/SettingsScreen';
 import ProfileDetailsScreen from '../screens/settings/account/ProfileDetailsScreen';
@@ -58,7 +59,8 @@ export default function AppNavigator() {
         <Stack.Screen name="CreateCatogory" component={CreateCatogoryScreen} />
         <Stack.Screen name="CostModuleHub" component={CostModuleHubScreen} />
         <Stack.Screen name="CostDashboard" component={CostDashboardScreen} />
-        <Stack.Screen name="CostAnalysis" component={CostAnalysisScreen} />
+        <Stack.Screen name="ManageCostCategories" component={ManageCostCategoriesScreen} />
+        <Stack.Screen name="CostCategoryForm" component={CostCategoryFormScreen} />
         <Stack.Screen name="CostManagementMain" component={CostManagementScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
         <Stack.Screen name="ProfileDetails" component={ProfileDetailsScreen} />

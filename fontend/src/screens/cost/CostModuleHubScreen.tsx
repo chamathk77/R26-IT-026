@@ -54,38 +54,12 @@ export default function CostModuleHubScreen({ navigation }: Props) {
 
           <View style={styles.header}>
             <Text style={[styles.title, { color: paperTheme.colors.onBackground }]}>
-              Cost Management & Analysis
+              Cost Management
             </Text>
             <Text style={[styles.subtitle, { color: paperTheme.colors.onSurfaceVariant }]}>
-              Choose analysis or day-to-day cost tools.
+              Day-to-day cost tools and controls.
             </Text>
           </View>
-
-          <TouchableOpacity
-            activeOpacity={0.92}
-            style={[styles.card, { backgroundColor: paperTheme.colors.surface }]}
-            onPress={() => navigation.navigate('CostAnalysis')}
-            accessibilityRole="button"
-            accessibilityLabel="Open Analysis"
-          >
-            <View
-              style={[
-                styles.iconWrap,
-                { backgroundColor: paperTheme.colors.primaryContainer },
-              ]}
-            >
-              <Ionicons name="analytics-outline" size={32} color={paperTheme.colors.primary} />
-            </View>
-            <View style={styles.cardText}>
-              <Text style={[styles.cardTitle, { color: paperTheme.colors.onSurface }]}>
-                Analysis
-              </Text>
-              <Text style={[styles.cardDesc, { color: paperTheme.colors.onSurfaceVariant }]}>
-                Charts, trends, and spending insights.
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={22} color={paperTheme.colors.outline} />
-          </TouchableOpacity>
 
           <TouchableOpacity
             activeOpacity={0.92}

@@ -11,6 +11,7 @@ import TrialReducer from '../store/reducers/TrialReducer';
 import PaymentReducer from '../store/reducers/PaymentReducer';
 import SalePersonReducer from '../store/reducers/SalePersonReducer';
 import ManageUsersReducer from '../store/reducers/ManageUsersReducer';
+import CostCategoryReducer from '../store/reducers/CostCategoryReducer';
 
 export const store = configureStore({
   reducer: {
@@ -25,6 +26,7 @@ export const store = configureStore({
     PaymentReducer,
     SalePersonReducer,
     ManageUsersReducer,
+    CostCategoryReducer,
   },
 });
 
