@@ -38,9 +38,18 @@ import {
   handleSessionExpiredApiError,
 } from '../../../../utils/apiErrorAlert';
 import { costCardShadow } from '../shared/costDashboardStyles';
+import DatePickerField from '../../../../components/DatePickerField/DatePickerField';
 import { addExpenseStyles as styles } from './addExpenseStyles';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddCostExpense'>;
+
+function getTodayDateValue(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 async function ensureMediaLibraryPermission(
   show_Alert: ReturnType<typeof useCommonAlert>['show_Alert'],
@@ -106,6 +115,7 @@ export default function AddCostExpenseScreen({ navigation }: Props) {
   const [amount, setAmount] = useState('');
   const [isProduct, setIsProduct] = useState(false);
   const [qty, setQty] = useState('');
+  const [expenseDate, setExpenseDate] = useState(getTodayDateValue);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [slideToastMessage, setSlideToastMessage] = useState<string | null>(null);
@@ -191,6 +201,7 @@ export default function AddCostExpenseScreen({ navigation }: Props) {
           amount: parsedAmount,
           isProduct,
           qty: parsedQty,
+          purchaseDate: expenseDate.trim() || undefined,
           imageUri,
         }),
       ).unwrap();
@@ -220,6 +231,7 @@ export default function AddCostExpenseScreen({ navigation }: Props) {
     canSave,
     dispatch,
     expenseName,
+    expenseDate,
     imageUri,
     isProduct,
     qty,
@@ -404,6 +416,20 @@ export default function AddCostExpenseScreen({ navigation }: Props) {
                     },
                   ]}
                 />
+              </View>
+
+              <View>
+                <DatePickerField
+                  label="Expense date"
+                  value={expenseDate}
+                  onChange={setExpenseDate}
+                  placeholder="Today"
+                  maximumDate={new Date()}
+                  paperTheme={paperTheme}
+                />
+                <Text style={[styles.toggleSub, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  Defaults to today. Tap to pick another date, or clear to use today on save.
+                </Text>
               </View>
 
               <View style={styles.toggleRow}>

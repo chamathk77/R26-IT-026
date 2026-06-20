@@ -1,11 +1,14 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { apiClient } from '../../config/apiConfig';
+import { apiClient, getApiBaseUrl } from '../../config/apiConfig';
 import { ensureInternetConnection } from '../utils/checkInternetConnection';
 import { ApiErrorResponse } from '../type/common';
 import { toApiErrorResponse } from '../utils/apiErrorAlert';
 import {
   CreateCostExpenseRequest,
   CreateCostExpenseResponse,
+  FetchCostHistoryParams,
+  GetCostExpenseByIdResponse,
+  GetCostHistoryResponse,
 } from '../type/costExpense';
 
 function isHttpSuccess(status: number): boolean {
@@ -77,6 +80,89 @@ function buildCostExpenseJsonBody(payload: CreateCostExpenseRequest) {
 
   return body;
 }
+
+function buildCostHistoryQuery(params: FetchCostHistoryParams): string {
+  const searchParams = new URLSearchParams();
+  if (params.startDate?.trim()) {
+    searchParams.set('startDate', params.startDate.trim());
+  }
+  if (params.endDate?.trim()) {
+    searchParams.set('endDate', params.endDate.trim());
+  }
+  if (params.categoryId?.trim()) {
+    searchParams.set('categoryId', params.categoryId.trim());
+  }
+  searchParams.set('page', String(params.page ?? 1));
+  searchParams.set('limit', String(params.limit ?? 20));
+  return searchParams.toString();
+}
+
+export const fetchCostHistory_Service = createAsyncThunk(
+  'costExpense/fetchHistory',
+  async (params: FetchCostHistoryParams, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const query = buildCostHistoryQuery(params);
+      const response = await apiClient.get<GetCostHistoryResponse>(
+        `/api/cost-expenses/history?${query}`,
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: response.data?.message || 'Could not load expense history',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export function getCostExpenseImageUrl(imagePath: string | null | undefined): string | null {
+  if (!imagePath || imagePath === 'pending-upload') {
+    return null;
+  }
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
+  }
+  const base = getApiBaseUrl().replace(/\/$/, '');
+  const path = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+  return `${base}${path}`;
+}
+
+export const fetchCostExpenseById_Service = createAsyncThunk(
+  'costExpense/fetchById',
+  async (id: string, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.get<GetCostExpenseByIdResponse>(
+        `/api/cost-expenses/${encodeURIComponent(id)}`,
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: response.data?.message || 'Could not load expense details',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
 
 export const createCostExpense_Service = createAsyncThunk(
   'costExpense/create',

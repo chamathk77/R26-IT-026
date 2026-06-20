@@ -66,6 +66,90 @@ function parseQty(value) {
   return qty;
 }
 
+function startOfDay(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfDay(date) {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+function parseFilterDate(value) {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return null;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return undefined;
+  }
+  return parsed;
+}
+
+function parsePagination(query) {
+  const pageRaw = parseInt(String(query?.page ?? '1'), 10);
+  const limitRaw = parseInt(String(query?.limit ?? '20'), 10);
+
+  const page = Number.isNaN(pageRaw) ? 1 : Math.max(1, pageRaw);
+  const limit = Number.isNaN(limitRaw) ? 20 : Math.min(100, Math.max(1, limitRaw));
+  const skip = (page - 1) * limit;
+
+  return { page, limit, skip };
+}
+
+async function buildCostHistoryFilter(req, shopId) {
+  const filter = { shopId };
+  const appliedFilters = {};
+
+  const startDate = parseFilterDate(req.query?.startDate);
+  if (startDate === undefined) {
+    return { error: 'startDate is invalid' };
+  }
+
+  const endDate = parseFilterDate(req.query?.endDate);
+  if (endDate === undefined) {
+    return { error: 'endDate is invalid' };
+  }
+
+  if (startDate && endDate && startOfDay(startDate) > endOfDay(endDate)) {
+    return { error: 'startDate cannot be after endDate' };
+  }
+
+  if (startDate || endDate) {
+    filter.purchaseDate = {};
+    if (startDate) {
+      filter.purchaseDate.$gte = startOfDay(startDate);
+      appliedFilters.startDate = startOfDay(startDate).toISOString();
+    }
+    if (endDate) {
+      filter.purchaseDate.$lte = endOfDay(endDate);
+      appliedFilters.endDate = endOfDay(endDate).toISOString();
+    }
+  }
+
+  const categoryIdRaw = req.query?.categoryId;
+  if (categoryIdRaw !== undefined && categoryIdRaw !== null && String(categoryIdRaw).trim() !== '') {
+    const categoryId = String(categoryIdRaw).trim();
+    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+      return { error: 'Invalid category id' };
+    }
+
+    const categoryResult = await resolveShopCategory(categoryId, shopId);
+    if (categoryResult.error) {
+      return { error: categoryResult.error };
+    }
+
+    filter.categoryId = categoryResult.category._id;
+    appliedFilters.categoryId = String(categoryResult.category._id);
+    appliedFilters.categoryName = categoryResult.category.name;
+  }
+
+  return { filter, appliedFilters };
+}
+
 function rollbackUploadedFile(req) {
   if (req.file) {
     unlinkCostExpenseImageIfLocal(publicImagePath(req.file.filename));
@@ -279,7 +363,29 @@ const createCostExpense = async (req, res) => {
   }
 };
 
-const getCostExpenses = async (req, res) => {
+// const getCostExpenses = async (req, res) => {
+//   try {
+//     const managerContext = await getCostExpenseManagerContext(req.user.id);
+//     if (managerContext.error) {
+//       return res
+//         .status(managerContext.error.status)
+//         .json({ message: managerContext.error.message, success: false });
+//     }
+
+//     const { shopId } = managerContext;
+
+//     const costExpenses = await CostExpense.find({ shopId })
+//       .populate('createdBy', 'name email role')
+//       .populate('categoryId', 'name colorCode')
+//       .sort({ purchaseDate: -1, createdAt: -1 });
+
+//     return res.json({ success: true, count: costExpenses.length, data: costExpenses });
+//   } catch (error) {
+//     return res.status(500).json({ message: error.message, success: false });
+//   }
+// };
+
+const getCostHistory = async (req, res) => {
   try {
     const managerContext = await getCostExpenseManagerContext(req.user.id);
     if (managerContext.error) {
@@ -289,13 +395,41 @@ const getCostExpenses = async (req, res) => {
     }
 
     const { shopId } = managerContext;
+    const historyFilter = await buildCostHistoryFilter(req, shopId);
+    if (historyFilter.error) {
+      return res.status(400).json({ message: historyFilter.error, success: false });
+    }
 
-    const costExpenses = await CostExpense.find({ shopId })
-      .populate('createdBy', 'name email role')
-      .populate('categoryId', 'name colorCode')
-      .sort({ purchaseDate: -1, createdAt: -1 });
+    const { filter, appliedFilters } = historyFilter;
+    const { page, limit, skip } = parsePagination(req.query);
 
-    return res.json({ success: true, count: costExpenses.length, data: costExpenses });
+    const [total, costExpenses] = await Promise.all([
+      CostExpense.countDocuments(filter),
+      CostExpense.find(filter)
+        .populate('createdBy', 'name email role')
+        .populate('categoryId', 'name colorCode')
+        .sort({ purchaseDate: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+    ]);
+
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+
+    return res.json({
+      success: true,
+      count: costExpenses.length,
+      total,
+      filters: appliedFilters,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+      data: costExpenses,
+    });
   } catch (error) {
     return res.status(500).json({ message: error.message, success: false });
   }
@@ -491,7 +625,8 @@ const deleteCostExpense = async (req, res) => {
 
 module.exports = {
   createCostExpense,
-  getCostExpenses,
+  // getCostExpenses,
+  getCostHistory,
   getCostExpenseById,
   updateCostExpense,
   deleteCostExpense,

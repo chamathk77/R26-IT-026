@@ -20,6 +20,7 @@ type DatePickerFieldProps = {
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  compact?: boolean;
   maximumDate?: Date;
   minimumDate?: Date;
   paperTheme: MD3Theme;
@@ -57,6 +58,7 @@ export default function DatePickerField({
   onChange,
   placeholder = 'Select date',
   disabled = false,
+  compact = false,
   maximumDate,
   minimumDate,
   paperTheme,
@@ -105,14 +107,23 @@ export default function DatePickerField({
   };
 
   return (
-    <View style={styles.wrap}>
-      <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>{label}</Text>
+    <View style={[styles.wrap, compact ? styles.wrapCompact : null]}>
+      <Text
+        style={[
+          styles.label,
+          compact ? styles.labelCompact : null,
+          { color: paperTheme.colors.onSurfaceVariant },
+        ]}
+      >
+        {label}
+      </Text>
       <TouchableOpacity
         activeOpacity={0.85}
         disabled={disabled}
         onPress={openPicker}
         style={[
           styles.field,
+          compact ? styles.fieldCompact : null,
           {
             backgroundColor: paperTheme.colors.surfaceVariant,
             borderColor: paperTheme.colors.outlineVariant,
@@ -120,10 +131,15 @@ export default function DatePickerField({
           },
         ]}
       >
-        <Ionicons name="calendar-outline" size={18} color={paperTheme.colors.onSurfaceVariant} />
+        <Ionicons
+          name="calendar-outline"
+          size={compact ? 16 : 18}
+          color={paperTheme.colors.onSurfaceVariant}
+        />
         <Text
           style={[
             styles.value,
+            compact ? styles.valueCompact : null,
             {
               color: value ? paperTheme.colors.onSurface : paperTheme.colors.onSurfaceVariant,
             },
@@ -206,9 +222,15 @@ const styles = StyleSheet.create({
     gap: 8,
     flex: 1,
   },
+  wrapCompact: {
+    gap: 4,
+  },
   label: {
     fontFamily: fonts.PoppinsMedium,
     fontSize: 12,
+  },
+  labelCompact: {
+    fontSize: 11,
   },
   field: {
     minHeight: 48,
@@ -219,10 +241,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
+  fieldCompact: {
+    minHeight: 38,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    gap: 8,
+  },
   value: {
     flex: 1,
     fontFamily: fonts.PoppinsMedium,
     fontSize: 14,
+  },
+  valueCompact: {
+    fontSize: 13,
   },
   backdrop: {
     flex: 1,

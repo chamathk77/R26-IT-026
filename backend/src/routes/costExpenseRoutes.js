@@ -4,6 +4,7 @@ const { uploadCostExpenseImageSingle } = require('../middleware/uploadCostExpens
 const {
   createCostExpense,
   getCostExpenses,
+  getCostHistory,
   getCostExpenseById,
   updateCostExpense,
   deleteCostExpense,
@@ -12,7 +13,8 @@ const {
 const router = express.Router();
 
 router.post('/', protect, uploadCostExpenseImageSingle, createCostExpense);
-router.get('/', protect, getCostExpenses);
+// router.get('/', protect, getCostExpenses);
+router.get('/history', protect, getCostHistory);
 router.get('/:id', protect, getCostExpenseById);
 router.put('/:id', protect, uploadCostExpenseImageSingle, updateCostExpense);
 router.delete('/:id', protect, deleteCostExpense);

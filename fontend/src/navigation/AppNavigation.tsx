@@ -16,6 +16,7 @@ import CostDashboardScreen from '../screens/cost/dashboard/CostDashboardScreen';
 import ManageCostCategoriesScreen from '../screens/cost/categories/ManageCostCategoriesScreen';
 import CostCategoryFormScreen from '../screens/cost/categories/CostCategoryFormScreen';
 import AddCostExpenseScreen from '../screens/cost/dashboard/addExpenses/AddCostExpenseScreen';
+import CostExpenseDetailScreen from '../screens/cost/dashboard/expenseDetail/CostExpenseDetailScreen';
 
 import SettingsScreen from '../screens/settings/hub/SettingsScreen';
 import ProfileDetailsScreen from '../screens/settings/account/ProfileDetailsScreen';
@@ -62,6 +63,7 @@ export default function AppNavigator() {
         <Stack.Screen name="ManageCostCategories" component={ManageCostCategoriesScreen} />
         <Stack.Screen name="CostCategoryForm" component={CostCategoryFormScreen} />
         <Stack.Screen name="AddCostExpense" component={AddCostExpenseScreen} />
+        <Stack.Screen name="CostExpenseDetail" component={CostExpenseDetailScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
         <Stack.Screen name="ProfileDetails" component={ProfileDetailsScreen} />
         <Stack.Screen name="ShopDetails" component={ShopDetailsScreen} />

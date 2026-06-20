@@ -44,3 +44,44 @@ export interface CreateCostExpenseResponse {
   data?: CostExpense;
   message?: string;
 }
+
+export interface CostHistoryPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+
+export interface CostHistoryAppliedFilters {
+  startDate?: string;
+  endDate?: string;
+  categoryId?: string;
+  categoryName?: string;
+}
+
+export interface FetchCostHistoryParams {
+  startDate?: string;
+  endDate?: string;
+  categoryId?: string;
+  page?: number;
+  limit?: number;
+  append?: boolean;
+}
+
+export interface GetCostHistoryResponse {
+  success: boolean;
+  count?: number;
+  total?: number;
+  filters?: CostHistoryAppliedFilters;
+  pagination?: CostHistoryPagination;
+  data?: CostExpense[];
+  message?: string;
+}
+
+export interface GetCostExpenseByIdResponse {
+  success: boolean;
+  data?: CostExpense;
+  message?: string;
+}
