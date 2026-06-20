@@ -78,6 +78,154 @@ function endOfDay(date) {
   return d;
 }
 
+function getCurrentMonthRange(referenceDate = new Date()) {
+  const monthStart = startOfDay(
+    new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1),
+  );
+  const monthEnd = endOfDay(
+    new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0),
+  );
+  return { monthStart, monthEnd };
+}
+
+const SUMMARY_PERIOD_KEYS = new Set([
+  'current_month',
+  'last_month',
+  'last_3_months',
+  'last_6_months',
+  'last_1_year',
+]);
+
+function resolveSummaryDateRange(query) {
+  const startDateRaw = parseFilterDate(query?.startDate);
+  if (startDateRaw === undefined) {
+    return { error: 'startDate is invalid' };
+  }
+
+  const endDateRaw = parseFilterDate(query?.endDate);
+  if (endDateRaw === undefined) {
+    return { error: 'endDate is invalid' };
+  }
+
+  const hasStart = Boolean(startDateRaw);
+  const hasEnd = Boolean(endDateRaw);
+
+  if (hasStart !== hasEnd) {
+    return { error: 'Both startDate and endDate are required for a custom date range' };
+  }
+
+  if (hasStart && hasEnd) {
+    const rangeStart = startOfDay(startDateRaw);
+    const rangeEnd = endOfDay(endDateRaw);
+    if (rangeStart > rangeEnd) {
+      return { error: 'startDate cannot be after endDate' };
+    }
+
+    return {
+      rangeStart,
+      rangeEnd,
+      filterType: 'custom_range',
+      appliedFilters: {
+        startDate: rangeStart.toISOString(),
+        endDate: rangeEnd.toISOString(),
+      },
+    };
+  }
+
+  const period = String(query?.period ?? 'current_month')
+    .trim()
+    .toLowerCase();
+  if (!SUMMARY_PERIOD_KEYS.has(period)) {
+    return {
+      error:
+        'Invalid period. Use current_month, last_month, last_3_months, last_6_months, or last_1_year',
+    };
+  }
+
+  const now = new Date();
+  let rangeStart;
+  let rangeEnd;
+
+  switch (period) {
+    case 'last_month': {
+      const ref = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      rangeStart = startOfDay(new Date(ref.getFullYear(), ref.getMonth(), 1));
+      rangeEnd = endOfDay(new Date(ref.getFullYear(), ref.getMonth() + 1, 0));
+      break;
+    }
+    case 'last_3_months':
+      rangeStart = startOfDay(new Date(now.getFullYear(), now.getMonth() - 2, 1));
+      rangeEnd = endOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+      break;
+    case 'last_6_months':
+      rangeStart = startOfDay(new Date(now.getFullYear(), now.getMonth() - 5, 1));
+      rangeEnd = endOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+      break;
+    case 'last_1_year':
+      rangeStart = startOfDay(new Date(now.getFullYear(), now.getMonth() - 11, 1));
+      rangeEnd = endOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+      break;
+    case 'current_month':
+    default: {
+      const currentMonth = getCurrentMonthRange(now);
+      rangeStart = currentMonth.monthStart;
+      rangeEnd = currentMonth.monthEnd;
+      break;
+    }
+  }
+
+  return {
+    rangeStart,
+    rangeEnd,
+    filterType: 'period',
+    period,
+    appliedFilters: { period },
+  };
+}
+
+function aggregateCostRecordsByCategory(records) {
+  const categoryMap = new Map();
+  let totalAmount = 0;
+
+  for (const record of records) {
+    const categoryId = String(record.categoryId?._id ?? record.categoryId ?? '');
+    const categoryName =
+      record.categoryId?.name != null
+        ? String(record.categoryId.name).trim()
+        : String(record.categoryName || 'Uncategorized').trim();
+    const colorCode =
+      record.categoryId?.colorCode != null ? String(record.categoryId.colorCode).trim() : '';
+
+    const amount = Number(record.amount) || 0;
+    totalAmount += amount;
+
+    if (!categoryMap.has(categoryId)) {
+      categoryMap.set(categoryId, {
+        categoryId,
+        categoryName,
+        colorCode,
+        expenseCount: 0,
+        totalAmount: 0,
+      });
+    }
+
+    const categorySummary = categoryMap.get(categoryId);
+    categorySummary.expenseCount += 1;
+    categorySummary.totalAmount += amount;
+  }
+
+  const categories = Array.from(categoryMap.values()).sort(
+    (a, b) => b.totalAmount - a.totalAmount,
+  );
+
+  return {
+    categoryCount: categories.length,
+    recordCount: records.length,
+    totalAmount,
+    categories,
+  };
+}
+
 function parseFilterDate(value) {
   if (value === undefined || value === null || String(value).trim() === '') {
     return null;
@@ -628,6 +776,86 @@ const deleteCostExpense = async (req, res) => {
   }
 };
 
+const costOverview = async (req, res) => {
+  try {
+    const managerContext = await getCostExpenseManagerContext(req.user.id);
+    if (managerContext.error) {
+      return res
+        .status(managerContext.error.status)
+        .json({ message: managerContext.error.message, success: false });
+    }
+
+    const { shopId } = managerContext;
+    const { monthStart, monthEnd } = getCurrentMonthRange();
+
+    const records = await CostExpense.find({
+      shopId,
+      purchaseDate: { $gte: monthStart, $lte: monthEnd },
+    })
+      .select('categoryId categoryName amount')
+      .populate('categoryId', 'name colorCode')
+      .lean();
+
+    const summary = aggregateCostRecordsByCategory(records);
+
+    return res.json({
+      success: true,
+      data: {
+        shopId,
+        monthStart: monthStart.toISOString(),
+        monthEnd: monthEnd.toISOString(),
+        ...summary,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message, success: false });
+  }
+};
+
+const costSummary = async (req, res) => {
+  try {
+    const managerContext = await getCostExpenseManagerContext(req.user.id);
+    if (managerContext.error) {
+      return res
+        .status(managerContext.error.status)
+        .json({ message: managerContext.error.message, success: false });
+    }
+
+    const dateRange = resolveSummaryDateRange(req.query);
+    if (dateRange.error) {
+      return res.status(400).json({ message: dateRange.error, success: false });
+    }
+
+    const { shopId } = managerContext;
+    const { rangeStart, rangeEnd, filterType, period, appliedFilters } = dateRange;
+
+    const records = await CostExpense.find({
+      shopId,
+      purchaseDate: { $gte: rangeStart, $lte: rangeEnd },
+    })
+      .select('categoryId categoryName amount purchaseDate')
+      .populate('categoryId', 'name colorCode')
+      .lean();
+
+    const summary = aggregateCostRecordsByCategory(records);
+
+    return res.json({
+      success: true,
+      data: {
+        shopId,
+        filterType,
+        period: period ?? null,
+        startDate: rangeStart.toISOString(),
+        endDate: rangeEnd.toISOString(),
+        filters: appliedFilters,
+        ...summary,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message, success: false });
+  }
+};
+
 module.exports = {
   createCostExpense,
   // getCostExpenses,
@@ -635,4 +863,6 @@ module.exports = {
   getCostExpenseById,
   updateCostExpense,
   deleteCostExpense,
+  costOverview,
+  costSummary,
 };

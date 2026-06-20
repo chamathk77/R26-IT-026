@@ -116,3 +116,65 @@ export interface DeleteCostExpenseResponse {
   id?: string;
   expenseId?: string;
 }
+
+export interface CostOverviewCategory {
+  categoryId: string;
+  categoryName: string;
+  colorCode: string;
+  expenseCount: number;
+  totalAmount: number;
+}
+
+export interface CostOverviewData {
+  shopId: string;
+  monthStart: string;
+  monthEnd: string;
+  categoryCount: number;
+  recordCount: number;
+  totalAmount: number;
+  categories: CostOverviewCategory[];
+}
+
+export interface GetCostOverviewResponse {
+  success: boolean;
+  data?: CostOverviewData;
+  message?: string;
+}
+
+export type CostSummaryPeriod =
+  | 'current_month'
+  | 'last_month'
+  | 'last_3_months'
+  | 'last_6_months'
+  | 'last_1_year';
+
+export interface FetchCostSummaryParams {
+  period?: CostSummaryPeriod;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface CostSummaryFilters {
+  period?: CostSummaryPeriod;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface CostSummaryData {
+  shopId: string;
+  filterType: 'period' | 'custom_range';
+  period: CostSummaryPeriod | null;
+  startDate: string;
+  endDate: string;
+  filters: CostSummaryFilters;
+  categoryCount: number;
+  recordCount: number;
+  totalAmount: number;
+  categories: CostOverviewCategory[];
+}
+
+export interface GetCostSummaryResponse {
+  success: boolean;
+  data?: CostSummaryData;
+  message?: string;
+}

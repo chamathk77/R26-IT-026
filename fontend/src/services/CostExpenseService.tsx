@@ -10,6 +10,9 @@ import {
   FetchCostHistoryParams,
   GetCostExpenseByIdResponse,
   GetCostHistoryResponse,
+  GetCostOverviewResponse,
+  GetCostSummaryResponse,
+  FetchCostSummaryParams,
   UpdateCostExpenseRequest,
   UpdateCostExpenseResponse,
 } from '../type/costExpense';
@@ -163,6 +166,70 @@ export const fetchCostHistory_Service = createAsyncThunk(
       const apiError: ApiErrorResponse = {
         error: 'Error',
         message: response.data?.message || 'Could not load expense history',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const fetchCostOverview_Service = createAsyncThunk(
+  'costExpense/fetchOverview',
+  async (_void: undefined, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.get<GetCostOverviewResponse>('/api/cost-expenses/overview');
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: response.data?.message || 'Could not load cost overview',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+function buildCostSummaryQuery(params: FetchCostSummaryParams): string {
+  const searchParams = new URLSearchParams();
+  if (params.startDate?.trim() && params.endDate?.trim()) {
+    searchParams.set('startDate', params.startDate.trim());
+    searchParams.set('endDate', params.endDate.trim());
+  } else {
+    searchParams.set('period', params.period ?? 'current_month');
+  }
+  return searchParams.toString();
+}
+
+export const fetchCostSummary_Service = createAsyncThunk(
+  'costExpense/fetchSummary',
+  async (params: FetchCostSummaryParams, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const query = buildCostSummaryQuery(params);
+      const response = await apiClient.get<GetCostSummaryResponse>(
+        `/api/cost-expenses/summary?${query}`,
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: response.data?.message || 'Could not load cost summary',
         status: response.status,
         timestamp: new Date().toISOString(),
       };

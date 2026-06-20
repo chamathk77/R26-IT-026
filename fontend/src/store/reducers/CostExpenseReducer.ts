@@ -4,9 +4,16 @@ import {
   deleteCostExpense_Service,
   fetchCostExpenseById_Service,
   fetchCostHistory_Service,
+  fetchCostOverview_Service,
+  fetchCostSummary_Service,
   updateCostExpense_Service,
 } from '../../services/CostExpenseService';
-import { CostExpense, CostHistoryPagination } from '../../type/costExpense';
+import {
+  CostExpense,
+  CostHistoryPagination,
+  CostOverviewData,
+  CostSummaryData,
+} from '../../type/costExpense';
 import { ApiErrorResponse } from '../../type/common';
 
 interface CostExpenseState {
@@ -30,6 +37,18 @@ interface CostExpenseState {
     error: string | null;
     byId: Record<string, CostExpense>;
   };
+  overview: {
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+    data: CostOverviewData | null;
+  };
+  summary: {
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+    data: CostSummaryData | null;
+  };
 }
 
 const initialState: CostExpenseState = {
@@ -52,6 +71,18 @@ const initialState: CostExpenseState = {
     deleting: false,
     error: null,
     byId: {},
+  },
+  overview: {
+    loading: false,
+    error: null,
+    success: false,
+    data: null,
+  },
+  summary: {
+    loading: false,
+    error: null,
+    success: false,
+    data: null,
   },
 };
 
@@ -79,6 +110,8 @@ export const CostExpenseSlice = createSlice({
       state.create.loading = false;
       state.create.success = true;
       state.create.error = null;
+      state.overview.success = false;
+      state.summary.success = false;
     });
     builder.addCase(createCostExpense_Service.rejected, (state, action) => {
       state.create.loading = false;
@@ -150,6 +183,8 @@ export const CostExpenseSlice = createSlice({
     builder.addCase(updateCostExpense_Service.fulfilled, (state, action) => {
       state.detail.updating = false;
       state.detail.error = null;
+      state.overview.success = false;
+      state.summary.success = false;
       const expense = action.payload?.data;
       if (expense?._id) {
         state.detail.byId[expense._id] = expense;
@@ -172,6 +207,8 @@ export const CostExpenseSlice = createSlice({
     builder.addCase(deleteCostExpense_Service.fulfilled, (state, action) => {
       state.detail.deleting = false;
       state.detail.error = null;
+      state.overview.success = false;
+      state.summary.success = false;
       const deletedId = action.payload?.id;
       if (deletedId) {
         delete state.detail.byId[deletedId];
@@ -186,6 +223,44 @@ export const CostExpenseSlice = createSlice({
       const payload = action.payload as ApiErrorResponse | undefined;
       state.detail.error =
         payload?.message || action.error.message || 'Could not delete expense';
+    });
+
+    builder.addCase(fetchCostOverview_Service.pending, (state) => {
+      state.overview.loading = true;
+      state.overview.error = null;
+      state.overview.success = false;
+    });
+    builder.addCase(fetchCostOverview_Service.fulfilled, (state, action) => {
+      state.overview.loading = false;
+      state.overview.success = true;
+      state.overview.error = null;
+      state.overview.data = action.payload?.data ?? null;
+    });
+    builder.addCase(fetchCostOverview_Service.rejected, (state, action) => {
+      state.overview.loading = false;
+      state.overview.success = false;
+      const payload = action.payload as ApiErrorResponse | undefined;
+      state.overview.error =
+        payload?.message || action.error.message || 'Could not load cost overview';
+    });
+
+    builder.addCase(fetchCostSummary_Service.pending, (state) => {
+      state.summary.loading = true;
+      state.summary.error = null;
+      state.summary.success = false;
+    });
+    builder.addCase(fetchCostSummary_Service.fulfilled, (state, action) => {
+      state.summary.loading = false;
+      state.summary.success = true;
+      state.summary.error = null;
+      state.summary.data = action.payload?.data ?? null;
+    });
+    builder.addCase(fetchCostSummary_Service.rejected, (state, action) => {
+      state.summary.loading = false;
+      state.summary.success = false;
+      const payload = action.payload as ApiErrorResponse | undefined;
+      state.summary.error =
+        payload?.message || action.error.message || 'Could not load cost summary';
     });
   },
 });
