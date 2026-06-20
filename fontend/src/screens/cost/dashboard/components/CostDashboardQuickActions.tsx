@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Text, TouchableOpacity, View } from 'react-native';
+import { Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -12,10 +12,6 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 export default function CostDashboardQuickActions() {
   const { paperTheme, resolvedTheme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
-
-  const showPlaceholderAction = (action: string) => {
-    Alert.alert('Coming soon', `${action} will be available in a future update.`);
-  };
 
   return (
     <View style={styles.quickActionsWrap}>
@@ -43,7 +39,7 @@ export default function CostDashboardQuickActions() {
             { backgroundColor: paperTheme.colors.primary },
             costCardShadow(resolvedTheme),
           ]}
-          onPress={() => showPlaceholderAction('New expense')}
+          onPress={() => navigation.navigate('AddCostExpense')}
         >
           <Ionicons name="add-circle-outline" size={18} color={paperTheme.colors.onPrimary} />
           <Text style={[styles.actionBtnText, { color: paperTheme.colors.onPrimary }]}>

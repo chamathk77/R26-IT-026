@@ -12,6 +12,7 @@ import PaymentReducer from '../store/reducers/PaymentReducer';
 import SalePersonReducer from '../store/reducers/SalePersonReducer';
 import ManageUsersReducer from '../store/reducers/ManageUsersReducer';
 import CostCategoryReducer from '../store/reducers/CostCategoryReducer';
+import CostExpenseReducer from '../store/reducers/CostExpenseReducer';
 
 export const store = configureStore({
   reducer: {
@@ -27,6 +28,7 @@ export const store = configureStore({
     SalePersonReducer,
     ManageUsersReducer,
     CostCategoryReducer,
+    CostExpenseReducer,
   },
 });
 

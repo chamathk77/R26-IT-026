@@ -13,6 +13,8 @@ import {
   CURRENT_MONTH_TOTAL,
   formatCostAmount,
 } from '../shared/costDashboardMockData';
+import CostDashboardQuickActions from '../components/CostDashboardQuickActions';
+import { CostDashboardWelcomeBanner } from '../components/CostDashboardTopBar';
 
 export default function DashboardTabScreen() {
   const { paperTheme, resolvedTheme } = useTheme();
@@ -23,6 +25,9 @@ export default function DashboardTabScreen() {
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
+      <CostDashboardWelcomeBanner />
+      <CostDashboardQuickActions />
+
       <Text style={[styles.sectionLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
         Current month overview
       </Text>

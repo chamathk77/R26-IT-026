@@ -37,7 +37,6 @@ export const costDashboardStyles = StyleSheet.create({
     fontSize: 16,
   },
   welcomeCard: {
-    marginHorizontal: 16,
     marginBottom: 12,
     borderRadius: 18,
     padding: 18,
@@ -70,7 +69,6 @@ export const costDashboardStyles = StyleSheet.create({
     marginTop: 6,
   },
   quickActionsWrap: {
-    paddingHorizontal: 16,
     marginBottom: 12,
   },
   tabContent: {

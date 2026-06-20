@@ -5,10 +5,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../../navigation/RootStackParamsList';
 import { useTheme } from '../../../context/ThemeContext';
 import CostDashboardTabNavigator from '../../../navigation/CostDashboardTabNavigator';
-import CostDashboardTopBar, {
-  CostDashboardWelcomeBanner,
-} from './components/CostDashboardTopBar';
-import CostDashboardQuickActions from './components/CostDashboardQuickActions';
+import CostDashboardTopBar from './components/CostDashboardTopBar';
 import { costDashboardStyles as styles } from './shared/costDashboardStyles';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CostDashboard'>;
@@ -33,8 +30,6 @@ export default function CostDashboardScreen({ navigation }: Props) {
             }
             onPressSettings={() => navigation.navigate('Settings')}
           />
-          <CostDashboardWelcomeBanner />
-          <CostDashboardQuickActions />
           <CostDashboardTabNavigator />
         </View>
       </SafeAreaView>
