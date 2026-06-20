@@ -13,10 +13,10 @@ import SignUpScreen from '../screens/loginScreens/SignUpScreen';
 import MainBottomTabNavigator from './MainBottomTabNavigator';
 
 import CostDashboardScreen from '../screens/cost/dashboard/CostDashboardScreen';
-import ManageCostCategoriesScreen from '../screens/cost/categories/ManageCostCategoriesScreen';
-import CostCategoryFormScreen from '../screens/cost/categories/CostCategoryFormScreen';
-import AddCostExpenseScreen from '../screens/cost/dashboard/addExpenses/AddCostExpenseScreen';
-import CostExpenseDetailScreen from '../screens/cost/dashboard/expenseDetail/CostExpenseDetailScreen';
+import ManageCostCategoriesScreen from '../screens/cost/dashboard/tabs/dashboard/categories/ManageCostCategoriesScreen';
+import CostCategoryFormScreen from '../screens/cost/dashboard/tabs/dashboard/categories/CostCategoryFormScreen';
+import AddCostExpenseScreen from '../screens/cost/dashboard/tabs/dashboard/addExpenses/AddCostExpenseScreen';
+import CostExpenseDetailScreen from '../screens/cost/dashboard/tabs/history/expenseDetail/CostExpenseDetailScreen';
 
 import SettingsScreen from '../screens/settings/hub/SettingsScreen';
 import ProfileDetailsScreen from '../screens/settings/account/ProfileDetailsScreen';

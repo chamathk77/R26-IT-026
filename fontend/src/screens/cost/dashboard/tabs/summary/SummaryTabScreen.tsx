@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../../../../context/ThemeContext';
-import DatePickerField, { formatDisplayDate } from '../../../../components/DatePickerField/DatePickerField';
+import { useTheme } from '../../../../../context/ThemeContext';
+import DatePickerField, { formatDisplayDate } from '../../../../../components/DatePickerField/DatePickerField';
 import {
   costCardShadow,
   costDashboardStyles as styles,
-} from '../shared/costDashboardStyles';
+} from '../../shared/costDashboardStyles';
 import {
   COST_TOTALS_BY_PERIOD,
   CostPeriodKey,
@@ -14,7 +14,7 @@ import {
   getSummaryCategoryBreakdown,
   getSummaryPeriodLabel,
   SUMMARY_PERIOD_OPTIONS,
-} from '../shared/costDashboardMockData';
+} from '../../shared/costDashboardMockData';
 
 export default function SummaryTabScreen() {
   const { paperTheme, resolvedTheme } = useTheme();

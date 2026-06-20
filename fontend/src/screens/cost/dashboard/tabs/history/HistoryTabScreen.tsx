@@ -15,27 +15,27 @@ import { Portal, MD3Theme } from 'react-native-paper';
 import { useDispatch, useSelector } from 'react-redux';
 import DatePickerField, {
   formatDisplayDate,
-} from '../../../../components/DatePickerField/DatePickerField';
-import CommonAlert from '../../../../components/CommonAlert/CommonAlert';
-import { useTheme } from '../../../../context/ThemeContext';
-import { useCommonAlert } from '../../../../hooks/useCommonAlert';
-import { RootStackParamList } from '../../../../navigation/RootStackParamsList';
-import { fetchCostCategories_Service } from '../../../../services/CostCategoryService';
-import { fetchCostHistory_Service } from '../../../../services/CostExpenseService';
-import { AppDispatch, RootState } from '../../../../store/store';
-import { CostCategory } from '../../../../type/costCategory';
-import { CostExpense, FetchCostHistoryParams } from '../../../../type/costExpense';
+} from '../../../../../components/DatePickerField/DatePickerField';
+import CommonAlert from '../../../../../components/CommonAlert/CommonAlert';
+import { useTheme } from '../../../../../context/ThemeContext';
+import { useCommonAlert } from '../../../../../hooks/useCommonAlert';
+import { RootStackParamList } from '../../../../../navigation/RootStackParamsList';
+import { fetchCostCategories_Service } from '../../../../../services/CostCategoryService';
+import { fetchCostHistory_Service } from '../../../../../services/CostExpenseService';
+import { AppDispatch, RootState } from '../../../../../store/store';
+import { CostCategory } from '../../../../../type/costCategory';
+import { CostExpense, FetchCostHistoryParams } from '../../../../../type/costExpense';
 import {
   getApiErrorMessage,
   handleSessionExpiredApiError,
-} from '../../../../utils/apiErrorAlert';
-import { SettingsEmptyState } from '../../../settings/shared/SettingsDetailComponents';
-import { addExpenseStyles as modalStyles } from '../addExpenses/addExpenseStyles';
+} from '../../../../../utils/apiErrorAlert';
+import { SettingsEmptyState } from '../../../../settings/shared/SettingsDetailComponents';
+import { addExpenseStyles as modalStyles } from '../dashboard/addExpenses/addExpenseStyles';
 import {
   costCardShadow,
   costDashboardStyles as styles,
-} from '../shared/costDashboardStyles';
-import { formatCostAmount } from '../shared/costDashboardMockData';
+} from '../../shared/costDashboardStyles';
+import { formatCostAmount } from '../../shared/costDashboardMockData';
 
 type HistoryFilters = {
   startDate: string;

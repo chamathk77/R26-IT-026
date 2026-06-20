@@ -1,20 +1,20 @@
 import React from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../../../../context/ThemeContext';
+import { useTheme } from '../../../../../context/ThemeContext';
 import {
   costCardShadow,
   costDashboardStyles as styles,
-} from '../shared/costDashboardStyles';
+} from '../../shared/costDashboardStyles';
 import {
   CURRENT_MONTH_CATEGORIES,
   CURRENT_MONTH_CATEGORY_COUNT,
   CURRENT_MONTH_EXPENSE_COUNT,
   CURRENT_MONTH_TOTAL,
   formatCostAmount,
-} from '../shared/costDashboardMockData';
-import CostDashboardQuickActions from '../components/CostDashboardQuickActions';
-import { CostDashboardWelcomeBanner } from '../components/CostDashboardTopBar';
+} from '../../shared/costDashboardMockData';
+import CostDashboardQuickActions from '../../components/CostDashboardQuickActions';
+import { CostDashboardWelcomeBanner } from '../../components/CostDashboardTopBar';
 
 export default function DashboardTabScreen() {
   const { paperTheme, resolvedTheme } = useTheme();

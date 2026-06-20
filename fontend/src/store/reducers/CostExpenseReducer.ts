@@ -1,8 +1,10 @@
 import { createSlice } from '@reduxjs/toolkit';
 import {
   createCostExpense_Service,
+  deleteCostExpense_Service,
   fetchCostExpenseById_Service,
   fetchCostHistory_Service,
+  updateCostExpense_Service,
 } from '../../services/CostExpenseService';
 import { CostExpense, CostHistoryPagination } from '../../type/costExpense';
 import { ApiErrorResponse } from '../../type/common';
@@ -23,6 +25,8 @@ interface CostExpenseState {
   };
   detail: {
     loadingId: string | null;
+    updating: boolean;
+    deleting: boolean;
     error: string | null;
     byId: Record<string, CostExpense>;
   };
@@ -44,6 +48,8 @@ const initialState: CostExpenseState = {
   },
   detail: {
     loadingId: null,
+    updating: false,
+    deleting: false,
     error: null,
     byId: {},
   },
@@ -135,6 +141,51 @@ export const CostExpenseSlice = createSlice({
       const payload = action.payload as ApiErrorResponse | undefined;
       state.detail.error =
         payload?.message || action.error.message || 'Could not load expense details';
+    });
+
+    builder.addCase(updateCostExpense_Service.pending, (state) => {
+      state.detail.updating = true;
+      state.detail.error = null;
+    });
+    builder.addCase(updateCostExpense_Service.fulfilled, (state, action) => {
+      state.detail.updating = false;
+      state.detail.error = null;
+      const expense = action.payload?.data;
+      if (expense?._id) {
+        state.detail.byId[expense._id] = expense;
+        state.history.items = state.history.items.map((item) =>
+          item._id === expense._id ? expense : item,
+        );
+      }
+    });
+    builder.addCase(updateCostExpense_Service.rejected, (state, action) => {
+      state.detail.updating = false;
+      const payload = action.payload as ApiErrorResponse | undefined;
+      state.detail.error =
+        payload?.message || action.error.message || 'Could not update expense';
+    });
+
+    builder.addCase(deleteCostExpense_Service.pending, (state) => {
+      state.detail.deleting = true;
+      state.detail.error = null;
+    });
+    builder.addCase(deleteCostExpense_Service.fulfilled, (state, action) => {
+      state.detail.deleting = false;
+      state.detail.error = null;
+      const deletedId = action.payload?.id;
+      if (deletedId) {
+        delete state.detail.byId[deletedId];
+        state.history.items = state.history.items.filter((item) => item._id !== deletedId);
+        if (state.history.pagination) {
+          state.history.pagination.total = Math.max(0, state.history.pagination.total - 1);
+        }
+      }
+    });
+    builder.addCase(deleteCostExpense_Service.rejected, (state, action) => {
+      state.detail.deleting = false;
+      const payload = action.payload as ApiErrorResponse | undefined;
+      state.detail.error =
+        payload?.message || action.error.message || 'Could not delete expense';
     });
   },
 });

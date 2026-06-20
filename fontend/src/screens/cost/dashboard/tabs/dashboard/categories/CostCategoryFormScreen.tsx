@@ -16,23 +16,23 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import { Portal } from 'react-native-paper';
-import { RootStackParamList } from '../../../navigation/RootStackParamsList';
-import { useTheme } from '../../../context/ThemeContext';
-import { AppDispatch, RootState } from '../../../store/store';
-import CommonHeader from '../../../components/CommonHeader/CommonHeader';
-import CommonAlert from '../../../components/CommonAlert/CommonAlert';
-import { useCommonAlert } from '../../../hooks/useCommonAlert';
+import { RootStackParamList } from '../../../../../../navigation/RootStackParamsList';
+import { useTheme } from '../../../../../../context/ThemeContext';
+import { AppDispatch, RootState } from '../../../../../../store/store';
+import CommonHeader from '../../../../../../components/CommonHeader/CommonHeader';
+import CommonAlert from '../../../../../../components/CommonAlert/CommonAlert';
+import { useCommonAlert } from '../../../../../../hooks/useCommonAlert';
 import {
   createCostCategory_Service,
   fetchCostCategoryById_Service,
   updateCostCategory_Service,
-} from '../../../services/CostCategoryService';
-import { CostCategory } from '../../../type/costCategory';
+} from '../../../../../../services/CostCategoryService';
+import { CostCategory } from '../../../../../../type/costCategory';
 import {
   getApiErrorMessage,
   handleSessionExpiredApiError,
-} from '../../../utils/apiErrorAlert';
-import { costCardShadow } from '../dashboard/shared/costDashboardStyles';
+} from '../../../../../../utils/apiErrorAlert';
+import { costCardShadow } from '../../../shared/costDashboardStyles';
 import { COLOR_OPTIONS, costCategoryStyles as styles } from './costCategoryStyles';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CostCategoryForm'>;

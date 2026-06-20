@@ -7,9 +7,14 @@ import { costCardShadow, costDashboardStyles as styles } from '../shared/costDas
 type Props = {
   onPressSettings: () => void;
   onPressBack?: () => void;
+  title?: string;
 };
 
-export default function CostDashboardTopBar({ onPressSettings, onPressBack }: Props) {
+export default function CostDashboardTopBar({
+  onPressSettings,
+  onPressBack,
+  title = 'Cost Management',
+}: Props) {
   const { paperTheme } = useTheme();
 
   return (
@@ -23,7 +28,7 @@ export default function CostDashboardTopBar({ onPressSettings, onPressBack }: Pr
       </View>
       <View style={styles.topBarCenter}>
         <Text style={[styles.topBarTitle, { color: paperTheme.colors.onBackground }]}>
-          Cost Management
+          {title}
         </Text>
       </View>
       <View style={styles.topBarSide}>

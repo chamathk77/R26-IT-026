@@ -56,6 +56,11 @@ const costExpenseSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
     purchaseDate: {
       type: Date,
       default: Date.now,

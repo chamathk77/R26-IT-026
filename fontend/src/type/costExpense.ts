@@ -23,6 +23,7 @@ export interface CostExpense {
   qty?: number | null;
   image?: string;
   createdBy?: CostExpenseCreatedBy | string;
+  updatedBy?: CostExpenseCreatedBy | string;
   purchaseDate?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -36,6 +37,8 @@ export interface CreateCostExpenseRequest {
   isProduct: boolean;
   qty?: number;
   imageUri?: string | null;
+  imageMimeType?: string | null;
+  imageFileName?: string | null;
   purchaseDate?: string;
 }
 
@@ -84,4 +87,32 @@ export interface GetCostExpenseByIdResponse {
   success: boolean;
   data?: CostExpense;
   message?: string;
+}
+
+export interface UpdateCostExpenseRequest {
+  id: string;
+  expenseName?: string;
+  categoryId?: string;
+  categoryName?: string;
+  amount?: number;
+  isProduct?: boolean;
+  qty?: number;
+  purchaseDate?: string;
+  removeImage?: boolean;
+  imageUri?: string | null;
+  imageMimeType?: string | null;
+  imageFileName?: string | null;
+}
+
+export interface UpdateCostExpenseResponse {
+  success: boolean;
+  data?: CostExpense;
+  message?: string;
+}
+
+export interface DeleteCostExpenseResponse {
+  success: boolean;
+  message?: string;
+  id?: string;
+  expenseId?: string;
 }

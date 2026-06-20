@@ -10,7 +10,28 @@ if (!fs.existsSync(costExpensesDir)) {
   fs.mkdirSync(costExpensesDir, { recursive: true });
 }
 
-const allowedMime = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+const allowedMime = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/pjpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+]);
+
+const allowedExtensions = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif']);
+
+function isAllowedCostExpenseImage(file) {
+  const mime = String(file.mimetype || '').toLowerCase();
+  if (allowedMime.has(mime)) return true;
+  if (mime === 'application/octet-stream') {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    return allowedExtensions.has(ext);
+  }
+  return false;
+}
 
 const storage = multer.diskStorage({
   destination(_req, _file, cb) {
@@ -18,7 +39,13 @@ const storage = multer.diskStorage({
   },
   filename(_req, file, cb) {
     const ext = path.extname(file.originalname || '').toLowerCase();
-    const safeExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext) ? ext : '.jpg';
+    const safeExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)
+      ? ext === '.jpeg'
+        ? '.jpg'
+        : ext
+      : ['.heic', '.heif'].includes(ext)
+        ? '.jpg'
+        : '.jpg';
     cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${safeExt}`);
   },
 });
@@ -27,7 +54,7 @@ const uploadCostExpenseImage = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter(_req, file, cb) {
-    if (allowedMime.has(file.mimetype)) {
+    if (isAllowedCostExpenseImage(file)) {
       cb(null, true);
       return;
     }

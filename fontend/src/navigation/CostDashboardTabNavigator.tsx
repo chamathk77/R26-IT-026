@@ -6,13 +6,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fonts } from '../constants/fonts';
 import { useTheme } from '../context/ThemeContext';
 import { CostDashboardTabParamList } from './CostDashboardTabParamList';
-import DashboardTabScreen from '../screens/cost/dashboard/tabs/DashboardTabScreen';
-import SummaryTabScreen from '../screens/cost/dashboard/tabs/SummaryTabScreen';
-import HistoryTabScreen from '../screens/cost/dashboard/tabs/HistoryTabScreen';
+import DashboardTabScreen from '../screens/cost/dashboard/tabs/dashboard/DashboardTabScreen';
+import SummaryTabScreen from '../screens/cost/dashboard/tabs/summary/SummaryTabScreen';
+import HistoryTabScreen from '../screens/cost/dashboard/tabs/history/HistoryTabScreen';
 
 const Tab = createBottomTabNavigator<CostDashboardTabParamList>();
 
-export default function CostDashboardTabNavigator() {
+type Props = {
+  onActiveTabChange?: (tab: keyof CostDashboardTabParamList) => void;
+};
+
+export default function CostDashboardTabNavigator({ onActiveTabChange }: Props) {
   const insets = useSafeAreaInsets();
   const { paperTheme, resolvedTheme } = useTheme();
 
@@ -25,6 +29,12 @@ export default function CostDashboardTabNavigator() {
     <Tab.Navigator
       id="CostDashboardTabs"
       initialRouteName="CostDashboardHome"
+      screenListeners={{
+        state: (event) => {
+          const route = event.data.state.routes[event.data.state.index];
+          onActiveTabChange?.(route.name as keyof CostDashboardTabParamList);
+        },
+      }}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarIcon: ({ focused, color }) => {

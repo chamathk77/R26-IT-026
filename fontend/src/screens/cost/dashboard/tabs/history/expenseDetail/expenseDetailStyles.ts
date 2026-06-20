@@ -1,5 +1,5 @@
 import { Platform, StyleSheet } from 'react-native';
-import { fonts } from '../../../../constants/fonts';
+import { fonts } from '../../../../../../constants/fonts';
 
 export function expenseDetailShadow(resolvedTheme: 'light' | 'dark') {
   if (Platform.OS === 'android') {
@@ -235,6 +235,45 @@ export const expenseDetailStyles = StyleSheet.create({
   },
   loadingText: {
     fontFamily: fonts.PoppinsRegular,
+    fontSize: 14,
+  },
+  editSection: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    gap: 12,
+  },
+  editSectionTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
+  },
+  actionRow: {
+    gap: 10,
+    marginTop: 4,
+  },
+  updateBtn: {
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  updateBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 15,
+  },
+  deleteBtn: {
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    borderWidth: 1,
+  },
+  deleteBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
     fontSize: 14,
   },
 });

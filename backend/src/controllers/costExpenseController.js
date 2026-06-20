@@ -407,6 +407,7 @@ const getCostHistory = async (req, res) => {
       CostExpense.countDocuments(filter),
       CostExpense.find(filter)
         .populate('createdBy', 'name email role')
+        .populate('updatedBy', 'name email role')
         .populate('categoryId', 'name colorCode')
         .sort({ purchaseDate: -1, createdAt: -1 })
         .skip(skip)
@@ -453,6 +454,7 @@ const getCostExpenseById = async (req, res) => {
 
     const costExpense = await CostExpense.findOne({ _id: id, shopId })
       .populate('createdBy', 'name email role')
+      .populate('updatedBy', 'name email role')
       .populate('categoryId', 'name colorCode');
 
     if (!costExpense) {
@@ -574,11 +576,14 @@ const updateCostExpense = async (req, res) => {
       return res.status(400).json({ message: 'No fields to update', success: false });
     }
 
+    updates.updatedBy = req.user.id;
+
     const costExpense = await CostExpense.findOneAndUpdate({ _id: id, shopId }, updates, {
       returnDocument: 'after',
       runValidators: true,
     })
       .populate('createdBy', 'name email role')
+      .populate('updatedBy', 'name email role')
       .populate('categoryId', 'name colorCode');
 
     return res.json({ success: true, data: costExpense });

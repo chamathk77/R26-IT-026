@@ -22,23 +22,23 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import { Portal } from 'react-native-paper';
-import { RootStackParamList } from '../../../../navigation/RootStackParamsList';
-import { fonts } from '../../../../constants/fonts';
-import { useTheme } from '../../../../context/ThemeContext';
-import { AppDispatch, RootState } from '../../../../store/store';
-import CommonHeader from '../../../../components/CommonHeader/CommonHeader';
-import CommonAlert from '../../../../components/CommonAlert/CommonAlert';
-import SlideToast from '../../../../components/SlideToast/SlideToast';
-import { useCommonAlert } from '../../../../hooks/useCommonAlert';
-import { fetchCostCategories_Service } from '../../../../services/CostCategoryService';
-import { createCostExpense_Service } from '../../../../services/CostExpenseService';
-import { CostCategory } from '../../../../type/costCategory';
+import { RootStackParamList } from '../../../../../../navigation/RootStackParamsList';
+import { fonts } from '../../../../../../constants/fonts';
+import { useTheme } from '../../../../../../context/ThemeContext';
+import { AppDispatch, RootState } from '../../../../../../store/store';
+import CommonHeader from '../../../../../../components/CommonHeader/CommonHeader';
+import CommonAlert from '../../../../../../components/CommonAlert/CommonAlert';
+import SlideToast from '../../../../../../components/SlideToast/SlideToast';
+import { useCommonAlert } from '../../../../../../hooks/useCommonAlert';
+import { fetchCostCategories_Service } from '../../../../../../services/CostCategoryService';
+import { createCostExpense_Service } from '../../../../../../services/CostExpenseService';
+import { CostCategory } from '../../../../../../type/costCategory';
 import {
   getApiErrorMessage,
   handleSessionExpiredApiError,
-} from '../../../../utils/apiErrorAlert';
-import { costCardShadow } from '../shared/costDashboardStyles';
-import DatePickerField from '../../../../components/DatePickerField/DatePickerField';
+} from '../../../../../../utils/apiErrorAlert';
+import { costCardShadow } from '../../../shared/costDashboardStyles';
+import DatePickerField from '../../../../../../components/DatePickerField/DatePickerField';
 import { addExpenseStyles as styles } from './addExpenseStyles';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddCostExpense'>;
@@ -117,6 +117,8 @@ export default function AddCostExpenseScreen({ navigation }: Props) {
   const [qty, setQty] = useState('');
   const [expenseDate, setExpenseDate] = useState(getTodayDateValue);
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageMimeType, setImageMimeType] = useState<string | null>(null);
+  const [imageFileName, setImageFileName] = useState<string | null>(null);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [slideToastMessage, setSlideToastMessage] = useState<string | null>(null);
 
@@ -169,7 +171,10 @@ export default function AddCostExpenseScreen({ navigation }: Props) {
     });
 
     if (!result.canceled && result.assets[0]?.uri) {
-      setImageUri(result.assets[0].uri);
+      const asset = result.assets[0];
+      setImageUri(asset.uri);
+      setImageMimeType(asset.mimeType ?? null);
+      setImageFileName(asset.fileName ?? null);
     }
   }, [show_Alert]);
 
@@ -182,7 +187,10 @@ export default function AddCostExpenseScreen({ navigation }: Props) {
     });
 
     if (!result.canceled && result.assets[0]?.uri) {
-      setImageUri(result.assets[0].uri);
+      const asset = result.assets[0];
+      setImageUri(asset.uri);
+      setImageMimeType(asset.mimeType ?? null);
+      setImageFileName(asset.fileName ?? null);
     }
   }, [show_Alert]);
 
@@ -203,6 +211,8 @@ export default function AddCostExpenseScreen({ navigation }: Props) {
           qty: parsedQty,
           purchaseDate: expenseDate.trim() || undefined,
           imageUri,
+          imageMimeType,
+          imageFileName,
         }),
       ).unwrap();
 
@@ -233,6 +243,8 @@ export default function AddCostExpenseScreen({ navigation }: Props) {
     expenseName,
     expenseDate,
     imageUri,
+    imageMimeType,
+    imageFileName,
     isProduct,
     qty,
     saving,
@@ -500,7 +512,11 @@ export default function AddCostExpenseScreen({ navigation }: Props) {
                 <>
                   <Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="cover" />
                   <TouchableOpacity
-                    onPress={() => setImageUri(null)}
+                    onPress={() => {
+                      setImageUri(null);
+                      setImageMimeType(null);
+                      setImageFileName(null);
+                    }}
                     style={[styles.imageBtn, { borderColor: paperTheme.colors.outlineVariant }]}
                   >
                     <Ionicons name="trash-outline" size={18} color={paperTheme.colors.error} />
