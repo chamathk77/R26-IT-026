@@ -53,4 +53,5 @@ export type RootStackParamList = {
   ThemePreference: undefined;
   SubscriptionPayments: undefined;
   PayNow: { payment: PaymentRecord };
+  KpiDashboard: undefined;
 };

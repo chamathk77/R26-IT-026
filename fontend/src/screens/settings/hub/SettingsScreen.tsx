@@ -308,8 +308,7 @@ export default function SettingsScreen({ navigation }: Props) {
       icon: 'stats-chart-outline',
       iconBg: '#fef3c7',
       iconColor: '#b45309',
-      comingSoon: true,
-      onPress: () => showComingSoonAlert('Key Performance Indicators'),
+      onPress: () => navigation.navigate('KpiDashboard'),
     },
     {
       key: 'customer-marketing',
