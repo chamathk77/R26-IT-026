@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Cart = require("../models/cart");
 const History = require("../models/history");
+const SalePerson = require("../models/salePerson");
 const User = require("../models/user");
 const Product = require("../models/product");
 const ShopsData = require("../models/shopsData");
@@ -205,6 +206,7 @@ function mapHistoryRecord(record) {
     reversedAt: record.reversedAt ?? null,
     reversedUserId: record.reversedUserId ?? null,
     reversedUserName: record.reversedUserName ?? null,
+    salesPersonId: record.salesPersonId ?? null,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -305,6 +307,28 @@ function buildHistoryListFilter(req, shopId) {
   return { filter, scope };
 }
 
+async function resolveOptionalSalesPersonId(salesPersonIdRaw, shopId) {
+  if (
+    salesPersonIdRaw === undefined ||
+    salesPersonIdRaw === null ||
+    String(salesPersonIdRaw).trim() === ""
+  ) {
+    return { salesPersonId: null };
+  }
+
+  const salesPersonId = String(salesPersonIdRaw).trim();
+  if (!mongoose.Types.ObjectId.isValid(salesPersonId)) {
+    return { error: "Invalid sales person id" };
+  }
+
+  const salePerson = await SalePerson.findOne({ _id: salesPersonId, shopId }).lean();
+  if (!salePerson) {
+    return { error: "Sales person not found for this shop" };
+  }
+
+  return { salesPersonId: salePerson._id };
+}
+
 const createHistory = async (req, res) => {
   try {
     const shopId = requireShopId(req, res);
@@ -315,6 +339,7 @@ const createHistory = async (req, res) => {
       customerName,
       customerMobile,
       paymentOption: paymentOptionRaw,
+      salesPersonId: salesPersonIdRaw,
     } = req.body;
 
     if (!sessionId || !mongoose.Types.ObjectId.isValid(sessionId)) {
@@ -377,6 +402,11 @@ const createHistory = async (req, res) => {
       .lean();
     const submittedUserName = submittedUser?.name?.trim() || "User";
 
+    const salesPersonResult = await resolveOptionalSalesPersonId(salesPersonIdRaw, shopId);
+    if (salesPersonResult.error) {
+      return res.status(400).json({ success: false, message: salesPersonResult.error });
+    }
+
     const amount = roundMoney(cart.totalPrice);
     const discountedAmount = roundMoney(cart.discountedAmount ?? 0);
     const totalAmount = roundMoney(amount - discountedAmount);
@@ -405,6 +435,7 @@ const createHistory = async (req, res) => {
       submittedUserId: req.user.id,
       submittedUserName,
       paymentOption,
+      salesPersonId: salesPersonResult.salesPersonId,
     });
 
     let smsStatus = { sent: false, reason: "Not attempted" };

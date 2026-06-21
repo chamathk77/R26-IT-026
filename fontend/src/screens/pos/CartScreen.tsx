@@ -34,6 +34,7 @@ import {
 } from '../../services/CartService';
 import { createHistory_Service } from '../../services/HistoryService';
 import { fetchProducts_Service } from '../../services/ProductService';
+import { fetchSalePersons_Service } from '../../services/SalePersonService';
 import { clearCartTabSelection, setCartTabSelection } from '../../store/reducers/CartReducer';
 import { AppDispatch, RootState, store } from '../../store/store';
 import { CartOrderItem, CartSessionSummary } from '../../type/cart';
@@ -361,6 +362,12 @@ export default function CartScreen({ navigation }: Props) {
     (state: RootState) => state.CartReducer.editCart,
   );
   const { items: products } = useSelector((state: RootState) => state.ProductReducer.list);
+  const salePersons = useSelector(
+    (state: RootState) => state.SalePersonReducer?.list?.items ?? [],
+  );
+  const salePersonsLoading = useSelector(
+    (state: RootState) => state.SalePersonReducer?.list?.loading ?? false,
+  );
   const shopId = useSelector(
     (state: RootState) =>
       state.AuthReducer.Login.shopData?.shopId ||
@@ -376,6 +383,7 @@ export default function CartScreen({ navigation }: Props) {
   const [serviceAmounts, setServiceAmounts] = useState<Record<string, string>>({});
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<CheckoutPaymentMethod>('cash');
+  const [selectedSalesPersonId, setSelectedSalesPersonId] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const previousShopIdRef = useRef(shopId);
@@ -541,6 +549,32 @@ export default function CartScreen({ navigation }: Props) {
           () => {},
         );
       }, 150);
+    }
+  }, [dispatch, shopId, show_Alert]);
+
+  const loadSalePersons = useCallback(async () => {
+    if (!shopId) return;
+
+    try {
+      const response = await dispatch(fetchSalePersons_Service()).unwrap();
+      console.log('response in loadSalePersons', response);
+    } catch (error: unknown) {
+      const handled = await handleSessionExpiredApiError(error, show_Alert);
+      if (handled) return;
+      console.log('error in loadSalePersons', error);
+      show_Alert(
+        'error',
+        'Load failed',
+        'Could not load sales persons. Please try again.',
+        2,
+        false,
+        'Retry',
+        () => {
+          void loadSalePersons();
+        },
+        'Cancel',
+        () => {},
+      );
     }
   }, [dispatch, shopId, show_Alert]);
 
@@ -813,6 +847,7 @@ export default function CartScreen({ navigation }: Props) {
   const closePaymentModal = useCallback(() => {
     if (checkoutLoading) return;
     setPaymentModalVisible(false);
+    setSelectedSalesPersonId(null);
   }, [checkoutLoading]);
 
   const openPaymentModal = useCallback(() => {
@@ -822,10 +857,12 @@ export default function CartScreen({ navigation }: Props) {
     if (!payload) return;
 
     setSelectedPaymentMethod('cash');
+    setSelectedSalesPersonId(null);
     setCustomerName('');
     setCustomerPhone('');
     setPaymentModalVisible(true);
-  }, [buildCheckoutPayload, checkoutLoading, items.length, sessionId]);
+    void loadSalePersons();
+  }, [buildCheckoutPayload, checkoutLoading, items.length, loadSalePersons, sessionId]);
 
   const handleConfirmCheckout = useCallback(async () => {
     if (!sessionId || items.length === 0 || checkoutLoading) return;
@@ -873,6 +910,7 @@ export default function CartScreen({ navigation }: Props) {
           customerName: customerName.trim(),
           customerMobile: sanitizeCheckoutPhone(customerPhone),
           paymentOption: selectedPaymentMethod,
+          ...(selectedSalesPersonId ? { salesPersonId: selectedSalesPersonId } : {}),
         }),
       ).unwrap();
       console.log('response in handleConfirmCheckout', historyResponse);
@@ -880,6 +918,7 @@ export default function CartScreen({ navigation }: Props) {
       setPaymentModalVisible(false);
       setCustomerName('');
       setCustomerPhone('');
+      setSelectedSalesPersonId(null);
 
       showSlideToast(
         `Order ${historyResponse.data.orderId ?? `#${historyResponse.data.cartNumber}`} completed successfully.`,
@@ -929,6 +968,7 @@ export default function CartScreen({ navigation }: Props) {
     loadProducts,
     navigation,
     selectedPaymentMethod,
+    selectedSalesPersonId,
     sessionId,
     shopId,
     show_Alert,
@@ -1580,12 +1620,16 @@ export default function CartScreen({ navigation }: Props) {
           customerName={customerName}
           customerPhone={customerPhone}
           selectedMethod={selectedPaymentMethod}
+          salePersons={salePersons}
+          selectedSalesPersonId={selectedSalesPersonId}
+          salePersonsLoading={salePersonsLoading}
           loading={checkoutLoading}
           paperTheme={paperTheme}
           resolvedTheme={resolvedTheme}
           onCustomerNameChange={setCustomerName}
           onCustomerPhoneChange={setCustomerPhone}
           onSelectMethod={setSelectedPaymentMethod}
+          onSelectSalesPerson={setSelectedSalesPersonId}
           onClose={closePaymentModal}
           proceedDisabled={!isValidCheckoutPhone(customerPhone)}
           onProceed={() => {

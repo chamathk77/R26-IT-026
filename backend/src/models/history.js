@@ -144,6 +144,12 @@ const historySchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    salesPersonId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SalePerson',
+      default: null,
+      index: true,
+    },
   },
   { timestamps: true },
 );

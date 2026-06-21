@@ -33,6 +33,7 @@ export interface HistoryRecord {
   reversedAt?: string | null;
   reversedUserId?: string | null;
   reversedUserName?: string | null;
+  salesPersonId?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -62,6 +63,7 @@ export interface CreateHistoryRequest {
   customerName?: string;
   customerMobile: string;
   paymentOption: HistoryPaymentOption;
+  salesPersonId?: string;
 }
 
 export interface CreateHistoryResponse {

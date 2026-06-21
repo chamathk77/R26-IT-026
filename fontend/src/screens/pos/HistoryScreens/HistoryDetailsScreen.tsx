@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -30,6 +30,8 @@ import ResendBillModal from './ResendBillModal';
 import { useCommonAlert } from '../../../hooks/useCommonAlert';
 import CommonAlert from '../../../components/CommonAlert/CommonAlert';
 import { resendBillSms_Service, reverseHistory_Service } from '../../../services/HistoryService';
+import { fetchSalePersonById_Service } from '../../../services/SalePersonService';
+import { getSalePersonFullName } from '../../../type/salePerson';
 import {
   getApiErrorMessage,
   handleSessionExpiredApiError,
@@ -66,9 +68,56 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
   const [receiptVisible, setReceiptVisible] = useState(false);
   const [resendModalVisible, setResendModalVisible] = useState(false);
   const [resendingBill, setResendingBill] = useState(false);
+  const [salesPersonName, setSalesPersonName] = useState<string | null>(null);
+  const [salesPersonLoading, setSalesPersonLoading] = useState(false);
   const shop = useSelector((state: RootState) => state.AuthReducer.Login.shopData);
+  const salePersons = useSelector(
+    (state: RootState) => state.SalePersonReducer?.list?.items ?? [],
+  );
   const normalizedStatus = normalizeHistoryStatus(record.status);
   const isSubmittedStatus = normalizedStatus === 'submited';
+
+  useEffect(() => {
+    const salesPersonId = record.salesPersonId?.trim();
+    if (!salesPersonId) {
+      setSalesPersonName(null);
+      setSalesPersonLoading(false);
+      return;
+    }
+
+    const cachedPerson = salePersons.find((person) => person._id === salesPersonId);
+    if (cachedPerson) {
+      setSalesPersonName(getSalePersonFullName(cachedPerson));
+      setSalesPersonLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSalesPersonLoading(true);
+
+    void (async () => {
+      try {
+        const response = await dispatch(fetchSalePersonById_Service(salesPersonId)).unwrap();
+        if (!cancelled) {
+          setSalesPersonName(
+            response.data ? getSalePersonFullName(response.data) : null,
+          );
+        }
+      } catch {
+        if (!cancelled) {
+          setSalesPersonName(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setSalesPersonLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, record.salesPersonId, salePersons]);
 
   const statusMeta = useMemo(() => {
     if (normalizedStatus === 'reversed') {
@@ -325,6 +374,18 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
               labelColor={paperTheme.colors.onSurfaceVariant}
               valueColor={paperTheme.colors.onSurface}
             />
+            {record.salesPersonId ? (
+              <DetailRow
+                label="Sales person"
+                value={
+                  salesPersonLoading
+                    ? 'Loading...'
+                    : salesPersonName?.trim() || '—'
+                }
+                labelColor={paperTheme.colors.onSurfaceVariant}
+                valueColor={paperTheme.colors.onSurface}
+              />
+            ) : null}
             <DetailRow
               label="Customer name"
               value={record.customerName.trim() || '—'}
