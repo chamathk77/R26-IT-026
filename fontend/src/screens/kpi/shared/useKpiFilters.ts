@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { KpiPeriodKey } from './kpiMockData';
+import { KpiPeriodKey } from '../../../type/kpi';
 
 const DEFAULT_PERIOD: KpiPeriodKey = 'this_month';
 

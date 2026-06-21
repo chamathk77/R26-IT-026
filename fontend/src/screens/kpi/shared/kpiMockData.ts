@@ -1,10 +1,5 @@
-export type KpiPeriodKey = 'this_month' | 'last_month' | 'last_3_months';
-
-export const KPI_PERIOD_OPTIONS: { key: KpiPeriodKey; label: string }[] = [
-  { key: 'this_month', label: 'This month' },
-  { key: 'last_month', label: 'Last month' },
-  { key: 'last_3_months', label: 'Last 3 months' },
-];
+export type { KpiPeriodKey } from '../../type/kpi';
+export { KPI_PERIOD_OPTIONS, getKpiPeriodLabel } from './kpiPeriodOptions';
 
 export type KpiMockSalePerson = {
   _id: string;
@@ -42,10 +37,6 @@ export function getKpiSalePersonName(
   person: Pick<KpiMockSalePerson, 'firstName' | 'lastName'>,
 ): string {
   return `${person.firstName} ${person.lastName}`.trim();
-}
-
-export function getKpiPeriodLabel(period: KpiPeriodKey | null): string {
-  return KPI_PERIOD_OPTIONS.find((option) => option.key === period)?.label ?? 'Custom range';
 }
 
 export const MOCK_KPI_SUMMARY = {

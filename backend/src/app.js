@@ -15,6 +15,7 @@ const manageUsersRoutes = require('./routes/manageUsersRoutes');
 const costCategoryRoutes = require('./routes/costCategoryRoutes');
 const costExpenseRoutes = require('./routes/costExpenseRoutes');
 const dashboardRoutes = require('./routes/dashboard');
+const kpiRoutes = require('./routes/kpiRoutes');
 const receiptRoutes = require('./routes/receiptRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -36,6 +37,7 @@ app.use('/api/manage-users', manageUsersRoutes);
 app.use('/api/cost-categories', costCategoryRoutes);
 app.use('/api/cost-expenses', costExpenseRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/kpi', kpiRoutes);
 app.use('/receipt', receiptRoutes);
 app.use('/api', routes);
 

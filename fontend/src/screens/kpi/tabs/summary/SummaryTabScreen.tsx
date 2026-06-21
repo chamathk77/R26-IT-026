@@ -1,20 +1,24 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Portal } from 'react-native-paper';
+import { useDispatch, useSelector } from 'react-redux';
 import CommonAlert from '../../../../components/CommonAlert/CommonAlert';
 import SlideToast from '../../../../components/SlideToast/SlideToast';
 import { formatDisplayDate } from '../../../../components/DatePickerField/DatePickerField';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useCommonAlert } from '../../../../hooks/useCommonAlert';
-import KpiFilterCard from '../../shared/KpiFilterCard';
+import { fetchKpiSummary_Service } from '../../../../services/KpiService';
+import { AppDispatch, RootState } from '../../../../store/store';
+import { resetKpiSummary } from '../../../../store/reducers/KpiReducer';
+import { KpiSalesPersonSummary } from '../../../../type/kpi';
 import {
-  formatKpiAmount,
-  getKpiPeriodLabel,
-  getKpiSalePersonName,
-  MOCK_KPI_SALE_PERSONS,
-  MOCK_KPI_SUMMARY,
-} from '../../shared/kpiMockData';
+  getApiErrorMessage,
+  handleSessionExpiredApiError,
+} from '../../../../utils/apiErrorAlert';
+import KpiFilterCard from '../../shared/KpiFilterCard';
+import { formatKpiAmount } from '../../shared/kpiMockData';
+import { getKpiPeriodLabel } from '../../shared/kpiPeriodOptions';
 import { kpiCardShadow, kpiStyles } from '../../shared/kpiStyles';
 import { useKpiFilters } from '../../shared/useKpiFilters';
 import { summaryTabStyles } from './summaryTabStyles';
@@ -31,11 +35,147 @@ function buildFilterLabel(
   return getKpiPeriodLabel(selectedPeriod);
 }
 
+function SummaryStatChip({
+  icon,
+  label,
+  value,
+  tint,
+  paperTheme,
+  resolvedTheme,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  tint: string;
+  paperTheme: ReturnType<typeof useTheme>['paperTheme'];
+  resolvedTheme: 'light' | 'dark';
+}) {
+  return (
+    <View
+      style={[
+        summaryTabStyles.statChip,
+        {
+          backgroundColor: paperTheme.colors.surface,
+          borderColor: paperTheme.colors.outlineVariant,
+        },
+        kpiCardShadow(resolvedTheme),
+      ]}
+    >
+      <View style={[summaryTabStyles.statIconWrap, { backgroundColor: `${tint}18` }]}>
+        <Ionicons name={icon} size={18} color={tint} />
+      </View>
+      <Text style={[summaryTabStyles.statChipLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+        {label}
+      </Text>
+      <Text style={[summaryTabStyles.statChipValue, { color: paperTheme.colors.onSurface }]}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function SalesPersonCard({
+  person,
+  rank,
+  paperTheme,
+  resolvedTheme,
+}: {
+  person: KpiSalesPersonSummary;
+  rank: number;
+  paperTheme: ReturnType<typeof useTheme>['paperTheme'];
+  resolvedTheme: 'light' | 'dark';
+}) {
+  const rankTint =
+    rank === 1 ? '#b45309' : rank === 2 ? '#64748b' : rank === 3 ? '#92400e' : paperTheme.colors.primary;
+
+  return (
+    <View
+      style={[
+        summaryTabStyles.personCard,
+        {
+          backgroundColor: paperTheme.colors.surface,
+          borderColor: paperTheme.colors.outlineVariant,
+        },
+        kpiCardShadow(resolvedTheme),
+      ]}
+    >
+      <View style={summaryTabStyles.personTopRow}>
+        <View style={[summaryTabStyles.rankBadge, { backgroundColor: `${rankTint}18` }]}>
+          <Text style={[summaryTabStyles.rankText, { color: rankTint }]}>#{rank}</Text>
+        </View>
+        <View style={summaryTabStyles.personBody}>
+          <Text style={[summaryTabStyles.personName, { color: paperTheme.colors.onSurface }]}>
+            {person.fullName}
+          </Text>
+          <Text style={[summaryTabStyles.personMeta, { color: paperTheme.colors.onSurfaceVariant }]}>
+            {person.salePersonId ? `ID ${person.salePersonId}` : 'No staff ID'}
+            {person.position ? ` · ${person.position}` : ''}
+          </Text>
+        </View>
+        <Text style={[summaryTabStyles.personAmount, { color: paperTheme.colors.primary }]}>
+          {formatKpiAmount(person.totalSalesAmount)}
+        </Text>
+      </View>
+
+      <View style={summaryTabStyles.personStatsRow}>
+        <View
+          style={[
+            summaryTabStyles.personStatPill,
+            { backgroundColor: paperTheme.colors.primaryContainer },
+          ]}
+        >
+          <Text
+            style={[
+              summaryTabStyles.personStatLabel,
+              { color: paperTheme.colors.onPrimaryContainer },
+            ]}
+          >
+            Works done
+          </Text>
+          <Text
+            style={[
+              summaryTabStyles.personStatValue,
+              { color: paperTheme.colors.onPrimaryContainer },
+            ]}
+          >
+            {person.workCount}
+          </Text>
+        </View>
+        <View
+          style={[
+            summaryTabStyles.personStatPill,
+            { backgroundColor: paperTheme.colors.secondaryContainer },
+          ]}
+        >
+          <Text
+            style={[
+              summaryTabStyles.personStatLabel,
+              { color: paperTheme.colors.onSecondaryContainer },
+            ]}
+          >
+            Avg. sale
+          </Text>
+          <Text
+            style={[
+              summaryTabStyles.personStatValue,
+              { color: paperTheme.colors.onSecondaryContainer },
+            ]}
+          >
+            {formatKpiAmount(
+              person.workCount > 0 ? person.totalSalesAmount / person.workCount : 0,
+            )}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export default function SummaryTabScreen() {
   const { paperTheme, resolvedTheme } = useTheme();
+  const dispatch = useDispatch<AppDispatch>();
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
-  const [selectedSalesPersonId, setSelectedSalesPersonId] = useState<string | null>(null);
-  const [summaryLoaded, setSummaryLoaded] = useState(false);
+  const { loading, data, error } = useSelector((state: RootState) => state.KpiReducer.summary);
   const [slideToastMessage, setSlideToastMessage] = useState<string | null>(null);
 
   const {
@@ -61,11 +201,10 @@ export default function SummaryTabScreen() {
 
   const handleReset = useCallback(() => {
     resetFilters();
-    setSelectedSalesPersonId(null);
-    setSummaryLoaded(false);
-  }, [resetFilters]);
+    dispatch(resetKpiSummary());
+  }, [dispatch, resetFilters]);
 
-  const handleGetSummary = useCallback(() => {
+  const loadSummary = useCallback(async () => {
     if (startDate.trim() && !endDate.trim()) {
       showSlideToast('Select end date before getting summary');
       return;
@@ -75,24 +214,36 @@ export default function SummaryTabScreen() {
       return;
     }
 
-    if (!selectedSalesPersonId) {
+    const params = isCustomRange
+      ? { startDate: startDate.trim(), endDate: endDate.trim() }
+      : { period: selectedPeriod ?? 'this_month' };
+
+    try {
+      await dispatch(fetchKpiSummary_Service(params)).unwrap();
+    } catch (err: unknown) {
+      const handled = await handleSessionExpiredApiError(err, show_Alert);
+      if (handled) return;
+
       show_Alert(
         'error',
-        'Sales person required',
-        'Please select a sales person before loading the summary.',
-        1,
+        'Load failed',
+        getApiErrorMessage(err, 'Could not load KPI summary. Please try again.'),
+        2,
         false,
-        'OK',
+        'Retry',
+        () => {
+          void loadSummary();
+        },
+        'Cancel',
         () => {},
       );
-      return;
     }
-
-    setSummaryLoaded(true);
   }, [
+    dispatch,
     endDate,
     hasActiveFilter,
-    selectedSalesPersonId,
+    isCustomRange,
+    selectedPeriod,
     showSlideToast,
     show_Alert,
     startDate,
@@ -103,11 +254,9 @@ export default function SummaryTabScreen() {
     [endDate, isCustomRange, selectedPeriod, startDate],
   );
 
-  const selectedPersonName = useMemo(() => {
-    if (!selectedSalesPersonId) return '';
-    const person = MOCK_KPI_SALE_PERSONS.find((item) => item._id === selectedSalesPersonId);
-    return person ? getKpiSalePersonName(person) : '';
-  }, [selectedSalesPersonId]);
+  const salesPersons = data?.salesPersons ?? [];
+  const unassignedSales = data?.unassignedSales;
+  const showResults = Boolean(data) && hasActiveFilter;
 
   return (
     <>
@@ -123,18 +272,25 @@ export default function SummaryTabScreen() {
           endDate={endDate}
           isCustomRange={isCustomRange}
           hasPartialCustomRange={hasPartialCustomRange}
-          selectedSalesPersonId={selectedSalesPersonId}
-          onSelectPeriod={handleSelectPeriod}
-          onStartDateChange={handleStartDateChange}
-          onEndDateChange={handleEndDateChange}
-          onSelectSalesPerson={(id) => {
-            setSelectedSalesPersonId(id);
-            setSummaryLoaded(false);
+          onSelectPeriod={(key) => {
+            handleSelectPeriod(key);
+            dispatch(resetKpiSummary());
+          }}
+          onStartDateChange={(value) => {
+            handleStartDateChange(value);
+            dispatch(resetKpiSummary());
+          }}
+          onEndDateChange={(value) => {
+            handleEndDateChange(value);
+            dispatch(resetKpiSummary());
           }}
           onReset={handleReset}
           actionLabel="Get summary"
           actionIcon="stats-chart-outline"
-          onActionPress={handleGetSummary}
+          onActionPress={() => {
+            void loadSummary();
+          }}
+          loading={loading}
           paperTheme={paperTheme}
           resolvedTheme={resolvedTheme}
         />
@@ -179,96 +335,241 @@ export default function SummaryTabScreen() {
           </View>
         ) : null}
 
-        {hasActiveFilter && summaryLoaded ? (
+        {loading && !data ? (
+          <View style={summaryTabStyles.loadingWrap}>
+            <ActivityIndicator size="large" color={paperTheme.colors.primary} />
+            <Text style={[summaryTabStyles.loadingText, { color: paperTheme.colors.onSurfaceVariant }]}>
+              Loading KPI summary...
+            </Text>
+          </View>
+        ) : null}
+
+        {error && !loading ? (
           <View
             style={[
-              summaryTabStyles.heroCard,
+              summaryTabStyles.emptyState,
               {
-                backgroundColor: paperTheme.colors.primaryContainer,
-                borderColor: `${paperTheme.colors.primary}33`,
+                backgroundColor: paperTheme.colors.errorContainer,
+                borderColor: `${paperTheme.colors.error}33`,
               },
-              kpiCardShadow(resolvedTheme),
             ]}
           >
-            <View style={[summaryTabStyles.heroAccent, { backgroundColor: paperTheme.colors.primary }]} />
-            <Text style={[summaryTabStyles.heroEyebrow, { color: paperTheme.colors.onPrimaryContainer }]}>
-              KPI summary
+            <Ionicons name="alert-circle-outline" size={28} color={paperTheme.colors.error} />
+            <Text style={[summaryTabStyles.emptyTitle, { color: paperTheme.colors.error }]}>
+              Could not load summary
             </Text>
-            <Text style={[summaryTabStyles.heroTitle, { color: paperTheme.colors.primary }]}>
-              {formatKpiAmount(MOCK_KPI_SUMMARY.totalSales)}
+            <Text style={[summaryTabStyles.emptyText, { color: paperTheme.colors.onErrorContainer }]}>
+              {error}
             </Text>
-            <Text style={[summaryTabStyles.heroSub, { color: paperTheme.colors.onPrimaryContainer }]}>
-              {filterLabel} · {selectedPersonName}
-            </Text>
+          </View>
+        ) : null}
 
-            <View style={summaryTabStyles.statsGrid}>
+        {showResults && data ? (
+          <>
+            <View
+              style={[
+                summaryTabStyles.heroCard,
+                {
+                  backgroundColor: paperTheme.colors.surface,
+                  borderColor: `${paperTheme.colors.primary}33`,
+                },
+                kpiCardShadow(resolvedTheme),
+              ]}
+            >
+              <View style={[summaryTabStyles.heroAccent, { backgroundColor: paperTheme.colors.primary }]} />
               <View
-                style={[
-                  summaryTabStyles.statCard,
-                  {
-                    backgroundColor: paperTheme.colors.surface,
-                    borderColor: paperTheme.colors.outlineVariant,
-                  },
-                ]}
-              >
-                <Text style={[summaryTabStyles.statLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  Orders
-                </Text>
-                <Text style={[summaryTabStyles.statValue, { color: paperTheme.colors.onSurface }]}>
-                  {MOCK_KPI_SUMMARY.orderCount}
-                </Text>
+                style={[summaryTabStyles.heroAccentSecondary, { backgroundColor: paperTheme.colors.tertiary }]}
+              />
+
+              <View style={summaryTabStyles.heroTopRow}>
+                <View style={summaryTabStyles.heroTitleBlock}>
+                  <Text style={[summaryTabStyles.heroEyebrow, { color: paperTheme.colors.primary }]}>
+                    KPI summary
+                  </Text>
+                  <Text style={[summaryTabStyles.heroTitle, { color: paperTheme.colors.onSurface }]}>
+                    {filterLabel}
+                  </Text>
+                  <Text style={[summaryTabStyles.heroSub, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    {data.orderCount} order{data.orderCount === 1 ? '' : 's'} · {salesPersons.length} sales
+                    person{salesPersons.length === 1 ? '' : 's'}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    summaryTabStyles.heroIconWrap,
+                    {
+                      backgroundColor: `${paperTheme.colors.primary}14`,
+                      borderColor: `${paperTheme.colors.primary}33`,
+                    },
+                  ]}
+                >
+                  <Ionicons name="stats-chart-outline" size={24} color={paperTheme.colors.primary} />
+                </View>
               </View>
+
               <View
                 style={[
-                  summaryTabStyles.statCard,
+                  summaryTabStyles.heroAmountPanel,
                   {
-                    backgroundColor: paperTheme.colors.surface,
-                    borderColor: paperTheme.colors.outlineVariant,
+                    backgroundColor: `${paperTheme.colors.primary}10`,
+                    borderColor: `${paperTheme.colors.primary}22`,
                   },
                 ]}
               >
-                <Text style={[summaryTabStyles.statLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  Avg. order
+                <Text
+                  style={[summaryTabStyles.heroAmountLabel, { color: paperTheme.colors.onSurfaceVariant }]}
+                >
+                  Total sales
                 </Text>
-                <Text style={[summaryTabStyles.statValue, { color: paperTheme.colors.onSurface }]}>
-                  {formatKpiAmount(MOCK_KPI_SUMMARY.averageOrderValue)}
-                </Text>
-              </View>
-              <View
-                style={[
-                  summaryTabStyles.statCard,
-                  {
-                    backgroundColor: paperTheme.colors.surface,
-                    borderColor: paperTheme.colors.outlineVariant,
-                  },
-                ]}
-              >
-                <Text style={[summaryTabStyles.statLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  Items sold
-                </Text>
-                <Text style={[summaryTabStyles.statValue, { color: paperTheme.colors.onSurface }]}>
-                  {MOCK_KPI_SUMMARY.itemsSold}
-                </Text>
-              </View>
-              <View
-                style={[
-                  summaryTabStyles.statCard,
-                  {
-                    backgroundColor: paperTheme.colors.surface,
-                    borderColor: paperTheme.colors.outlineVariant,
-                  },
-                ]}
-              >
-                <Text style={[summaryTabStyles.statLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  Top payment
-                </Text>
-                <Text style={[summaryTabStyles.statValue, { color: paperTheme.colors.onSurface }]}>
-                  {MOCK_KPI_SUMMARY.topPaymentMethod}
+                <Text style={[summaryTabStyles.heroAmountValue, { color: paperTheme.colors.primary }]}>
+                  {formatKpiAmount(data.totalSales)}
                 </Text>
               </View>
             </View>
-          </View>
-        ) : hasActiveFilter ? (
+
+            <View style={summaryTabStyles.statGrid}>
+              <SummaryStatChip
+                icon="receipt-outline"
+                label="Orders"
+                value={String(data.orderCount)}
+                tint={paperTheme.colors.primary}
+                paperTheme={paperTheme}
+                resolvedTheme={resolvedTheme}
+              />
+              <SummaryStatChip
+                icon="people-outline"
+                label="Sales persons"
+                value={String(salesPersons.length)}
+                tint={paperTheme.colors.secondary}
+                paperTheme={paperTheme}
+                resolvedTheme={resolvedTheme}
+              />
+              <SummaryStatChip
+                icon="help-circle-outline"
+                label="Unassigned"
+                value={String(unassignedSales?.count ?? 0)}
+                tint={paperTheme.colors.tertiary}
+                paperTheme={paperTheme}
+                resolvedTheme={resolvedTheme}
+              />
+              <SummaryStatChip
+                icon="cash-outline"
+                label="Unassigned sales"
+                value={formatKpiAmount(unassignedSales?.totalSalesAmount ?? 0)}
+                tint="#b45309"
+                paperTheme={paperTheme}
+                resolvedTheme={resolvedTheme}
+              />
+            </View>
+
+            <View style={summaryTabStyles.sectionHeader}>
+              <Text style={[summaryTabStyles.sectionTitle, { color: paperTheme.colors.onSurface }]}>
+                Sales team performance
+              </Text>
+              <Text
+                style={[summaryTabStyles.sectionCount, { color: paperTheme.colors.onSurfaceVariant }]}
+              >
+                {salesPersons.length} member{salesPersons.length === 1 ? '' : 's'}
+              </Text>
+            </View>
+
+            {salesPersons.length === 0 ? (
+              <View
+                style={[
+                  summaryTabStyles.emptyState,
+                  {
+                    backgroundColor: paperTheme.colors.surface,
+                    borderColor: paperTheme.colors.outlineVariant,
+                  },
+                  kpiCardShadow(resolvedTheme),
+                ]}
+              >
+                <Ionicons name="people-outline" size={28} color={paperTheme.colors.onSurfaceVariant} />
+                <Text style={[summaryTabStyles.emptyTitle, { color: paperTheme.colors.onSurface }]}>
+                  No assigned sales
+                </Text>
+                <Text
+                  style={[summaryTabStyles.emptyText, { color: paperTheme.colors.onSurfaceVariant }]}
+                >
+                  No sales in this period were linked to a sales person.
+                </Text>
+              </View>
+            ) : (
+              salesPersons.map((person, index) => (
+                <SalesPersonCard
+                  key={person.salesPersonId}
+                  person={person}
+                  rank={index + 1}
+                  paperTheme={paperTheme}
+                  resolvedTheme={resolvedTheme}
+                />
+              ))
+            )}
+
+            {(unassignedSales?.count ?? 0) > 0 ? (
+              <>
+                <View style={summaryTabStyles.sectionHeader}>
+                  <Text style={[summaryTabStyles.sectionTitle, { color: paperTheme.colors.onSurface }]}>
+                    Unassigned sales
+                  </Text>
+                  <Text
+                    style={[summaryTabStyles.sectionCount, { color: paperTheme.colors.onSurfaceVariant }]}
+                  >
+                    {unassignedSales?.count} order{(unassignedSales?.count ?? 0) === 1 ? '' : 's'}
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    summaryTabStyles.unassignedCard,
+                    {
+                      backgroundColor: paperTheme.colors.surface,
+                      borderColor: paperTheme.colors.outlineVariant,
+                    },
+                    kpiCardShadow(resolvedTheme),
+                  ]}
+                >
+                  <Text
+                    style={[summaryTabStyles.personMeta, { color: paperTheme.colors.onSurfaceVariant }]}
+                  >
+                    Total unassigned: {formatKpiAmount(unassignedSales?.totalSalesAmount ?? 0)}
+                  </Text>
+
+                  {(unassignedSales?.orders ?? []).map((order, index, list) => (
+                    <View
+                      key={`${order.orderId}-${order.checkOutTime}`}
+                      style={[
+                        summaryTabStyles.orderRow,
+                        {
+                          borderBottomColor: paperTheme.colors.outlineVariant,
+                          borderBottomWidth:
+                            index === list.length - 1 ? 0 : StyleSheet.hairlineWidth,
+                        },
+                      ]}
+                    >
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text style={[summaryTabStyles.orderId, { color: paperTheme.colors.onSurface }]}>
+                          {order.orderId}
+                        </Text>
+                        <Text
+                          style={[
+                            summaryTabStyles.personMeta,
+                            { color: paperTheme.colors.onSurfaceVariant },
+                          ]}
+                        >
+                          {formatDisplayDate(order.checkOutTime.slice(0, 10))}
+                        </Text>
+                      </View>
+                      <Text style={[summaryTabStyles.orderAmount, { color: paperTheme.colors.primary }]}>
+                        {formatKpiAmount(order.totalAmount)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            ) : null}
+          </>
+        ) : hasActiveFilter && !loading && !data && !error ? (
           <View
             style={[
               summaryTabStyles.emptyState,
@@ -284,7 +585,7 @@ export default function SummaryTabScreen() {
               Ready to load
             </Text>
             <Text style={[summaryTabStyles.emptyText, { color: paperTheme.colors.onSurfaceVariant }]}>
-              Select a sales person and tap Get summary to preview KPI metrics for the chosen period.
+              Tap Get summary to load KPI metrics for the selected period.
             </Text>
           </View>
         ) : null}

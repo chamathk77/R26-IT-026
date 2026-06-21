@@ -4,8 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { MD3Theme } from 'react-native-paper';
 import DatePickerField from '../../../components/DatePickerField/DatePickerField';
 import { fonts } from '../../../constants/fonts';
-import { KPI_PERIOD_OPTIONS, KpiPeriodKey } from './kpiMockData';
-import KpiSalesPersonField from './KpiSalesPersonField';
+import { KPI_PERIOD_OPTIONS, KpiPeriodKey } from './kpiPeriodOptions';
 import { kpiCardShadow, kpiStyles } from './kpiStyles';
 
 type Props = {
@@ -14,15 +13,14 @@ type Props = {
   endDate: string;
   isCustomRange: boolean;
   hasPartialCustomRange: boolean;
-  selectedSalesPersonId: string | null;
   onSelectPeriod: (key: KpiPeriodKey) => void;
   onStartDateChange: (value: string) => void;
   onEndDateChange: (value: string) => void;
-  onSelectSalesPerson: (id: string | null) => void;
   onReset: () => void;
   actionLabel: string;
   actionIcon: keyof typeof Ionicons.glyphMap;
   onActionPress: () => void;
+  loading?: boolean;
   paperTheme: MD3Theme;
   resolvedTheme: 'light' | 'dark';
 };
@@ -33,15 +31,14 @@ export default function KpiFilterCard({
   endDate,
   isCustomRange,
   hasPartialCustomRange,
-  selectedSalesPersonId,
   onSelectPeriod,
   onStartDateChange,
   onEndDateChange,
-  onSelectSalesPerson,
   onReset,
   actionLabel,
   actionIcon,
   onActionPress,
+  loading = false,
   paperTheme,
   resolvedTheme,
 }: Props) {
@@ -60,11 +57,12 @@ export default function KpiFilterCard({
         <View style={styles.headerText}>
           <Text style={[styles.title, { color: paperTheme.colors.onSurface }]}>Filters</Text>
           <Text style={[styles.hint, { color: paperTheme.colors.onSurfaceVariant }]}>
-            Choose a period, sales person, then load the summary.
+            Choose a period or custom date range, then load the summary.
           </Text>
         </View>
         <TouchableOpacity
           onPress={onReset}
+          disabled={loading}
           style={[styles.resetBtn, { backgroundColor: paperTheme.colors.secondaryContainer }]}
           accessibilityLabel="Reset filters to this month"
         >
@@ -87,6 +85,7 @@ export default function KpiFilterCard({
             <TouchableOpacity
               key={option.key}
               onPress={() => onSelectPeriod(option.key)}
+              disabled={loading}
               style={[
                 kpiStyles.periodChip,
                 {
@@ -96,6 +95,7 @@ export default function KpiFilterCard({
                   borderColor: active
                     ? paperTheme.colors.primary
                     : paperTheme.colors.outlineVariant,
+                  opacity: loading ? 0.7 : 1,
                 },
               ]}
             >
@@ -124,6 +124,7 @@ export default function KpiFilterCard({
           onChange={onStartDateChange}
           placeholder="Select start"
           maximumDate={endDate ? new Date(`${endDate}T23:59:59`) : undefined}
+          disabled={loading}
           paperTheme={paperTheme}
         />
         <DatePickerField
@@ -132,27 +133,30 @@ export default function KpiFilterCard({
           onChange={onEndDateChange}
           placeholder="Select end"
           minimumDate={startDate ? new Date(`${startDate}T00:00:00`) : undefined}
+          disabled={loading}
           paperTheme={paperTheme}
         />
       </View>
 
-      <View style={[styles.divider, { backgroundColor: paperTheme.colors.outlineVariant }]} />
-
-      <KpiSalesPersonField
-        selectedSalesPersonId={selectedSalesPersonId}
-        onSelect={onSelectSalesPerson}
-        paperTheme={paperTheme}
-        resolvedTheme={resolvedTheme}
-      />
-
       <TouchableOpacity
         activeOpacity={0.9}
         onPress={onActionPress}
-        style={[styles.actionBtn, { backgroundColor: paperTheme.colors.primary }]}
+        disabled={loading}
+        style={[
+          styles.actionBtn,
+          {
+            backgroundColor: paperTheme.colors.primary,
+            opacity: loading ? 0.7 : 1,
+          },
+        ]}
       >
-        <Ionicons name={actionIcon} size={18} color={paperTheme.colors.onPrimary} />
+        {loading ? (
+          <Ionicons name="hourglass-outline" size={18} color={paperTheme.colors.onPrimary} />
+        ) : (
+          <Ionicons name={actionIcon} size={18} color={paperTheme.colors.onPrimary} />
+        )}
         <Text style={[styles.actionBtnText, { color: paperTheme.colors.onPrimary }]}>
-          {actionLabel}
+          {loading ? 'Loading...' : actionLabel}
         </Text>
       </TouchableOpacity>
     </View>
@@ -203,10 +207,6 @@ const styles = StyleSheet.create({
   resetText: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 11,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: 2,
   },
   actionBtn: {
     borderRadius: 14,
