@@ -294,12 +294,11 @@ export default function SettingsScreen({ navigation }: Props) {
     {
       key: 'analytics',
       title: 'Analytics',
-      description: 'Business trends, insights & data visualization',
+      description: 'Sales, costs, profit & business insights',
       icon: 'analytics-outline',
       iconBg: '#ccfbf1',
       iconColor: '#0f766e',
-      comingSoon: true,
-      onPress: () => showComingSoonAlert('Analytics'),
+      onPress: () => navigation.navigate('Analytics'),
     },
     {
       key: 'kpi',

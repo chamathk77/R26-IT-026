@@ -52,6 +52,7 @@ export type RootStackParamList = {
   ManageUserForm: { userId?: string } | undefined;
   ThemePreference: undefined;
   SubscriptionPayments: undefined;
+  Analytics: undefined;
   PayNow: { payment: PaymentRecord };
   KpiDashboard: undefined;
   KpiUnassignedOrderDetail: {

@@ -25,6 +25,7 @@ import ManageAccountScreen from '../screens/settings/account/ManageAccountScreen
 import ManageUserFormScreen from '../screens/settings/account/ManageUserFormScreen';
 import ThemePreferenceScreen from '../screens/settings/preferences/ThemePreferenceScreen';
 import SubscriptionPaymentsScreen from '../screens/settings/payments/SubscriptionPaymentsScreen';
+import AnalyticsScreen from '../screens/analytics/AnalyticsScreen';
 import PayNowScreen from '../screens/settings/payments/PayNowScreen';
 import KpiScreen from '../screens/kpi/KpiScreen';
 import UnassignedOrderDetailScreen from '../screens/kpi/unassignedOrder/UnassignedOrderDetailScreen';
@@ -73,6 +74,7 @@ export default function AppNavigator() {
         <Stack.Screen name="ManageUserForm" component={ManageUserFormScreen} />
         <Stack.Screen name="ThemePreference" component={ThemePreferenceScreen} />
         <Stack.Screen name="SubscriptionPayments" component={SubscriptionPaymentsScreen} />
+        <Stack.Screen name="Analytics" component={AnalyticsScreen} />
         <Stack.Screen name="PayNow" component={PayNowScreen} />
         <Stack.Screen name="KpiDashboard" component={KpiScreen} />
         <Stack.Screen name="KpiUnassignedOrderDetail" component={UnassignedOrderDetailScreen} />
