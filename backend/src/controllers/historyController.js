@@ -10,6 +10,7 @@ const {
   buildDigitalReceiptUrl,
   buildHistoryReceiptSmsMessage,
 } = require("../utils/historyReceiptSms");
+const { manageCustomerData, removeCustomerData } = require("./customerController");
 
 const PAYMENT_OPTIONS = History.PAYMENT_OPTIONS;
 
@@ -438,6 +439,17 @@ const createHistory = async (req, res) => {
       salesPersonId: salesPersonResult.salesPersonId,
     });
 
+    try {
+      await manageCustomerData({
+        shopId,
+        mobileNumber: mobile,
+        name: customerName,
+        salesAmount: totalAmount,
+      });
+    } catch (customerError) {
+      console.log("error in createHistory manageCustomerData", customerError.message);
+    }
+
     let smsStatus = { sent: false, reason: "Not attempted" };
     try {
 
@@ -664,6 +676,15 @@ const reversedSalesData = async (req, res) => {
         product.qty = currentQty + restoreQty;
         await product.save({ session });
       }
+
+      await removeCustomerData(
+        {
+          shopId,
+          mobileNumber: history.customerMobile,
+          salesAmount: history.totalAmount,
+        },
+        { session },
+      );
 
       history.status = requestedStatus;
       history.isReversed = true;
