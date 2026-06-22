@@ -2,9 +2,16 @@ import { createSlice } from '@reduxjs/toolkit';
 import {
   assignKpiHistorySalesPerson_Service,
   fetchKpiHistoryByOrderId_Service,
+  fetchKpiHistorySummary_Service,
   fetchKpiSummary_Service,
 } from '../../services/KpiService';
-import { KpiHistoryRecord, KpiSummaryData } from '../../type/kpi';
+import {
+  KpiHistoryRecord,
+  KpiHistorySummaryFilters,
+  KpiHistorySummaryPagination,
+  KpiHistorySummaryStats,
+  KpiSummaryData,
+} from '../../type/kpi';
 import { ApiErrorResponse } from '../../type/common';
 
 interface KpiState {
@@ -24,6 +31,16 @@ interface KpiState {
     loading: boolean;
     error: string | null;
     success: boolean;
+  };
+  historySummary: {
+    loading: boolean;
+    loadingMore: boolean;
+    error: string | null;
+    success: boolean;
+    items: KpiHistoryRecord[];
+    filters: KpiHistorySummaryFilters | null;
+    summary: KpiHistorySummaryStats | null;
+    pagination: KpiHistorySummaryPagination | null;
   };
 }
 
@@ -45,6 +62,16 @@ const initialState: KpiState = {
     error: null,
     success: false,
   },
+  historySummary: {
+    loading: false,
+    loadingMore: false,
+    error: null,
+    success: false,
+    items: [],
+    filters: null,
+    summary: null,
+    pagination: null,
+  },
 };
 
 export const KpiSlice = createSlice({
@@ -59,6 +86,9 @@ export const KpiSlice = createSlice({
     },
     resetKpiAssignSalesPerson: (state) => {
       state.assignSalesPerson = initialState.assignSalesPerson;
+    },
+    resetKpiHistorySummary: (state) => {
+      state.historySummary = initialState.historySummary;
     },
   },
   extraReducers: (builder) => {
@@ -119,10 +149,54 @@ export const KpiSlice = createSlice({
       state.assignSalesPerson.error =
         payload?.message || action.error.message || 'Could not assign sales person';
     });
+
+    builder.addCase(fetchKpiHistorySummary_Service.pending, (state, action) => {
+      if (action.meta.arg.append) {
+        state.historySummary.loadingMore = true;
+      } else {
+        state.historySummary.loading = true;
+      }
+      state.historySummary.error = null;
+      state.historySummary.success = false;
+    });
+    builder.addCase(fetchKpiHistorySummary_Service.fulfilled, (state, action) => {
+      state.historySummary.loading = false;
+      state.historySummary.loadingMore = false;
+      state.historySummary.success = true;
+      state.historySummary.error = null;
+      state.historySummary.filters = action.payload.filters ?? null;
+      state.historySummary.summary = action.payload.summary ?? null;
+      state.historySummary.pagination = action.payload.pagination ?? null;
+
+      const nextItems = Array.isArray(action.payload.data) ? action.payload.data : [];
+      if (action.meta.arg.append) {
+        state.historySummary.items = [...state.historySummary.items, ...nextItems];
+      } else {
+        state.historySummary.items = nextItems;
+      }
+    });
+    builder.addCase(fetchKpiHistorySummary_Service.rejected, (state, action) => {
+      state.historySummary.loading = false;
+      state.historySummary.loadingMore = false;
+      state.historySummary.success = false;
+      const payload = action.payload as ApiErrorResponse | undefined;
+      state.historySummary.error =
+        payload?.message || action.error.message || 'Could not load KPI history summary';
+      if (!action.meta.arg.append) {
+        state.historySummary.items = [];
+        state.historySummary.filters = null;
+        state.historySummary.summary = null;
+        state.historySummary.pagination = null;
+      }
+    });
   },
 });
 
-export const { resetKpiSummary, resetKpiHistoryDetail, resetKpiAssignSalesPerson } =
-  KpiSlice.actions;
+export const {
+  resetKpiSummary,
+  resetKpiHistoryDetail,
+  resetKpiAssignSalesPerson,
+  resetKpiHistorySummary,
+} = KpiSlice.actions;
 
 export default KpiSlice.reducer;

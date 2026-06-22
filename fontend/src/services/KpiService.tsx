@@ -7,8 +7,10 @@ import { toApiErrorResponse } from '../utils/apiErrorAlert';
 import {
   AssignKpiHistorySalesPersonParams,
   AssignKpiHistorySalesPersonResponse,
+  FetchKpiHistorySummaryParams,
   FetchKpiSummaryParams,
   GetKpiHistoryByOrderIdResponse,
+  GetKpiHistorySummaryResponse,
   GetKpiSummaryResponse,
 } from '../type/kpi';
 
@@ -35,6 +37,44 @@ function buildKpiSummaryQuery(params: FetchKpiSummaryParams): string {
   search.set('period', mapPeriodToApi(params.period));
   return search.toString();
 }
+
+function buildKpiHistorySummaryQuery(params: FetchKpiHistorySummaryParams): string {
+  const search = new URLSearchParams();
+  search.set('salesPersonId', params.salesPersonId);
+  search.set('startDate', params.startDate);
+  search.set('endDate', params.endDate);
+  search.set('page', String(params.page ?? 1));
+  search.set('limit', String(params.limit ?? 20));
+  return search.toString();
+}
+
+export const fetchKpiHistorySummary_Service = createAsyncThunk(
+  'kpi/fetchHistorySummary',
+  async (params: FetchKpiHistorySummaryParams, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const query = buildKpiHistorySummaryQuery(params);
+      const response = await apiClient.get<GetKpiHistorySummaryResponse>(
+        `/api/kpi/history-summary?${query}`,
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: response.data?.message || 'Could not load KPI history summary',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
 
 export const fetchKpiHistoryByOrderId_Service = createAsyncThunk(
   'kpi/fetchHistoryByOrderId',

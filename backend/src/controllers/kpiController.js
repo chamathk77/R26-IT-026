@@ -252,6 +252,17 @@ async function resolveRequiredSalesPersonId(salesPersonIdRaw, shopId) {
   return resolveOptionalSalesPersonId(salesPersonIdRaw, shopId);
 }
 
+function parsePagination(query) {
+  const pageRaw = parseInt(String(query?.page ?? '1'), 10);
+  const limitRaw = parseInt(String(query?.limit ?? '20'), 10);
+
+  const page = Number.isNaN(pageRaw) ? 1 : Math.max(1, pageRaw);
+  const limit = Number.isNaN(limitRaw) ? 20 : Math.min(100, Math.max(1, limitRaw));
+  const skip = (page - 1) * limit;
+
+  return { page, limit, skip };
+}
+
 async function findShopHistoryByOrderId(shopId, orderIdRaw) {
   const orderId = normalizeOrderId(orderIdRaw);
   if (!orderId || orderId.length < ORDER_ID_MIN_LENGTH) {
@@ -422,8 +433,110 @@ const getKpiSummary = async (req, res) => {
   }
 };
 
+const getKpiHistorySummary = async (req, res) => {
+  try {
+    const shopId = requireShopId(req, res);
+    if (!shopId) return;
+
+    const salesPersonResult = await resolveRequiredSalesPersonId(req.query?.salesPersonId, shopId);
+    if (salesPersonResult.error) {
+      return res.status(400).json({ success: false, message: salesPersonResult.error });
+    }
+
+    const startDateRaw = parseFilterDate(req.query?.startDate);
+    if (startDateRaw === undefined) {
+      return res.status(400).json({ success: false, message: 'startDate is invalid' });
+    }
+
+    const endDateRaw = parseFilterDate(req.query?.endDate);
+    if (endDateRaw === undefined) {
+      return res.status(400).json({ success: false, message: 'endDate is invalid' });
+    }
+
+    if (!startDateRaw || !endDateRaw) {
+      return res.status(400).json({
+        success: false,
+        message: 'Both startDate and endDate are required',
+      });
+    }
+
+    const rangeStart = startOfDay(startDateRaw);
+    const rangeEnd = endOfDay(endDateRaw);
+    const todayEnd = endOfDay(new Date());
+
+    if (rangeStart > todayEnd || rangeEnd > todayEnd) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate cannot be after today',
+      });
+    }
+
+    if (rangeStart > rangeEnd) {
+      return res.status(400).json({ success: false, message: 'startDate cannot be after endDate' });
+    }
+
+    const { page, limit, skip } = parsePagination(req.query);
+    const filter = {
+      shopId,
+      status: 'submited',
+      salesPersonId: salesPersonResult.salesPersonId,
+      checkOutTime: { $gte: rangeStart, $lte: rangeEnd },
+    };
+
+    const [total, records, salePerson, aggregateResult] = await Promise.all([
+      History.countDocuments(filter),
+      History.find(filter)
+        .sort({ checkOutTime: -1, createdAt: -1, _id: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      SalePerson.findOne({ _id: salesPersonResult.salesPersonId, shopId })
+        .select('_id salePersonId firstName lastName position')
+        .lean(),
+      History.aggregate([
+        { $match: filter },
+        { $group: { _id: null, totalSales: { $sum: '$totalAmount' } } },
+      ]),
+    ]);
+
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+    const grandTotalSales = roundMoney(aggregateResult[0]?.totalSales ?? 0);
+
+    return res.status(200).json({
+      success: true,
+      count: records.length,
+      total,
+      filters: {
+        salesPersonId: String(salesPersonResult.salesPersonId),
+        startDate: rangeStart.toISOString(),
+        endDate: rangeEnd.toISOString(),
+        salesPersonName: getSalePersonFullName(salePerson?.firstName, salePerson?.lastName),
+        salePersonId: salePerson?.salePersonId ?? null,
+        position: salePerson?.position ?? '',
+      },
+      summary: {
+        orderCount: total,
+        totalSalesAmount: grandTotalSales,
+      },
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+      data: records.map(mapHistoryRecord),
+      message: 'KPI history summary loaded',
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getKpiSummary,
   getKpiHistoryByOrderId,
+  getKpiHistorySummary,
   assignKpiHistorySalesPerson,
 };

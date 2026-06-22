@@ -69,3 +69,46 @@ export interface AssignKpiHistorySalesPersonResponse {
   data: KpiHistoryRecord;
   message: string;
 }
+
+export interface KpiHistorySummaryPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+
+export interface KpiHistorySummaryFilters {
+  salesPersonId: string;
+  startDate: string;
+  endDate: string;
+  salesPersonName: string;
+  salePersonId: string | null;
+  position: string;
+}
+
+export interface KpiHistorySummaryStats {
+  orderCount: number;
+  totalSalesAmount: number;
+}
+
+export interface FetchKpiHistorySummaryParams {
+  salesPersonId: string;
+  startDate: string;
+  endDate: string;
+  page?: number;
+  limit?: number;
+  append?: boolean;
+}
+
+export interface GetKpiHistorySummaryResponse {
+  success: boolean;
+  count?: number;
+  total?: number;
+  filters?: KpiHistorySummaryFilters;
+  summary?: KpiHistorySummaryStats;
+  pagination?: KpiHistorySummaryPagination;
+  data?: KpiHistoryRecord[];
+  message?: string;
+}

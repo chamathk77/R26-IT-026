@@ -1,16 +1,19 @@
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MD3Theme } from 'react-native-paper';
 import DatePickerField from '../../../../components/DatePickerField/DatePickerField';
 import { fonts } from '../../../../constants/fonts';
 import KpiSalesPersonField from '../../shared/KpiSalesPersonField';
+import { KpiMockSalePerson } from '../../shared/kpiMockData';
 import { kpiCardShadow, kpiStyles } from '../../shared/kpiStyles';
 
 type Props = {
+  salePersons: KpiMockSalePerson[];
   selectedSalesPersonId: string | null;
   startDate: string;
   endDate: string;
+  loading?: boolean;
   onSelectSalesPerson: (id: string | null) => void;
   onStartDateChange: (value: string) => void;
   onEndDateChange: (value: string) => void;
@@ -20,10 +23,18 @@ type Props = {
   resolvedTheme: 'light' | 'dark';
 };
 
+function getTodayMaximumDate(): Date {
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  return today;
+}
+
 export default function HistorySummaryFilterCard({
+  salePersons,
   selectedSalesPersonId,
   startDate,
   endDate,
+  loading = false,
   onSelectSalesPerson,
   onStartDateChange,
   onEndDateChange,
@@ -32,6 +43,14 @@ export default function HistorySummaryFilterCard({
   paperTheme,
   resolvedTheme,
 }: Props) {
+  const todayMaximumDate = useMemo(() => getTodayMaximumDate(), []);
+
+  const startMaximumDate = useMemo(() => {
+    if (!endDate.trim()) return todayMaximumDate;
+    const end = new Date(`${endDate}T23:59:59`);
+    return end.getTime() < todayMaximumDate.getTime() ? end : todayMaximumDate;
+  }, [endDate, todayMaximumDate]);
+
   return (
     <View
       style={[
@@ -43,50 +62,43 @@ export default function HistorySummaryFilterCard({
         kpiCardShadow(resolvedTheme),
       ]}
     >
-      <View style={styles.headerRow}>
-        <View style={styles.headerText}>
-          <Text style={[styles.title, { color: paperTheme.colors.onSurface }]}>Filters</Text>
-          <Text style={[styles.hint, { color: paperTheme.colors.onSurfaceVariant }]}>
-            Select a sales person and date range to load history summary.
-          </Text>
-        </View>
+      <View style={styles.topRow}>
+        <Text style={[styles.title, { color: paperTheme.colors.onSurface }]}>Filters</Text>
         <TouchableOpacity
           onPress={onReset}
+          disabled={loading}
           style={[styles.resetBtn, { backgroundColor: paperTheme.colors.secondaryContainer }]}
           accessibilityLabel="Reset filters"
         >
-          <Ionicons name="refresh-outline" size={16} color={paperTheme.colors.onSecondaryContainer} />
-          <Text style={[styles.resetText, { color: paperTheme.colors.onSecondaryContainer }]}>
-            Reset
-          </Text>
+          <Ionicons name="refresh-outline" size={14} color={paperTheme.colors.onSecondaryContainer} />
         </TouchableOpacity>
       </View>
 
       <KpiSalesPersonField
+        salePersons={salePersons}
         selectedSalesPersonId={selectedSalesPersonId}
         onSelect={onSelectSalesPerson}
         paperTheme={paperTheme}
         resolvedTheme={resolvedTheme}
+        disabled={loading}
       />
 
-      <Text style={[kpiStyles.sectionLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-        Date range
-      </Text>
       <View style={kpiStyles.dateFilterRow}>
         <DatePickerField
-          label="Start date"
+          label="Start"
           value={startDate}
           onChange={onStartDateChange}
-          placeholder="Select start"
-          maximumDate={endDate ? new Date(`${endDate}T23:59:59`) : undefined}
+          placeholder="Start"
+          maximumDate={startMaximumDate}
           paperTheme={paperTheme}
         />
         <DatePickerField
-          label="End date"
+          label="End"
           value={endDate}
           onChange={onEndDateChange}
-          placeholder="Select end"
+          placeholder="End"
           minimumDate={startDate ? new Date(`${startDate}T00:00:00`) : undefined}
+          maximumDate={todayMaximumDate}
           paperTheme={paperTheme}
         />
       </View>
@@ -94,12 +106,25 @@ export default function HistorySummaryFilterCard({
       <TouchableOpacity
         activeOpacity={0.9}
         onPress={onActionPress}
-        style={[styles.actionBtn, { backgroundColor: paperTheme.colors.primary }]}
+        disabled={loading}
+        style={[
+          styles.actionBtn,
+          {
+            backgroundColor: paperTheme.colors.primary,
+            opacity: loading ? 0.75 : 1,
+          },
+        ]}
       >
-        <Ionicons name="time-outline" size={18} color={paperTheme.colors.onPrimary} />
-        <Text style={[styles.actionBtnText, { color: paperTheme.colors.onPrimary }]}>
-          Get history summary
-        </Text>
+        {loading ? (
+          <ActivityIndicator size="small" color={paperTheme.colors.onPrimary} />
+        ) : (
+          <>
+            <Ionicons name="search-outline" size={16} color={paperTheme.colors.onPrimary} />
+            <Text style={[styles.actionBtnText, { color: paperTheme.colors.onPrimary }]}>
+              Get history
+            </Text>
+          </>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -107,53 +132,37 @@ export default function HistorySummaryFilterCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
-    gap: 12,
+    padding: 10,
+    gap: 8,
   },
-  headerRow: {
+  topRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
-  },
-  headerText: {
-    flex: 1,
-    gap: 4,
   },
   title: {
     fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 15,
-  },
-  hint: {
-    fontFamily: fonts.PoppinsRegular,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 13,
   },
   resetBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    width: 30,
+    height: 30,
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  resetText: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actionBtn: {
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderRadius: 12,
+    paddingVertical: 11,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    marginTop: 2,
+    gap: 6,
   },
   actionBtnText: {
     fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 15,
+    fontSize: 13,
   },
 });
