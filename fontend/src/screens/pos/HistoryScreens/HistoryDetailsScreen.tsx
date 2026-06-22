@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
+  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -30,8 +32,12 @@ import ResendBillModal from './ResendBillModal';
 import { useCommonAlert } from '../../../hooks/useCommonAlert';
 import CommonAlert from '../../../components/CommonAlert/CommonAlert';
 import { resendBillSms_Service, reverseHistory_Service } from '../../../services/HistoryService';
-import { fetchSalePersonById_Service } from '../../../services/SalePersonService';
-import { getSalePersonFullName } from '../../../type/salePerson';
+import { assignKpiHistorySalesPerson_Service } from '../../../services/KpiService';
+import {
+  fetchSalePersonById_Service,
+  fetchSalePersons_Service,
+} from '../../../services/SalePersonService';
+import { getSalePersonFullName, SalePerson } from '../../../type/salePerson';
 import {
   getApiErrorMessage,
   handleSessionExpiredApiError,
@@ -70,12 +76,22 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
   const [resendingBill, setResendingBill] = useState(false);
   const [salesPersonName, setSalesPersonName] = useState<string | null>(null);
   const [salesPersonLoading, setSalesPersonLoading] = useState(false);
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [selectedSalesPersonId, setSelectedSalesPersonId] = useState<string | null>(null);
   const shop = useSelector((state: RootState) => state.AuthReducer.Login.shopData);
   const salePersons = useSelector(
     (state: RootState) => state.SalePersonReducer?.list?.items ?? [],
   );
+  const salePersonsLoading = useSelector(
+    (state: RootState) => state.SalePersonReducer?.list?.loading ?? false,
+  );
+  const updatingSalesPerson = useSelector(
+    (state: RootState) => state.KpiReducer.assignSalesPerson.loading,
+  );
   const normalizedStatus = normalizeHistoryStatus(record.status);
   const isSubmittedStatus = normalizedStatus === 'submited';
+  const orderId = record.orderId?.trim() ?? '';
+  const canEditSalesPerson = Boolean(record.salesPersonId && isSubmittedStatus && orderId);
 
   useEffect(() => {
     const salesPersonId = record.salesPersonId?.trim();
@@ -275,6 +291,168 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
     [dispatch, navigation, record._id, resendingBill, show_Alert],
   );
 
+  const loadSalePersons = useCallback(async () => {
+    try {
+      await dispatch(fetchSalePersons_Service()).unwrap();
+    } catch (error: unknown) {
+      const handled = await handleSessionExpiredApiError(error, show_Alert);
+      if (handled) return;
+
+      show_Alert(
+        'error',
+        'Load failed',
+        getApiErrorMessage(error, 'Could not load sales persons. Please try again.'),
+        1,
+        false,
+        'OK',
+        () => {},
+      );
+    }
+  }, [dispatch, show_Alert]);
+
+  const handleOpenSalesPersonPicker = useCallback(() => {
+    if (!canEditSalesPerson) return;
+
+    setSelectedSalesPersonId(record.salesPersonId?.trim() ?? null);
+    setPickerVisible(true);
+
+    if (salePersons.length === 0 && !salePersonsLoading) {
+      void loadSalePersons();
+    }
+  }, [
+    canEditSalesPerson,
+    loadSalePersons,
+    record.salesPersonId,
+    salePersons.length,
+    salePersonsLoading,
+  ]);
+
+  const selectedPerson = useMemo(
+    () => salePersons.find((person) => person._id === selectedSalesPersonId) ?? null,
+    [salePersons, selectedSalesPersonId],
+  );
+
+  const handleConfirmSalesPersonUpdate = useCallback(async () => {
+    if (!selectedSalesPersonId || !orderId) {
+      show_Alert(
+        'pending',
+        'Select sales person',
+        'Choose a sales person from the list before updating.',
+        1,
+        false,
+        'OK',
+        () => {},
+      );
+      return;
+    }
+
+    if (selectedSalesPersonId === record.salesPersonId?.trim()) {
+      show_Alert(
+        'pending',
+        'No change',
+        'This sales person is already assigned to this sale.',
+        1,
+        false,
+        'OK',
+        () => {},
+      );
+      return;
+    }
+
+    try {
+      const response = await dispatch(
+        assignKpiHistorySalesPerson_Service({
+          orderId,
+          salesPersonId: selectedSalesPersonId,
+        }),
+      ).unwrap();
+
+      setRecord(response.data);
+      navigation.setParams({ record: response.data });
+      setPickerVisible(false);
+
+      const updatedName = selectedPerson
+        ? getSalePersonFullName(selectedPerson)
+        : salesPersonName;
+
+      show_Alert(
+        'success',
+        'Updated',
+        `${updatedName ?? 'Sales person'} is now assigned to ${orderId}.`,
+        1,
+        false,
+        'OK',
+        () => {
+          navigation.goBack();
+        },
+      );
+    } catch (error: unknown) {
+      const handled = await handleSessionExpiredApiError(error, show_Alert);
+      if (handled) return;
+
+      show_Alert(
+        'error',
+        'Update failed',
+        getApiErrorMessage(error, 'Could not update sales person. Please try again.'),
+        1,
+        false,
+        'OK',
+        () => {},
+      );
+    }
+  }, [
+    dispatch,
+    navigation,
+    orderId,
+    record.salesPersonId,
+    salesPersonName,
+    selectedPerson,
+    selectedSalesPersonId,
+    show_Alert,
+  ]);
+
+  const renderSalePersonOption = useCallback(
+    (person: SalePerson) => {
+      const selected = selectedSalesPersonId === person._id;
+      return (
+        <TouchableOpacity
+          key={person._id}
+          style={[
+            pickerStyles.option,
+            {
+              backgroundColor: selected
+                ? paperTheme.colors.primaryContainer
+                : paperTheme.colors.surfaceVariant,
+              borderColor: selected ? paperTheme.colors.primary : paperTheme.colors.outlineVariant,
+            },
+          ]}
+          onPress={() => setSelectedSalesPersonId(person._id)}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={[pickerStyles.optionLabel, { color: paperTheme.colors.onSurface }]}>
+              {getSalePersonFullName(person)}
+            </Text>
+            <Text style={[pickerStyles.optionSub, { color: paperTheme.colors.onSurfaceVariant }]}>
+              {person.salePersonId} · {person.position}
+            </Text>
+          </View>
+          {selected ? (
+            <Ionicons name="checkmark-circle" size={22} color={paperTheme.colors.primary} />
+          ) : null}
+        </TouchableOpacity>
+      );
+    },
+    [
+      paperTheme.colors.onSurface,
+      paperTheme.colors.onSurfaceVariant,
+      paperTheme.colors.outlineVariant,
+      paperTheme.colors.primary,
+      paperTheme.colors.primaryContainer,
+      paperTheme.colors.surfaceVariant,
+      selectedSalesPersonId,
+    ],
+  );
+
   return (
     <>
       <StatusBar
@@ -375,16 +553,35 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
               valueColor={paperTheme.colors.onSurface}
             />
             {record.salesPersonId ? (
-              <DetailRow
-                label="Sales person"
-                value={
-                  salesPersonLoading
-                    ? 'Loading...'
-                    : salesPersonName?.trim() || '—'
-                }
-                labelColor={paperTheme.colors.onSurfaceVariant}
-                valueColor={paperTheme.colors.onSurface}
-              />
+              <View style={styles.detailRow}>
+                <Text style={[styles.detailLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  Sales person
+                </Text>
+                <View style={styles.salesPersonValueWrap}>
+                  {canEditSalesPerson ? (
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      onPress={handleOpenSalesPersonPicker}
+                      style={styles.salesPersonEditRow}
+                    >
+                      <Ionicons
+                        name="create-outline"
+                        size={16}
+                        color={paperTheme.colors.primary}
+                      />
+                      <Text
+                        style={[styles.detailValue, styles.salesPersonValue, { color: paperTheme.colors.onSurface }]}
+                      >
+                        {salesPersonLoading ? 'Loading...' : salesPersonName?.trim() || '—'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={[styles.detailValue, { color: paperTheme.colors.onSurface }]}>
+                      {salesPersonLoading ? 'Loading...' : salesPersonName?.trim() || '—'}
+                    </Text>
+                  )}
+                </View>
+              </View>
             ) : null}
             <DetailRow
               label="Customer name"
@@ -604,6 +801,91 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
         paperTheme={paperTheme}
       />
 
+      <Modal
+        visible={pickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPickerVisible(false)}
+      >
+        <View style={pickerStyles.overlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setPickerVisible(false)} />
+          <View style={[pickerStyles.sheet, { backgroundColor: paperTheme.colors.surface }]}>
+            <View
+              style={[pickerStyles.handle, { backgroundColor: paperTheme.colors.outlineVariant }]}
+            />
+            <Text style={[pickerStyles.title, { color: paperTheme.colors.onSurface }]}>
+              Update sales person
+            </Text>
+            <Text style={[pickerStyles.sub, { color: paperTheme.colors.onSurfaceVariant }]}>
+              Choose who assisted this sale for {orderId}. The previous assignment will be replaced.
+            </Text>
+
+            {salePersonsLoading ? (
+              <View style={pickerStyles.modalLoading}>
+                <ActivityIndicator size="small" color={paperTheme.colors.primary} />
+                <Text style={{ color: paperTheme.colors.onSurfaceVariant, fontFamily: fonts.PoppinsRegular }}>
+                  Loading sales persons…
+                </Text>
+              </View>
+            ) : salePersons.length === 0 ? (
+              <View style={pickerStyles.modalLoading}>
+                <Text style={{ color: paperTheme.colors.onSurfaceVariant, fontFamily: fonts.PoppinsRegular }}>
+                  No sales persons found. Add sales persons in settings first.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={pickerStyles.optionList}
+                contentContainerStyle={{ gap: 10 }}
+                showsVerticalScrollIndicator={false}
+              >
+                {salePersons.map(renderSalePersonOption)}
+              </ScrollView>
+            )}
+
+            <TouchableOpacity
+              activeOpacity={0.9}
+              disabled={
+                updatingSalesPerson ||
+                !selectedSalesPersonId ||
+                selectedSalesPersonId === record.salesPersonId?.trim()
+              }
+              onPress={() => void handleConfirmSalesPersonUpdate()}
+              style={[
+                pickerStyles.confirmBtn,
+                {
+                  backgroundColor:
+                    selectedSalesPersonId &&
+                    selectedSalesPersonId !== record.salesPersonId?.trim()
+                      ? paperTheme.colors.primary
+                      : paperTheme.colors.surfaceVariant,
+                  opacity: updatingSalesPerson ? 0.7 : 1,
+                },
+              ]}
+            >
+              {updatingSalesPerson ? (
+                <ActivityIndicator size="small" color={paperTheme.colors.onPrimary} />
+              ) : (
+                <Text
+                  style={[
+                    pickerStyles.confirmBtnText,
+                    {
+                      color:
+                        selectedSalesPersonId &&
+                        selectedSalesPersonId !== record.salesPersonId?.trim()
+                          ? paperTheme.colors.onPrimary
+                          : paperTheme.colors.onSurfaceVariant,
+                    },
+                  ]}
+                >
+                  Update sales person
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {alertConfig ? (
         <CommonAlert
           visible={visible}
@@ -698,6 +980,21 @@ const styles = StyleSheet.create({
     flex: 1.2,
     textAlign: 'right',
   },
+  salesPersonValueWrap: {
+    flex: 1.2,
+    alignItems: 'flex-end',
+  },
+  salesPersonEditRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+    maxWidth: '100%',
+  },
+  salesPersonValue: {
+    flex: 0,
+    textAlign: 'right',
+  },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -781,5 +1078,75 @@ const styles = StyleSheet.create({
   statusActionText: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 14,
+  },
+});
+
+const pickerStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  sheet: {
+    maxHeight: '75%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 28,
+    gap: 10,
+  },
+  handle: {
+    alignSelf: 'center',
+    width: 42,
+    height: 4,
+    borderRadius: 999,
+    marginBottom: 8,
+  },
+  title: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 18,
+  },
+  sub: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 13,
+    marginBottom: 6,
+  },
+  optionList: {
+    maxHeight: 280,
+  },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+  },
+  optionLabel: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
+  },
+  optionSub: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  confirmBtn: {
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  confirmBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 16,
+  },
+  modalLoading: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 24,
   },
 });

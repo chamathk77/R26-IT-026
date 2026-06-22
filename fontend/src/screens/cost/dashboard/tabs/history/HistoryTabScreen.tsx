@@ -246,6 +246,24 @@ function ExpenseHistoryCard({
   );
 }
 
+function getExpenseSortTime(expense: CostExpense): number {
+  const createdAt = expense.createdAt ? new Date(expense.createdAt).getTime() : Number.NaN;
+  if (!Number.isNaN(createdAt)) return createdAt;
+
+  const purchaseDate = expense.purchaseDate ? new Date(expense.purchaseDate).getTime() : Number.NaN;
+  if (!Number.isNaN(purchaseDate)) return purchaseDate;
+
+  return 0;
+}
+
+function sortExpensesLatestFirst(expenses: CostExpense[]): CostExpense[] {
+  return [...expenses].sort((left, right) => {
+    const timeDiff = getExpenseSortTime(right) - getExpenseSortTime(left);
+    if (timeDiff !== 0) return timeDiff;
+    return right._id.localeCompare(left._id);
+  });
+}
+
 function buildHistoryRequest(
   filters: HistoryFilters,
   page: number,
@@ -276,6 +294,7 @@ export default function HistoryTabScreen() {
   const { items, loading, loadingMore, pagination } = useSelector(
     (state: RootState) => state.CostExpenseReducer.history,
   );
+  const sortedItems = useMemo(() => sortExpensesLatestFirst(items), [items]);
 
   const initialRange = useMemo(() => getCurrentMonthRange(), []);
 
@@ -638,7 +657,7 @@ export default function HistoryTabScreen() {
   );
 
   const listFooter =
-    pagination?.hasNextPage && items.length > 0 ? (
+    pagination?.hasNextPage && sortedItems.length > 0 ? (
       <TouchableOpacity
         style={[
           styles.historyLoadMoreBtn,
@@ -669,7 +688,7 @@ export default function HistoryTabScreen() {
           styles.historyScrollContent,
           items.length === 0 ? { flexGrow: 1 } : null,
         ]}
-        data={items}
+        data={sortedItems}
         keyExtractor={(item) => item._id}
         renderItem={renderExpenseRow}
         ListHeaderComponent={listHeader}

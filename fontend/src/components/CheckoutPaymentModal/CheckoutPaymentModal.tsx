@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -106,6 +107,11 @@ export default function CheckoutPaymentModal({
     [salePersons],
   );
 
+  const handleOpenSalesPersonPicker = () => {
+    Keyboard.dismiss();
+    setSalesPersonPickerVisible(true);
+  };
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
@@ -193,7 +199,7 @@ export default function CheckoutPaymentModal({
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Select sales person"
-                  onPress={() => setSalesPersonPickerVisible(true)}
+                  onPress={handleOpenSalesPersonPicker}
                   disabled={loading}
                   style={({ pressed }) => [
                     styles.pickerRow,

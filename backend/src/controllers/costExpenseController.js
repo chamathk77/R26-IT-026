@@ -557,7 +557,7 @@ const getCostHistory = async (req, res) => {
         .populate('createdBy', 'name email role')
         .populate('updatedBy', 'name email role')
         .populate('categoryId', 'name colorCode')
-        .sort({ purchaseDate: -1, createdAt: -1 })
+        .sort({ createdAt: -1, purchaseDate: -1, _id: -1 })
         .skip(skip)
         .limit(limit),
     ]);
