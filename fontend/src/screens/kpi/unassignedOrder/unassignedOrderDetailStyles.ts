@@ -1,0 +1,140 @@
+import { StyleSheet } from 'react-native';
+import { fonts } from '../../../constants/fonts';
+
+export const unassignedOrderDetailStyles = StyleSheet.create({
+  safe: { flex: 1 },
+  scroll: {
+    paddingHorizontal: 16,
+    paddingBottom: 120,
+    gap: 14,
+  },
+  heroCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 18,
+    overflow: 'hidden',
+    gap: 12,
+    marginTop: 8,
+  },
+  heroAccent: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    top: -50,
+    right: -30,
+    opacity: 0.18,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+  },
+  statusBadgeText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 12,
+  },
+  orderId: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 24,
+    letterSpacing: -0.4,
+  },
+  heroMeta: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  amountPanel: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  amountLabel: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 12,
+  },
+  amountValue: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 22,
+    letterSpacing: -0.3,
+  },
+  section: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
+    gap: 10,
+  },
+  sectionTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 15,
+    marginBottom: 2,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingVertical: 4,
+  },
+  detailLabel: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 13,
+    flex: 1,
+  },
+  detailValue: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 13,
+    flex: 1.2,
+    textAlign: 'right',
+  },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  itemName: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
+  },
+  itemMeta: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  itemAmount: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 14,
+  },
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  assignBtn: {
+    borderRadius: 16,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  assignBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 16,
+  },
+});

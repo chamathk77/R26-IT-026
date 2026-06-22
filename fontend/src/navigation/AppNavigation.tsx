@@ -27,6 +27,7 @@ import ThemePreferenceScreen from '../screens/settings/preferences/ThemePreferen
 import SubscriptionPaymentsScreen from '../screens/settings/payments/SubscriptionPaymentsScreen';
 import PayNowScreen from '../screens/settings/payments/PayNowScreen';
 import KpiScreen from '../screens/kpi/KpiScreen';
+import UnassignedOrderDetailScreen from '../screens/kpi/unassignedOrder/UnassignedOrderDetailScreen';
 import ManageCatogoryScreen from '../screens/pos/ManageCatogory/ManageCatogoryScreen';
 import CreateCatogoryScreen from '../screens/pos/ManageCatogory/CreateCatogoryScreen';
 import ManageInventoryScreen from '../screens/pos/ManageInventory/ManageInventoryScreen';
@@ -74,6 +75,7 @@ export default function AppNavigator() {
         <Stack.Screen name="SubscriptionPayments" component={SubscriptionPaymentsScreen} />
         <Stack.Screen name="PayNow" component={PayNowScreen} />
         <Stack.Screen name="KpiDashboard" component={KpiScreen} />
+        <Stack.Screen name="KpiUnassignedOrderDetail" component={UnassignedOrderDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

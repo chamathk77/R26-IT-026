@@ -1,3 +1,5 @@
+import { HistoryRecord } from './history';
+
 export type KpiPeriodKey = 'this_month' | 'last_month' | 'last_3_months';
 
 export type KpiApiPeriodKey = 'current_month' | 'last_month' | 'last_3_months';
@@ -48,3 +50,22 @@ export interface GetKpiSummaryResponse {
 export type FetchKpiSummaryParams =
   | { period: KpiPeriodKey }
   | { startDate: string; endDate: string };
+
+export type KpiHistoryRecord = HistoryRecord;
+
+export interface GetKpiHistoryByOrderIdResponse {
+  success: boolean;
+  data: KpiHistoryRecord;
+  message: string;
+}
+
+export interface AssignKpiHistorySalesPersonParams {
+  orderId: string;
+  salesPersonId: string;
+}
+
+export interface AssignKpiHistorySalesPersonResponse {
+  success: boolean;
+  data: KpiHistoryRecord;
+  message: string;
+}

@@ -1,6 +1,8 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Portal } from 'react-native-paper';
 import { useDispatch, useSelector } from 'react-redux';
 import CommonAlert from '../../../../components/CommonAlert/CommonAlert';
@@ -12,6 +14,7 @@ import { fetchKpiSummary_Service } from '../../../../services/KpiService';
 import { AppDispatch, RootState } from '../../../../store/store';
 import { resetKpiSummary } from '../../../../store/reducers/KpiReducer';
 import { KpiSalesPersonSummary } from '../../../../type/kpi';
+import { RootStackParamList } from '../../../../navigation/RootStackParamsList';
 import {
   getApiErrorMessage,
   handleSessionExpiredApiError,
@@ -74,97 +77,209 @@ function SummaryStatChip({
   );
 }
 
+function getSalesPersonCardTheme(rank: number, resolvedTheme: 'light' | 'dark') {
+  const palettes = [
+    {
+      accent: '#d97706',
+      cardBg: resolvedTheme === 'dark' ? '#422006' : '#fffbeb',
+      border: '#f59e0b',
+      badgeBg: '#fef3c7',
+      badgeText: '#b45309',
+      amountBg: '#fef3c7',
+      amountText: '#92400e',
+      statA: { bg: '#ffedd5', border: '#fdba74', text: '#c2410c' },
+      statB: { bg: '#fef9c3', border: '#fde047', text: '#a16207' },
+    },
+    {
+      accent: '#475569',
+      cardBg: resolvedTheme === 'dark' ? '#1e293b' : '#f8fafc',
+      border: '#94a3b8',
+      badgeBg: '#e2e8f0',
+      badgeText: '#334155',
+      amountBg: '#e2e8f0',
+      amountText: '#1e293b',
+      statA: { bg: '#f1f5f9', border: '#cbd5e1', text: '#475569' },
+      statB: { bg: '#e2e8f0', border: '#94a3b8', text: '#334155' },
+    },
+    {
+      accent: '#b45309',
+      cardBg: resolvedTheme === 'dark' ? '#431407' : '#fff7ed',
+      border: '#fb923c',
+      badgeBg: '#ffedd5',
+      badgeText: '#c2410c',
+      amountBg: '#ffedd5',
+      amountText: '#9a3412',
+      statA: { bg: '#ffedd5', border: '#fdba74', text: '#c2410c' },
+      statB: { bg: '#fef3c7', border: '#fcd34d', text: '#b45309' },
+    },
+    {
+      accent: '#2563eb',
+      cardBg: resolvedTheme === 'dark' ? '#172554' : '#eff6ff',
+      border: '#60a5fa',
+      badgeBg: '#dbeafe',
+      badgeText: '#1d4ed8',
+      amountBg: '#dbeafe',
+      amountText: '#1e40af',
+      statA: { bg: '#dbeafe', border: '#93c5fd', text: '#1d4ed8' },
+      statB: { bg: '#e0e7ff', border: '#a5b4fc', text: '#4338ca' },
+    },
+    {
+      accent: '#059669',
+      cardBg: resolvedTheme === 'dark' ? '#064e3b' : '#ecfdf5',
+      border: '#34d399',
+      badgeBg: '#d1fae5',
+      badgeText: '#047857',
+      amountBg: '#d1fae5',
+      amountText: '#065f46',
+      statA: { bg: '#d1fae5', border: '#6ee7b7', text: '#047857' },
+      statB: { bg: '#ccfbf1', border: '#5eead4', text: '#0f766e' },
+    },
+    {
+      accent: '#7c3aed',
+      cardBg: resolvedTheme === 'dark' ? '#2e1065' : '#f5f3ff',
+      border: '#a78bfa',
+      badgeBg: '#ede9fe',
+      badgeText: '#6d28d9',
+      amountBg: '#ede9fe',
+      amountText: '#5b21b6',
+      statA: { bg: '#ede9fe', border: '#c4b5fd', text: '#6d28d9' },
+      statB: { bg: '#f3e8ff', border: '#d8b4fe', text: '#7e22ce' },
+    },
+  ];
+
+  return palettes[(rank - 1) % palettes.length];
+}
+
 function SalesPersonCard({
   person,
   rank,
-  paperTheme,
   resolvedTheme,
 }: {
   person: KpiSalesPersonSummary;
   rank: number;
-  paperTheme: ReturnType<typeof useTheme>['paperTheme'];
   resolvedTheme: 'light' | 'dark';
 }) {
-  const rankTint =
-    rank === 1 ? '#b45309' : rank === 2 ? '#64748b' : rank === 3 ? '#92400e' : paperTheme.colors.primary;
+  const theme = getSalesPersonCardTheme(rank, resolvedTheme);
+  const initials = person.fullName
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <View
       style={[
         summaryTabStyles.personCard,
         {
-          backgroundColor: paperTheme.colors.surface,
-          borderColor: paperTheme.colors.outlineVariant,
+          backgroundColor: theme.cardBg,
+          borderColor: theme.border,
         },
         kpiCardShadow(resolvedTheme),
       ]}
     >
-      <View style={summaryTabStyles.personTopRow}>
-        <View style={[summaryTabStyles.rankBadge, { backgroundColor: `${rankTint}18` }]}>
-          <Text style={[summaryTabStyles.rankText, { color: rankTint }]}>#{rank}</Text>
-        </View>
-        <View style={summaryTabStyles.personBody}>
-          <Text style={[summaryTabStyles.personName, { color: paperTheme.colors.onSurface }]}>
-            {person.fullName}
-          </Text>
-          <Text style={[summaryTabStyles.personMeta, { color: paperTheme.colors.onSurfaceVariant }]}>
-            {person.salePersonId ? `ID ${person.salePersonId}` : 'No staff ID'}
-            {person.position ? ` · ${person.position}` : ''}
-          </Text>
-        </View>
-        <Text style={[summaryTabStyles.personAmount, { color: paperTheme.colors.primary }]}>
-          {formatKpiAmount(person.totalSalesAmount)}
-        </Text>
-      </View>
+      <View style={[summaryTabStyles.personAccentBar, { backgroundColor: theme.accent }]} />
 
-      <View style={summaryTabStyles.personStatsRow}>
-        <View
-          style={[
-            summaryTabStyles.personStatPill,
-            { backgroundColor: paperTheme.colors.primaryContainer },
-          ]}
-        >
-          <Text
+      <View style={summaryTabStyles.personCardInner}>
+        <View style={summaryTabStyles.personTopRow}>
+          <View
             style={[
-              summaryTabStyles.personStatLabel,
-              { color: paperTheme.colors.onPrimaryContainer },
+              summaryTabStyles.personAvatar,
+              {
+                backgroundColor: theme.badgeBg,
+                borderWidth: 1.5,
+                borderColor: theme.border,
+              },
             ]}
           >
-            Works done
-          </Text>
-          <Text
+            <Text style={[summaryTabStyles.rankText, { color: theme.badgeText, fontSize: 13 }]}>
+              {initials || '#'}
+            </Text>
+          </View>
+
+          <View style={summaryTabStyles.personBody}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Text style={[summaryTabStyles.personName, { color: theme.amountText }]}>
+                {person.fullName}
+              </Text>
+              <View
+                style={[
+                  summaryTabStyles.rankBadge,
+                  {
+                    width: 'auto',
+                    height: 'auto',
+                    minWidth: 32,
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    backgroundColor: theme.badgeBg,
+                    borderColor: theme.border,
+                  },
+                ]}
+              >
+                <Text style={[summaryTabStyles.rankText, { color: theme.badgeText, fontSize: 11 }]}>
+                  #{rank}
+                </Text>
+              </View>
+            </View>
+            <Text style={[summaryTabStyles.personMeta, { color: theme.badgeText }]}>
+              {person.salePersonId ? `ID ${person.salePersonId}` : 'No staff ID'}
+              {person.position ? ` · ${person.position}` : ''}
+            </Text>
+          </View>
+
+          <View
             style={[
-              summaryTabStyles.personStatValue,
-              { color: paperTheme.colors.onPrimaryContainer },
+              summaryTabStyles.personAmountPanel,
+              {
+                backgroundColor: theme.amountBg,
+                borderColor: theme.border,
+              },
             ]}
           >
-            {person.workCount}
-          </Text>
+            <Text style={[summaryTabStyles.personAmountLabel, { color: theme.badgeText }]}>
+              Total sales
+            </Text>
+            <Text style={[summaryTabStyles.personAmount, { color: theme.amountText }]}>
+              {formatKpiAmount(person.totalSalesAmount)}
+            </Text>
+          </View>
         </View>
-        <View
-          style={[
-            summaryTabStyles.personStatPill,
-            { backgroundColor: paperTheme.colors.secondaryContainer },
-          ]}
-        >
-          <Text
+
+        <View style={summaryTabStyles.personStatsRow}>
+          <View
             style={[
-              summaryTabStyles.personStatLabel,
-              { color: paperTheme.colors.onSecondaryContainer },
+              summaryTabStyles.personStatPill,
+              {
+                backgroundColor: theme.statA.bg,
+                borderColor: theme.statA.border,
+              },
             ]}
           >
-            Avg. sale
-          </Text>
-          <Text
+            <Text style={[summaryTabStyles.personStatLabel, { color: theme.statA.text }]}>
+              Works done
+            </Text>
+            <Text style={[summaryTabStyles.personStatValue, { color: theme.statA.text }]}>
+              {person.workCount}
+            </Text>
+          </View>
+          <View
             style={[
-              summaryTabStyles.personStatValue,
-              { color: paperTheme.colors.onSecondaryContainer },
+              summaryTabStyles.personStatPill,
+              {
+                backgroundColor: theme.statB.bg,
+                borderColor: theme.statB.border,
+              },
             ]}
           >
-            {formatKpiAmount(
-              person.workCount > 0 ? person.totalSalesAmount / person.workCount : 0,
-            )}
-          </Text>
+            <Text style={[summaryTabStyles.personStatLabel, { color: theme.statB.text }]}>
+              Avg. sale
+            </Text>
+            <Text style={[summaryTabStyles.personStatValue, { color: theme.statB.text }]}>
+              {formatKpiAmount(
+                person.workCount > 0 ? person.totalSalesAmount / person.workCount : 0,
+              )}
+            </Text>
+          </View>
         </View>
       </View>
     </View>
@@ -172,11 +287,17 @@ function SalesPersonCard({
 }
 
 export default function SummaryTabScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { paperTheme, resolvedTheme } = useTheme();
   const dispatch = useDispatch<AppDispatch>();
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
   const { loading, data, error } = useSelector((state: RootState) => state.KpiReducer.summary);
   const [slideToastMessage, setSlideToastMessage] = useState<string | null>(null);
+  const hasLoadedSummaryRef = useRef(false);
+
+  useEffect(() => {
+    hasLoadedSummaryRef.current = Boolean(data);
+  }, [data]);
 
   const {
     selectedPeriod,
@@ -249,6 +370,14 @@ export default function SummaryTabScreen() {
     startDate,
   ]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (hasActiveFilter && hasLoadedSummaryRef.current) {
+        void loadSummary();
+      }
+    }, [hasActiveFilter, loadSummary]),
+  );
+
   const filterLabel = useMemo(
     () => buildFilterLabel(isCustomRange, startDate, endDate, selectedPeriod),
     [endDate, isCustomRange, selectedPeriod, startDate],
@@ -257,6 +386,7 @@ export default function SummaryTabScreen() {
   const salesPersons = data?.salesPersons ?? [];
   const unassignedSales = data?.unassignedSales;
   const showResults = Boolean(data) && hasActiveFilter;
+  const accentUnassigned = resolvedTheme === 'dark' ? '#fbbf24' : '#d97706';
 
   return (
     <>
@@ -462,111 +592,183 @@ export default function SummaryTabScreen() {
               />
             </View>
 
-            <View style={summaryTabStyles.sectionHeader}>
-              <Text style={[summaryTabStyles.sectionTitle, { color: paperTheme.colors.onSurface }]}>
-                Sales team performance
-              </Text>
-              <Text
-                style={[summaryTabStyles.sectionCount, { color: paperTheme.colors.onSurfaceVariant }]}
-              >
-                {salesPersons.length} member{salesPersons.length === 1 ? '' : 's'}
-              </Text>
-            </View>
-
-            {salesPersons.length === 0 ? (
-              <View
-                style={[
-                  summaryTabStyles.emptyState,
-                  {
-                    backgroundColor: paperTheme.colors.surface,
-                    borderColor: paperTheme.colors.outlineVariant,
-                  },
-                  kpiCardShadow(resolvedTheme),
-                ]}
-              >
-                <Ionicons name="people-outline" size={28} color={paperTheme.colors.onSurfaceVariant} />
-                <Text style={[summaryTabStyles.emptyTitle, { color: paperTheme.colors.onSurface }]}>
-                  No assigned sales
-                </Text>
-                <Text
-                  style={[summaryTabStyles.emptyText, { color: paperTheme.colors.onSurfaceVariant }]}
-                >
-                  No sales in this period were linked to a sales person.
-                </Text>
-              </View>
-            ) : (
-              salesPersons.map((person, index) => (
-                <SalesPersonCard
-                  key={person.salesPersonId}
-                  person={person}
-                  rank={index + 1}
-                  paperTheme={paperTheme}
-                  resolvedTheme={resolvedTheme}
-                />
-              ))
-            )}
-
-            {(unassignedSales?.count ?? 0) > 0 ? (
-              <>
-                <View style={summaryTabStyles.sectionHeader}>
-                  <Text style={[summaryTabStyles.sectionTitle, { color: paperTheme.colors.onSurface }]}>
-                    Unassigned sales
-                  </Text>
-                  <Text
-                    style={[summaryTabStyles.sectionCount, { color: paperTheme.colors.onSurfaceVariant }]}
-                  >
-                    {unassignedSales?.count} order{(unassignedSales?.count ?? 0) === 1 ? '' : 's'}
-                  </Text>
-                </View>
-
+            <View
+              style={[
+                summaryTabStyles.teamSection,
+                {
+                  backgroundColor:
+                    resolvedTheme === 'dark' ? '#0f172a' : `${paperTheme.colors.tertiary}08`,
+                  borderColor: `${paperTheme.colors.tertiary}44`,
+                },
+                kpiCardShadow(resolvedTheme),
+              ]}
+            >
+              <View style={summaryTabStyles.teamSectionHeader}>
                 <View
                   style={[
-                    summaryTabStyles.unassignedCard,
+                    summaryTabStyles.teamSectionIcon,
+                    { backgroundColor: `${paperTheme.colors.tertiary}22` },
+                  ]}
+                >
+                  <Ionicons name="people" size={22} color={paperTheme.colors.tertiary} />
+                </View>
+                <View style={summaryTabStyles.teamSectionTitleBlock}>
+                  <Text
+                    style={[summaryTabStyles.teamSectionTitle, { color: paperTheme.colors.onSurface }]}
+                  >
+                    Sales team performance
+                  </Text>
+                  <Text
+                    style={[
+                      summaryTabStyles.teamSectionSub,
+                      { color: paperTheme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    {salesPersons.length} member{salesPersons.length === 1 ? '' : 's'} ranked by
+                    total sales
+                  </Text>
+                </View>
+              </View>
+
+              {salesPersons.length === 0 ? (
+                <View
+                  style={[
+                    summaryTabStyles.emptyState,
                     {
                       backgroundColor: paperTheme.colors.surface,
                       borderColor: paperTheme.colors.outlineVariant,
                     },
-                    kpiCardShadow(resolvedTheme),
                   ]}
                 >
-                  <Text
-                    style={[summaryTabStyles.personMeta, { color: paperTheme.colors.onSurfaceVariant }]}
-                  >
-                    Total unassigned: {formatKpiAmount(unassignedSales?.totalSalesAmount ?? 0)}
+                  <Ionicons
+                    name="people-outline"
+                    size={28}
+                    color={paperTheme.colors.onSurfaceVariant}
+                  />
+                  <Text style={[summaryTabStyles.emptyTitle, { color: paperTheme.colors.onSurface }]}>
+                    No assigned sales
                   </Text>
+                  <Text
+                    style={[summaryTabStyles.emptyText, { color: paperTheme.colors.onSurfaceVariant }]}
+                  >
+                    No sales in this period were linked to a sales person.
+                  </Text>
+                </View>
+              ) : (
+                salesPersons.map((person, index) => (
+                  <SalesPersonCard
+                    key={person.salesPersonId}
+                    person={person}
+                    rank={index + 1}
+                    resolvedTheme={resolvedTheme}
+                  />
+                ))
+              )}
+            </View>
 
-                  {(unassignedSales?.orders ?? []).map((order, index, list) => (
-                    <View
-                      key={`${order.orderId}-${order.checkOutTime}`}
+            {(unassignedSales?.count ?? 0) > 0 ? (
+              <View
+                style={[
+                  summaryTabStyles.unassignedSection,
+                  {
+                    backgroundColor:
+                      resolvedTheme === 'dark' ? '#1c1917' : `${accentUnassigned}08`,
+                    borderColor: `${accentUnassigned}44`,
+                  },
+                  kpiCardShadow(resolvedTheme),
+                ]}
+              >
+                <View style={summaryTabStyles.unassignedSectionHeader}>
+                  <View
+                    style={[
+                      summaryTabStyles.unassignedSectionIcon,
+                      { backgroundColor: `${accentUnassigned}22` },
+                    ]}
+                  >
+                    <Ionicons name="help-buoy-outline" size={22} color={accentUnassigned} />
+                  </View>
+                  <View style={summaryTabStyles.teamSectionTitleBlock}>
+                    <Text
+                      style={[summaryTabStyles.teamSectionTitle, { color: paperTheme.colors.onSurface }]}
+                    >
+                      Unassigned sales
+                    </Text>
+                    <Text
                       style={[
-                        summaryTabStyles.orderRow,
-                        {
-                          borderBottomColor: paperTheme.colors.outlineVariant,
-                          borderBottomWidth:
-                            index === list.length - 1 ? 0 : StyleSheet.hairlineWidth,
-                        },
+                        summaryTabStyles.teamSectionSub,
+                        { color: paperTheme.colors.onSurfaceVariant },
                       ]}
                     >
-                      <View style={{ flex: 1, gap: 2 }}>
-                        <Text style={[summaryTabStyles.orderId, { color: paperTheme.colors.onSurface }]}>
+                      {unassignedSales?.count} order{(unassignedSales?.count ?? 0) === 1 ? '' : 's'} ·{' '}
+                      {formatKpiAmount(unassignedSales?.totalSalesAmount ?? 0)} total
+                    </Text>
+                  </View>
+                </View>
+
+                {(unassignedSales?.orders ?? []).map((order) => (
+                  <TouchableOpacity
+                    key={`${order.orderId}-${order.checkOutTime}`}
+                    activeOpacity={0.85}
+                    onPress={() =>
+                      navigation.navigate('KpiUnassignedOrderDetail', {
+                        orderId: order.orderId,
+                      })
+                    }
+                    style={[
+                      summaryTabStyles.unassignedOrderCard,
+                      {
+                        backgroundColor: resolvedTheme === 'dark' ? '#422006' : '#fffbeb',
+                        borderColor: accentUnassigned,
+                      },
+                      kpiCardShadow(resolvedTheme),
+                    ]}
+                  >
+                    <View style={summaryTabStyles.unassignedOrderTop}>
+                      <View
+                        style={[
+                          summaryTabStyles.unassignedOrderIcon,
+                          { backgroundColor: `${accentUnassigned}22` },
+                        ]}
+                      >
+                        <Ionicons name="receipt-outline" size={20} color={accentUnassigned} />
+                      </View>
+                      <View style={{ flex: 1, gap: 3 }}>
+                        <Text
+                          style={[
+                            summaryTabStyles.unassignedOrderId,
+                            { color: resolvedTheme === 'dark' ? '#fef3c7' : '#92400e' },
+                          ]}
+                        >
                           {order.orderId}
                         </Text>
                         <Text
                           style={[
                             summaryTabStyles.personMeta,
-                            { color: paperTheme.colors.onSurfaceVariant },
+                            { color: resolvedTheme === 'dark' ? '#fcd34d' : '#b45309' },
                           ]}
                         >
-                          {formatDisplayDate(order.checkOutTime.slice(0, 10))}
+                          {formatDisplayDate(order.checkOutTime.slice(0, 10))} · Tap to assign
                         </Text>
                       </View>
-                      <Text style={[summaryTabStyles.orderAmount, { color: paperTheme.colors.primary }]}>
-                        {formatKpiAmount(order.totalAmount)}
-                      </Text>
+                      <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                        <Text
+                          style={[
+                            summaryTabStyles.unassignedOrderAmount,
+                            { color: accentUnassigned },
+                          ]}
+                        >
+                          {formatKpiAmount(order.totalAmount)}
+                        </Text>
+                        <Ionicons
+                          name="chevron-forward"
+                          size={16}
+                          color={resolvedTheme === 'dark' ? '#fcd34d' : '#b45309'}
+                        />
+                      </View>
                     </View>
-                  ))}
-                </View>
-              </>
+                  </TouchableOpacity>
+                ))}
+              </View>
             ) : null}
           </>
         ) : hasActiveFilter && !loading && !data && !error ? (

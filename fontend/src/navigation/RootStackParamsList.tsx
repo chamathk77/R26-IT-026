@@ -54,4 +54,7 @@ export type RootStackParamList = {
   SubscriptionPayments: undefined;
   PayNow: { payment: PaymentRecord };
   KpiDashboard: undefined;
+  KpiUnassignedOrderDetail: {
+    orderId: string;
+  };
 };

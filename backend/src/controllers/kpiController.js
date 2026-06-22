@@ -1,7 +1,9 @@
+const mongoose = require('mongoose');
 const History = require('../models/history');
 const SalePerson = require('../models/salePerson');
 
 const KPI_PERIOD_KEYS = new Set(['current_month', 'this_month', 'last_month', 'last_3_months']);
+const ORDER_ID_MIN_LENGTH = 6;
 
 function normalizeShopId(value) {
   return value ? String(value).trim().toUpperCase() : '';
@@ -154,10 +156,6 @@ function resolveKpiDateRange(query) {
   };
 }
 
-function getSalePersonFullName(firstName, lastName) {
-  return `${String(firstName ?? '').trim()} ${String(lastName ?? '').trim()}`.trim();
-}
-
 function mapSalesPersonSummary(person, stats) {
   const firstName = person?.firstName ?? '';
   const lastName = person?.lastName ?? '';
@@ -174,6 +172,166 @@ function mapSalesPersonSummary(person, stats) {
     totalSalesAmount: stats.totalSalesAmount,
   };
 }
+
+function getSalePersonFullName(firstName, lastName) {
+  return `${String(firstName ?? '').trim()} ${String(lastName ?? '').trim()}`.trim();
+}
+
+function normalizeOrderId(value) {
+  return String(value ?? '')
+    .trim()
+    .toUpperCase();
+}
+
+function mapHistoryRecord(record) {
+  return {
+    _id: record._id,
+    shopId: record.shopId,
+    cartId: record.cartId,
+    cartNumber: record.cartNumber,
+    orderId: record.orderId,
+    checkOutTime: record.checkOutTime,
+    amount: roundMoney(record.amount),
+    isDiscount: Boolean(record.isDiscount),
+    discountedAmount: roundMoney(record.discountedAmount ?? 0),
+    items: (record.items ?? []).map((item) => ({
+      productId: item.productId,
+      productName: item.productName,
+      qty: item.qty,
+      unitCost: item.unitCost ?? null,
+    })),
+    totalAmount: roundMoney(record.totalAmount),
+    customerName: record.customerName ?? '',
+    customerMobile: record.customerMobile ?? '',
+    userId: record.userId,
+    submittedUserId: record.submittedUserId,
+    submittedUserName: record.submittedUserName ?? '',
+    paymentOption: record.paymentOption,
+    status: record.status ?? 'submited',
+    isReversed: Boolean(record.isReversed),
+    reversedAt: record.reversedAt ?? null,
+    reversedUserId: record.reversedUserId ?? null,
+    reversedUserName: record.reversedUserName ?? null,
+    salesPersonId: record.salesPersonId ?? null,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  };
+}
+
+async function resolveOptionalSalesPersonId(salesPersonIdRaw, shopId) {
+  if (
+    salesPersonIdRaw === undefined ||
+    salesPersonIdRaw === null ||
+    String(salesPersonIdRaw).trim() === ''
+  ) {
+    return { salesPersonId: null };
+  }
+
+  const salesPersonId = String(salesPersonIdRaw).trim();
+  if (!mongoose.Types.ObjectId.isValid(salesPersonId)) {
+    return { error: 'Invalid sales person id' };
+  }
+
+  const salePerson = await SalePerson.findOne({ _id: salesPersonId, shopId }).lean();
+  if (!salePerson) {
+    return { error: 'Sales person not found for this shop' };
+  }
+
+  return { salesPersonId: salePerson._id };
+}
+
+async function resolveRequiredSalesPersonId(salesPersonIdRaw, shopId) {
+  if (
+    salesPersonIdRaw === undefined ||
+    salesPersonIdRaw === null ||
+    String(salesPersonIdRaw).trim() === ''
+  ) {
+    return { error: 'Sales person id is required' };
+  }
+
+  return resolveOptionalSalesPersonId(salesPersonIdRaw, shopId);
+}
+
+async function findShopHistoryByOrderId(shopId, orderIdRaw) {
+  const orderId = normalizeOrderId(orderIdRaw);
+  if (!orderId || orderId.length < ORDER_ID_MIN_LENGTH) {
+    return { error: 'Valid order id is required' };
+  }
+
+  const history = await History.findOne({ shopId, orderId }).lean();
+  if (!history) {
+    return { error: 'History record not found for this order id', status: 404 };
+  }
+
+  return { history, orderId };
+}
+
+const getKpiHistoryByOrderId = async (req, res) => {
+  try {
+    const shopId = requireShopId(req, res);
+    if (!shopId) return;
+
+    const lookup = await findShopHistoryByOrderId(shopId, req.params?.orderId);
+    if (lookup.error) {
+      return res.status(lookup.status ?? 400).json({ success: false, message: lookup.error });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: mapHistoryRecord(lookup.history),
+      message: 'History record loaded',
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const assignKpiHistorySalesPerson = async (req, res) => {
+  try {
+    const shopId = requireShopId(req, res);
+    if (!shopId) return;
+
+    const lookup = await findShopHistoryByOrderId(shopId, req.params?.orderId);
+    if (lookup.error) {
+      return res.status(lookup.status ?? 400).json({ success: false, message: lookup.error });
+    }
+
+    const { history } = lookup;
+
+    if (history.status !== 'submited') {
+      return res.status(400).json({
+        success: false,
+        message: 'Sales person can only be assigned to submitted history records',
+      });
+    }
+
+    const salesPersonResult = await resolveRequiredSalesPersonId(
+      req.body?.salesPersonId,
+      shopId,
+    );
+    if (salesPersonResult.error) {
+      return res.status(400).json({ success: false, message: salesPersonResult.error });
+    }
+
+    const updated = await History.findOneAndUpdate(
+      { _id: history._id, shopId },
+      { $set: { salesPersonId: salesPersonResult.salesPersonId } },
+      { new: true },
+    ).lean();
+
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'History record not found' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: mapHistoryRecord(updated),
+      message: 'Sales person assigned to history record',
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 const getKpiSummary = async (req, res) => {
   try {
@@ -266,4 +424,6 @@ const getKpiSummary = async (req, res) => {
 
 module.exports = {
   getKpiSummary,
+  getKpiHistoryByOrderId,
+  assignKpiHistorySalesPerson,
 };
