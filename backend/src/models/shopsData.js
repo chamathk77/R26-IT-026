@@ -2,10 +2,13 @@ const mongoose = require('mongoose');
 
 const SHOP_STATUS = ['trial', 'active', 'disabled', 'due', 'trialExpired','diactiveByAdmin','diactiveByUser','initialPaymentPending','paymentPending'];
 
+const SUBSCRIPTION_TYPES = ['1month', '3months', '6months', '1year'];
+
 const ONBOARD_STEPS = [
   'startOnboarding',
   'shopRegistered',
   'featureSelected',
+  'subscriptionSelected',
   'completed',
 ];
 
@@ -86,7 +89,7 @@ const shopsDataSchema = new mongoose.Schema(
     // },
 
     //module related
-    sms: {
+    sendReceiptSms: {
       type: Boolean,
       default: false,
     },
@@ -95,10 +98,6 @@ const shopsDataSchema = new mongoose.Schema(
       default: false,
     },
     analyticsModule: {
-      type: Boolean,
-      default: false,
-    },
-    smsMobileNumber: {
       type: Boolean,
       default: false,
     },
@@ -114,8 +113,6 @@ const shopsDataSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-
-    //subscription related
     maxUsers: {
       type: Number,
       default: 3,
@@ -130,6 +127,9 @@ const shopsDataSchema = new mongoose.Schema(
       default: null,
       min: 0,
     },
+
+    //subscription related
+
     status: {
       type: String,
       enum: SHOP_STATUS,
@@ -151,6 +151,11 @@ const shopsDataSchema = new mongoose.Schema(
       type: Number,
       default: null,
       min: 0,
+    },
+    subscriptionType: {
+      type: String,
+      enum: SUBSCRIPTION_TYPES,
+      default: null,
     },
     oneTimePaymentAmount: {
       type: Number,
@@ -186,22 +191,8 @@ const shopsDataSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
-    beforeSevenDaysNotification: {
-      type: Boolean,
-      default: false,
-    },
-    onDateNotification: {
-      type: Boolean,
-      default: false,
-    },
-    beforeSevenDaysSms: {
-      type: Boolean,
-      default: false,
-    },
-    onDateSms: {
-      type: Boolean,
-      default: false,
-    },
+ 
+
   },
   { timestamps: true },
 );
@@ -238,6 +229,7 @@ const ShopsData = mongoose.model('ShopsData', shopsDataSchema);
 
 ShopsData.SHOP_STATUS = SHOP_STATUS;
 ShopsData.ONBOARD_STEPS = ONBOARD_STEPS;
+ShopsData.SUBSCRIPTION_TYPES = SUBSCRIPTION_TYPES;
 
 module.exports = ShopsData;
 
@@ -259,7 +251,7 @@ module.exports = ShopsData;
   // onboardStep: startOnboarding | shopRegistered | featureSelected | completed
 
   // manageInventory removed — inventory is per product (Product.isInventoryAvailable)
-  // sms: boolean
+  // sendReceiptSms: boolean
   // kpi: boolean
   // analyticsModule: boolean
   // smsMobileNumber: boolean
@@ -276,15 +268,12 @@ module.exports = ShopsData;
   // subscriptionStartDate: date
   // currentPaymentDoneDate: date
   // nextPaymentDate: date
-  // subAmount: number | 
+  // subsAmount: number
+  // subscriptionType: 1month | 3months | 6months | 1year
   // oneTimePaymentAmount: number | null
   // isOneTimePaymentDone: boolean
   // isOneTimePaymentGenerated: boolean
   // dueDays: number
-  // beforeSevenDaysNotification: boolean
-  // onDateNotification: boolean
-  // beforeSevenDaysSms: boolean
-  // onDateSms: boolean
   // isTrailStared: boolean
   // isTrailCompleted: boolean
   // trailStartDate: date

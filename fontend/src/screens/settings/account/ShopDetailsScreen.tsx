@@ -141,7 +141,7 @@ export default function ShopDetailsScreen({ navigation }: Props) {
       : []),
   ];
   const modules = [
-    { key: 'sms', label: 'SMS', icon: 'chatbubble-outline' as const, enabled: shop.sms },
+    { key: 'sendReceiptSms', label: 'Digital receipt SMS', icon: 'chatbubble-outline' as const, enabled: shop.sendReceiptSms },
     { key: 'kpi', label: 'KPI', icon: 'stats-chart-outline' as const, enabled: shop.kpi },
     { key: 'analytics', label: 'Analytics', icon: 'analytics-outline' as const, enabled: shop.analyticsModule },
     { key: 'cost', label: 'Cost', icon: 'calculator-outline' as const, enabled: shop.costModule },

@@ -16,10 +16,10 @@ export type FeatureOption = {
 
 export const FEATURE_OPTIONS: FeatureOption[] = [
   {
-    key: 'sms',
-    title: 'SMS Sending to Users',
+    key: 'sendReceiptSms',
+    title: 'Send Digital Receipt SMS',
     description:
-      'Send order updates, alerts, and notifications via SMS. Every SMS costs 0.8 LKR. Usage charges will be added to your monthly subscription.',
+      'Automatically send digital receipt links to customers by SMS after checkout. Every SMS is billed monthly with your subscription at 1.4 LKR per message.',
     icon: 'chatbubble-ellipses-outline',
   },
   {
@@ -55,10 +55,17 @@ export const FEATURE_OPTIONS: FeatureOption[] = [
   },
 ];
 
+const DEFAULT_ENABLED_FEATURES: ReadonlySet<ShopFeatureKey> = new Set([
+  'kpi',
+  'analyticsModule',
+  'costModule',
+  'marketingModule',
+]);
+
 export function createDefaultFeatures(): ShopFeaturesState {
   return FEATURE_OPTIONS.reduce(
     (acc, item) => {
-      acc[item.key] = false;
+      acc[item.key] = DEFAULT_ENABLED_FEATURES.has(item.key);
       return acc;
     },
     {} as ShopFeaturesState,

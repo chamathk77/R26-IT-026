@@ -17,7 +17,7 @@ export interface CreateShopOnboardingResponse {
 
 export interface UpdateShopFeaturesRequest {
   shopId: string;
-  sms: boolean;
+  sendReceiptSms: boolean;
   kpi: boolean;
   analyticsModule: boolean;
   customerManualOrder: boolean;
@@ -28,7 +28,7 @@ export interface UpdateShopFeaturesRequest {
 }
 
 export interface ShopFeaturesPayload {
-  sms: boolean;
+  sendReceiptSms: boolean;
   kpi: boolean;
   analyticsModule: boolean;
   customerManualOrder: boolean;

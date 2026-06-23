@@ -28,7 +28,7 @@ export interface LoginShop {
   isVerifyEmail?: boolean;
   isVerifyPhoneNumber?: boolean;
   onboardStep?: string;
-  sms?: boolean;
+  sendReceiptSms?: boolean;
   kpi?: boolean;
   analyticsModule?: boolean;
   smsMobileNumber?: boolean;

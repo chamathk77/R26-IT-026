@@ -144,7 +144,7 @@ const updateShopFeatures = async (req, res) => {
   try {
     const {
       shopId,
-      sms,
+      sendReceiptSms,
       kpi,
       analyticsModule,
       customerManualOrder,
@@ -169,9 +169,9 @@ const updateShopFeatures = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Shop not found' });
     }
 
-    const smsParsed = requireBooleanField(sms, 'sms');
-    if (smsParsed.error) {
-      return res.status(400).json({ success: false, message: smsParsed.error });
+    const sendReceiptSmsParsed = requireBooleanField(sendReceiptSms, 'sendReceiptSms');
+    if (sendReceiptSmsParsed.error) {
+      return res.status(400).json({ success: false, message: sendReceiptSmsParsed.error });
     }
 
     const kpiParsed = requireBooleanField(kpi, 'kpi');
@@ -237,7 +237,7 @@ const updateShopFeatures = async (req, res) => {
     }
 
     const updates = {
-      sms: smsParsed.value,
+      sendReceiptSms: sendReceiptSmsParsed.value,
       kpi: kpiParsed.value,
       analyticsModule: analyticsModuleParsed.value,
       customerManualOrder: customerManualOrderParsed.value,
@@ -261,7 +261,7 @@ const updateShopFeatures = async (req, res) => {
       onboardStep: updated.onboardStep,
       message: 'Shop features saved',
       features: {
-        sms: updated.sms,
+        sendReceiptSms: updated.sendReceiptSms,
         kpi: updated.kpi,
         analyticsModule: updated.analyticsModule,
         customerManualOrder: updated.customerManualOrder,
@@ -278,7 +278,74 @@ const updateShopFeatures = async (req, res) => {
   }
 };
 
+function normalizeSubscriptionType(value) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (!ShopsData.SUBSCRIPTION_TYPES.includes(normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+const setSubscription = async (req, res) => {
+  try {
+    const { shopId, subscriptionType } = req.body;
+
+    if (!shopId?.trim()) {
+      return res.status(400).json({ success: false, message: 'Shop id is required' });
+    }
+
+    const normalizedShopId = normalizeShopId(shopId);
+
+    if (!isValidShopIdFormat(normalizedShopId)) {
+      return res.status(400).json({ success: false, message: 'Invalid shop id format' });
+    }
+
+    if (subscriptionType === undefined || subscriptionType === null || subscriptionType === '') {
+      return res.status(400).json({ success: false, message: 'subscriptionType is required' });
+    }
+
+    const normalizedSubscriptionType = normalizeSubscriptionType(subscriptionType);
+    if (!normalizedSubscriptionType) {
+      return res.status(400).json({
+        success: false,
+        message: `subscriptionType must be one of: ${ShopsData.SUBSCRIPTION_TYPES.join(', ')}`,
+      });
+    }
+
+    const shop = await ShopsData.findOne({ shopId: normalizedShopId });
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found' });
+    }
+
+    const updates = {
+      subscriptionType: normalizedSubscriptionType,
+    };
+
+    if (shop.onboardStep !== 'completed') {
+      updates.onboardStep = 'subscriptionSelected';
+    }
+
+    const updated = await ShopsData.findOneAndUpdate(
+      { shopId: normalizedShopId },
+      { $set: updates },
+      { returnDocument: 'after', runValidators: true },
+    ).lean();
+
+    res.status(200).json({
+      success: true,
+      shopId: updated.shopId,
+      subscriptionType: updated.subscriptionType,
+      onboardStep: updated.onboardStep,
+      message: 'Subscription saved',
+    });
+  } catch (error) {
+    console.log('error in setSubscription', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   createShopOnboarding,
   updateShopFeatures,
+  setSubscription,
 };

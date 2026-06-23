@@ -87,7 +87,7 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
     [parsedAdditionalUsers],
   );
 
-  const showSubscriptionSummary = features.sms || (needMoreUsers && parsedAdditionalUsers > 0);
+  const showSubscriptionSummary = features.sendReceiptSms || (needMoreUsers && parsedAdditionalUsers > 0);
 
   const scrollToField = useCallback((fieldRef: React.RefObject<View | null>) => {
     const field = fieldRef.current;
@@ -178,7 +178,7 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
       const response = await dispatch(
         updateShopFeatures_Service({
           shopId: ownerData.shopId,
-          sms: features.sms,
+          sendReceiptSms: features.sendReceiptSms,
           kpi: features.kpi,
           analyticsModule: features.analyticsModule,
           customerManualOrder: features.customerManualOrder,
@@ -258,7 +258,7 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
 
             {FEATURE_OPTIONS.map((item) => {
               const enabled = features[item.key];
-              const isSms = item.key === 'sms';
+              const isSendReceiptSms = item.key === 'sendReceiptSms';
               return (
                 <View
                   key={item.key}
@@ -300,7 +300,7 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
                     >
                       {item.description}
                     </Text>
-                    {isSms && enabled && (
+                    {isSendReceiptSms && enabled && (
                       <Text style={[styles.billingNote, { color: paperTheme.colors.primary }]}>
                         SMS usage ({formatLkrDecimal(SMS_PRICE_PER_MESSAGE_LKR)} per message) will be
                         added to your monthly subscription.
@@ -437,7 +437,7 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
                 <Text style={[styles.summaryTitle, { color: paperTheme.colors.onPrimaryContainer }]}>
                   Monthly subscription add-ons
                 </Text>
-                {features.sms && (
+                {features.sendReceiptSms && (
                   <Text
                     style={[styles.summaryLine, { color: paperTheme.colors.onPrimaryContainer }]}
                   >

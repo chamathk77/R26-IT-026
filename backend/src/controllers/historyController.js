@@ -143,9 +143,9 @@ async function sendHistoryReceiptSms({
   orderId,
 }) {
   const shop = await ShopsData.findOne({ shopId })
-    .select("shopName sms")
+    .select("shopName sendReceiptSms")
     .lean();
-  if (!shop?.sms) {
+  if (!shop?.sendReceiptSms) {
     return { sent: false, reason: "SMS disabled for shop" };
   }
 
