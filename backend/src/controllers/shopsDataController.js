@@ -1,4 +1,5 @@
 const ShopsData = require('../models/shopsData');
+const User = require('../models/user');
 
 function normalizeShopId(shopId) {
   return String(shopId).trim().toUpperCase();
@@ -25,6 +26,29 @@ function requireBooleanField(value, fieldName) {
     return { error: `${fieldName} must be a boolean` };
   }
   return { value: parsed };
+}
+
+function buildOwnerMobileConflictResponse(existingShop) {
+  if (!existingShop) {
+    return {
+      success: false,
+      message: 'Owner mobile number is already registered but not completed onboarding',
+      shopId: null,
+    };
+  }
+
+  if (existingShop.onboardStep === 'completed') {
+    return {
+      success: false,
+      message: 'There is already an account for that owner mobile number',
+    };
+  }
+
+  return {
+    success: false,
+    message: 'Owner mobile number is already registered but not completed onboarding',
+    shopId: existingShop.shopId,
+  };
 }
 
 const createShopOnboarding = async (req, res) => {
@@ -68,20 +92,11 @@ const createShopOnboarding = async (req, res) => {
     const ownerMobileTrimmed = String(ownerMobileNumber).trim();
     const emailTrimmed = String(email).trim().toLowerCase();
 
-    const existingShopMobile = await ShopsData.findOne({ shopMobileNumber: shopMobileTrimmed }).lean();
-    if (existingShopMobile) {
-      return res.status(400).json({
-        success: false,
-        message: 'Shop mobile number is already registered to another shop',
-      });
-    }
-
-    const existingOwnerMobile = await ShopsData.findOne({ ownerMobileNumber: ownerMobileTrimmed }).lean();
+    const existingOwnerMobile = await ShopsData.findOne({ ownerMobileNumber: ownerMobileTrimmed })
+      .select('shopId onboardStep')
+      .lean();
     if (existingOwnerMobile) {
-      return res.status(400).json({
-        success: false,
-        message: 'Owner mobile number is already registered to another shop',
-      });
+      return res.status(400).json(buildOwnerMobileConflictResponse(existingOwnerMobile));
     }
 
     const existingEmail = await ShopsData.findOne({ email: emailTrimmed }).lean();
@@ -116,17 +131,15 @@ const createShopOnboarding = async (req, res) => {
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern || {})[0];
       console.log('field in createShopOnboarding', field);
-      if (field === 'shopMobileNumber') {
-        return res.status(400).json({
-          success: false,
-          message: 'Shop mobile number is already registered to another shop',
-        });
-      }
       if (field === 'ownerMobileNumber') {
-        return res.status(400).json({
-          success: false,
-          message: 'Owner mobile number is already registered to another shop',
-        });
+        const ownerMobileTrimmed = String(req.body.ownerMobileNumber ?? '').trim();
+        const existingOwnerMobile = ownerMobileTrimmed
+          ? await ShopsData.findOne({ ownerMobileNumber: ownerMobileTrimmed })
+              .select('shopId onboardStep')
+              .lean()
+          : null;
+
+        return res.status(400).json(buildOwnerMobileConflictResponse(existingOwnerMobile));
       }
       if (field === 'email') {
         return res.status(400).json({
@@ -322,7 +335,7 @@ const setSubscription = async (req, res) => {
     };
 
     if (shop.onboardStep !== 'completed') {
-      updates.onboardStep = 'subscriptionSelected';
+      updates.onboardStep = 'completed';
     }
 
     const updated = await ShopsData.findOneAndUpdate(
@@ -344,8 +357,52 @@ const setSubscription = async (req, res) => {
   }
 };
 
+const removeOnboardingData = async (req, res) => {
+  try {
+    const { shopId } = req.body;
+
+    if (!shopId?.trim()) {
+      return res.status(400).json({ success: false, message: 'Shop id is required' });
+    }
+
+    const normalizedShopId = normalizeShopId(shopId);
+
+    if (!isValidShopIdFormat(normalizedShopId)) {
+      return res.status(400).json({ success: false, message: 'Invalid shop id format' });
+    }
+
+    const shop = await ShopsData.findOne({ shopId: normalizedShopId });
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found' });
+    }
+
+    if (shop.onboardStep === 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot remove onboarding data for a completed shop',
+        shopId: normalizedShopId,
+        onboardStep: shop.onboardStep,
+      });
+    }
+
+    const userDeleteResult = await User.deleteMany({ shopId: normalizedShopId });
+    await ShopsData.deleteOne({ shopId: normalizedShopId });
+
+    res.status(200).json({
+      success: true,
+      shopId: normalizedShopId,
+      removedUsers: userDeleteResult.deletedCount,
+      message: 'Onboarding data removed successfully',
+    });
+  } catch (error) {
+    console.log('error in removeOnboardingData', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   createShopOnboarding,
   updateShopFeatures,
   setSubscription,
+  removeOnboardingData,
 };

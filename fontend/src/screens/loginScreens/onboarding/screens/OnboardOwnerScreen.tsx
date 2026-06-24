@@ -23,11 +23,16 @@ import OnboardingStepIndicator from "./OnboardingStepIndicator";
 import { onboardingStyles as s } from "../styles/onboardingStyles";
 import { useCommonAlert } from "../../../../hooks/useCommonAlert";
 import CommonAlert from "../../../../components/CommonAlert/CommonAlert";
-import { createShopOnboarding_Service } from "../../../../services/ShopOnboardingService";
+import { createShopOnboarding_Service, removeOnboardingData_Service, sendOtpOnboarding_Service } from "../../../../services/ShopOnboardingService";
 import { getApiErrorMessage, parseApiError } from "../../../../utils/apiErrorAlert";
 import { AppDispatch, RootState } from "../../../../store/store";
 
 type Props = NativeStackScreenProps<RootStackParamList, "OnboardOwnerScreen">;
+
+const INCOMPLETE_OWNER_MOBILE_MESSAGE =
+  "Owner mobile number is already registered but not completed onboarding";
+const EXISTING_OWNER_ACCOUNT_MESSAGE =
+  "There is already an account for that owner mobile number";
 
 const MOBILE_DIGIT_LENGTH = 10;
 const LOCAL_MOBILE_PATTERN = /^0\d{9}$/;
@@ -58,6 +63,13 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
   const createShopLoading = useSelector(
     (state: RootState) => state.shopOnboarding.createShop.loading,
   );
+  const sendOtpLoading = useSelector(
+    (state: RootState) => state.shopOnboarding.sendOtp.loading,
+  );
+  const removeOnboardingLoading = useSelector(
+    (state: RootState) => state.shopOnboarding.removeOnboardingData.loading,
+  );
+  const isSubmitting = createShopLoading || sendOtpLoading || removeOnboardingLoading;
 
   const [shopName, setShopName] = useState("");
   const [address, setAddress] = useState("");
@@ -108,8 +120,34 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
     textColor: inputTextColor,
   };
 
+  const handleRemoveIncompleteOnboarding = async (shopId: string) => {
+    try {
+      await dispatch(removeOnboardingData_Service({ shopId })).unwrap();
+      show_Alert(
+        "success",
+        "Data removed",
+        "Existing details were removed successfully. You can continue now.",
+        1,
+        false,
+        "OK",
+        () => {},
+      );
+    } catch (error: unknown) {
+      console.log("error removing incomplete onboarding", parseApiError(error));
+      show_Alert(
+        "error",
+        "Error",
+        getApiErrorMessage(error, "Could not remove existing data. Please try again."),
+        1,
+        true,
+        "OK",
+        () => {},
+      );
+    }
+  };
+
   const onContinue = async () => {
-    if (createShopLoading) {
+    if (isSubmitting) {
       return;
     }
 
@@ -180,14 +218,57 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
       ).unwrap();
       console.log("response in onboard owner screen", response);
 
-      navigation.navigate("SelectFeaturesScreen", {
+      const otpResponse = await dispatch(
+        sendOtpOnboarding_Service({ shopId: response.shopId }),
+      ).unwrap();
+
+      navigation.navigate("OtpValidationScreen", {
         ownerData: {
           ...ownerData,
           shopId: response.shopId,
         },
+        otpTimerSeconds: otpResponse.otpTimerSeconds,
       });
+      
+
     } catch (error: unknown) {
-      console.log("error in onboard owner screen", parseApiError(error));
+      const parsed = parseApiError(error);
+      console.log("error in onboard owner screen", parsed);
+
+      if (parsed.message === INCOMPLETE_OWNER_MOBILE_MESSAGE && parsed.shopId) {
+        show_Alert(
+          "pending",
+          "Incomplete onboarding",
+          "This owner mobile number has an incomplete registration. Would you like to remove the existing data and continue?",
+          2,
+          false,
+          "Yes",
+          () => {
+            void handleRemoveIncompleteOnboarding(parsed.shopId!);
+          },
+          "No",
+          () => {},
+        );
+        return;
+      }
+
+      if (parsed.message === EXISTING_OWNER_ACCOUNT_MESSAGE) {
+        show_Alert(
+          "error",
+          "Account already exists",
+          "There is already an account for this owner mobile number. Please log in to continue.",
+          2,
+          false,
+          "Login",
+          () => {
+            navigation.navigate("LoginScreen");
+          },
+          "Cancel",
+          () => {},
+        );
+        return;
+      }
+
       show_Alert(
         "error",
         "Error",
@@ -442,13 +523,13 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
             style={[
               s.primaryButton,
               { backgroundColor: paperTheme.colors.primary },
-              createShopLoading && styles.primaryButtonDisabled,
+              isSubmitting && styles.primaryButtonDisabled,
             ]}
             onPress={onContinue}
             activeOpacity={0.9}
-            disabled={createShopLoading}
+            disabled={isSubmitting}
           >
-            {createShopLoading ? (
+            {isSubmitting ? (
               <ActivityIndicator color={paperTheme.colors.onPrimary} />
             ) : (
               <Text

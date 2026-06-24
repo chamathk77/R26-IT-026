@@ -28,6 +28,7 @@ export interface ParsedApiError {
   tokenExpired?: boolean;
   tokenInvalid?: boolean;
   trialExpired?: boolean;
+  shopId?: string;
 }
 
 const SESSION_ERROR_CODES = new Set([
@@ -49,12 +50,13 @@ export function parseApiError(error: unknown): ParsedApiError {
       tokenExpired: error.tokenExpired,
       tokenInvalid: error.tokenInvalid,
       trialExpired: error.trialExpired,
+      shopId: error.shopId,
     };
   }
 
   if (error && typeof error === "object") {
     const payload = error as ApiErrorResponse;
-    if (payload.message || payload.status || payload.code) {
+    if (payload.message || payload.status || payload.code || payload.shopId) {
       return {
         status: payload.status,
         code: payload.code,
@@ -63,6 +65,7 @@ export function parseApiError(error: unknown): ParsedApiError {
         tokenExpired: payload.tokenExpired,
         tokenInvalid: payload.tokenInvalid,
         trialExpired: payload.trialExpired,
+        shopId: payload.shopId,
       };
     }
   }
@@ -92,6 +95,7 @@ export function toApiErrorResponse(error: unknown): ApiErrorResponse {
     tokenExpired: parsed.tokenExpired,
     tokenInvalid: parsed.tokenInvalid,
     trialExpired: parsed.trialExpired,
+    shopId: parsed.shopId,
     timestamp: new Date().toISOString(),
   };
 }

@@ -20,9 +20,9 @@ import OnboardingStepIndicator from './OnboardingStepIndicator';
 import { onboardingStyles as s } from '../styles/onboardingStyles';
 import { useCommonAlert } from '../../../../hooks/useCommonAlert';
 import CommonAlert from '../../../../components/CommonAlert/CommonAlert';
-import { sendOtpOnboarding_Service } from '../../../../services/ShopOnboardingService';
-import { getApiErrorMessage, parseApiError } from '../../../../utils/apiErrorAlert';
+import { signupOnboarding_Service } from '../../../../services/ShopOnboardingService';
 import { AppDispatch, RootState } from '../../../../store/store';
+import { getApiErrorMessage, parseApiError } from '../../../../utils/apiErrorAlert';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreatePasswordScreen'>;
 
@@ -31,8 +31,8 @@ export default function CreatePasswordScreen({ navigation, route }: Props) {
   const { ownerData } = route.params;
   const { paperTheme, resolvedTheme } = useTheme();
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
-  const sendOtpLoading = useSelector(
-    (state: RootState) => state.shopOnboarding.sendOtp.loading,
+  const signupOwnerLoading = useSelector(
+    (state: RootState) => state.shopOnboarding.signupOwner.loading,
   );
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -48,7 +48,7 @@ export default function CreatePasswordScreen({ navigation, route }: Props) {
   }, [ownerData]);
 
   const onComplete = async () => {
-    if (sendOtpLoading) {
+    if (signupOwnerLoading) {
       return;
     }
 
@@ -88,45 +88,30 @@ export default function CreatePasswordScreen({ navigation, route }: Props) {
 
     try {
       Keyboard.dismiss();
-      const response = await dispatch(
-        sendOtpOnboarding_Service({ shopId: ownerData.shopId }),
-      ).unwrap();
-
-      console.log('response in create password screen', response);
-
       const ownerName = `${ownerData.ownerFirstName} ${ownerData.ownerLastName}`.trim();
 
-      show_Alert(
-        'success',
-        'OTP Sent',
-        `A verification code has been sent to ${ownerData.ownerMobileNumber}.`,
-        1,
-        false,
-        'Continue',
-        () => {
-          navigation.navigate('OtpValidationScreen', {
-            mobileNumber: ownerData.ownerMobileNumber,
-            password,
-            shopId: ownerData.shopId!,
-            ownerName,
-            email: ownerData.email,
-            shopName: ownerData.shopName,
-            otpTimerSeconds: response.otpTimerSeconds,
-          });
-        },
-      );
+      await dispatch(
+        signupOnboarding_Service({
+          shopId: ownerData.shopId!,
+          name: ownerName,
+          email: ownerData.email,
+          password,
+          role: 'owner',
+          phone: ownerData.ownerMobileNumber,
+        }),
+      ).unwrap();
+
+      navigation.navigate('SelectFeaturesScreen', { ownerData });
     } catch (error: unknown) {
       console.log('error in create password screen', parseApiError(error));
       show_Alert(
         'error',
         'Error',
-        getApiErrorMessage(error, 'Failed to send verification code. Please try again.'),
+        getApiErrorMessage(error, 'Could not create your account. Please try again.'),
         1,
         true,
         'OK',
-        () => {
-          console.log('do it');
-        },
+        () => {},
       );
     }
   };
@@ -210,17 +195,17 @@ export default function CreatePasswordScreen({ navigation, route }: Props) {
             style={[
               s.primaryButton,
               { backgroundColor: paperTheme.colors.primary },
-              sendOtpLoading && styles.primaryButtonDisabled,
+              signupOwnerLoading && styles.primaryButtonDisabled,
             ]}
-            onPress={onComplete}
+            onPress={() => void onComplete()}
             activeOpacity={0.9}
-            disabled={sendOtpLoading}
+            disabled={signupOwnerLoading}
           >
-            {sendOtpLoading ? (
+            {signupOwnerLoading ? (
               <ActivityIndicator color={paperTheme.colors.onPrimary} />
             ) : (
               <Text style={[s.primaryButtonText, { color: paperTheme.colors.onPrimary }]}>
-                Send verification code
+                Continue
               </Text>
             )}
           </TouchableOpacity>

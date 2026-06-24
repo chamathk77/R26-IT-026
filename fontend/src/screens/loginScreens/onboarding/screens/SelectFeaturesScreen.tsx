@@ -60,6 +60,7 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
   const updateFeaturesLoading = useSelector(
     (state: RootState) => state.shopOnboarding.updateFeatures.loading,
   );
+  const isSubmitting = updateFeaturesLoading;
   const [features, setFeatures] = useState<ShopFeaturesState>(createDefaultFeatures);
   const [needMoreUsers, setNeedMoreUsers] = useState(false);
   const [additionalUsersCount, setAdditionalUsersCount] = useState('');
@@ -125,7 +126,7 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
   };
 
   const onContinue = async () => {
-    if (updateFeaturesLoading) {
+    if (isSubmitting) {
       return;
     }
 
@@ -175,7 +176,7 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
 
     try {
       Keyboard.dismiss();
-      const response = await dispatch(
+      await dispatch(
         updateShopFeatures_Service({
           shopId: ownerData.shopId,
           sendReceiptSms: features.sendReceiptSms,
@@ -189,18 +190,7 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
         }),
       ).unwrap();
 
-      navigation.navigate('CreatePasswordScreen', {
-        ownerData: {
-          ...ownerData,
-          shopId: response.shopId,
-        },
-        features,
-        userConfig: {
-          maxUsers: response.features.maxUsers,
-          isAdditionalUsersAdded: response.features.isAdditionalUsersAdded,
-          numAdditionalUsers: response.features.numAdditionalUsers,
-        },
-      });
+      navigation.navigate('SelectSubscriptionScreen', { ownerData });
     } catch (error: unknown) {
       console.log('error in select features screen', parseApiError(error));
       show_Alert(
@@ -233,7 +223,7 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
           onPressLeftBtn={() => navigation.goBack()}
         />
         <View style={[s.container, styles.screenBody]}>
-          <OnboardingStepIndicator currentStep={2} />
+          <OnboardingStepIndicator currentStep={4} />
           <KeyboardAwareScrollView
             innerRef={(ref) => {
               keyboardScrollRef.current = ref as ScrollView | null;
@@ -466,13 +456,13 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
             style={[
               s.primaryButton,
               { backgroundColor: paperTheme.colors.primary },
-              updateFeaturesLoading && styles.primaryButtonDisabled,
+              isSubmitting && styles.primaryButtonDisabled,
             ]}
             onPress={onContinue}
             activeOpacity={0.9}
-            disabled={updateFeaturesLoading}
+            disabled={isSubmitting}
           >
-            {updateFeaturesLoading ? (
+            {isSubmitting ? (
               <ActivityIndicator color={paperTheme.colors.onPrimary} />
             ) : (
               <Text style={[s.primaryButtonText, { color: paperTheme.colors.onPrimary }]}>

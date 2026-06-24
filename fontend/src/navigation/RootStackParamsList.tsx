@@ -2,8 +2,6 @@ import type { Category } from '../type/category';
 import type { InventoryProductFormParams } from '../type/inventory';
 import type {
   OnboardingOwnerData,
-  OnboardingUserConfig,
-  ShopFeaturesState,
 } from '../type/onboarding';
 import type { PaymentRecord } from '../type/payment';
 
@@ -13,18 +11,14 @@ export type RootStackParamList = {
   SelectFeaturesScreen: {
     ownerData: OnboardingOwnerData;
   };
+  SelectSubscriptionScreen: {
+    ownerData: OnboardingOwnerData;
+  };
   CreatePasswordScreen: {
     ownerData: OnboardingOwnerData;
-    features: ShopFeaturesState;
-    userConfig: OnboardingUserConfig;
   };
   OtpValidationScreen: {
-    mobileNumber: string;
-    password: string;
-    shopId: string;
-    ownerName: string;
-    email: string;
-    shopName?: string;
+    ownerData: OnboardingOwnerData;
     otpTimerSeconds?: number;
   };
   LoginScreen: undefined;

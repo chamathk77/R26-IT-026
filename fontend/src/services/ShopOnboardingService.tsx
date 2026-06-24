@@ -14,6 +14,10 @@ import {
   VerifyOtpOnboardingResponse,
   SignupOnboardingRequest,
   SignupOnboardingResponse,
+  SetSubscriptionRequest,
+  SetSubscriptionResponse,
+  RemoveOnboardingDataRequest,
+  RemoveOnboardingDataResponse,
 } from "../type/shopOnboarding";
 
 function isHttpSuccess(status: number): boolean {
@@ -33,7 +37,6 @@ export const createShopOnboarding_Service = createAsyncThunk(
 
       if (isHttpSuccess(response.status)) {
         console.log("Create shop onboarding response:", response.data);
-
         return response.data;
       }
 
@@ -43,9 +46,10 @@ export const createShopOnboarding_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      throw toApiErrorResponse(error);
+      console.log("error in create shop onboarding service", error);
+      return rejectWithValue(toApiErrorResponse(error));
     }
   },
 );
@@ -63,7 +67,6 @@ export const updateShopFeatures_Service = createAsyncThunk(
 
       if (isHttpSuccess(response.status)) {
         console.log("Update shop features response:", response.data);
-
         return response.data;
       }
 
@@ -73,9 +76,9 @@ export const updateShopFeatures_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      throw toApiErrorResponse(error);
+      return rejectWithValue(toApiErrorResponse(error));
     }
   },
 );
@@ -93,7 +96,6 @@ export const sendOtpOnboarding_Service = createAsyncThunk(
 
       if (isHttpSuccess(response.status)) {
         console.log("Send OTP onboarding response:", response.data);
-
         return response.data;
       }
 
@@ -103,9 +105,9 @@ export const sendOtpOnboarding_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      throw toApiErrorResponse(error);
+      return rejectWithValue(toApiErrorResponse(error));
     }
   },
 );
@@ -123,7 +125,6 @@ export const verifyOtpOnboarding_Service = createAsyncThunk(
 
       if (isHttpSuccess(response.status)) {
         console.log("Verify OTP onboarding response:", response.data);
-
         return response.data;
       }
 
@@ -133,9 +134,9 @@ export const verifyOtpOnboarding_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      throw toApiErrorResponse(error);
+      return rejectWithValue(toApiErrorResponse(error));
     }
   },
 );
@@ -153,7 +154,6 @@ export const signupOnboarding_Service = createAsyncThunk(
 
       if (isHttpSuccess(response.status)) {
         console.log("Signup onboarding response:", response.data);
-
         return response.data;
       }
 
@@ -163,9 +163,67 @@ export const signupOnboarding_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      throw toApiErrorResponse(error);
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const setSubscription_Service = createAsyncThunk(
+  "shopOnboarding/setSubscription",
+  async (payload: SetSubscriptionRequest, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.post<SetSubscriptionResponse>(
+        "/api/shops/subscription",
+        payload,
+      );
+
+      if (isHttpSuccess(response.status)) {
+        console.log("Set subscription response:", response.data);
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: "Error",
+        message: "Subscription update failed",
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const removeOnboardingData_Service = createAsyncThunk(
+  "shopOnboarding/removeOnboardingData",
+  async (payload: RemoveOnboardingDataRequest, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.post<RemoveOnboardingDataResponse>(
+        "/api/shops/remove-onboarding",
+        payload,
+      );
+
+      if (isHttpSuccess(response.status)) {
+        console.log("Remove onboarding data response:", response.data);
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: "Error",
+        message: "Failed to remove onboarding data",
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
     }
   },
 );

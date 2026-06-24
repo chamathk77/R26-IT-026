@@ -1,10 +1,45 @@
-import { OnboardingStep, ShopFeatureKey, ShopFeaturesState } from '../../../../type/onboarding';
+import { OnboardingStep, ShopFeatureKey, ShopFeaturesState, SubscriptionType } from '../../../../type/onboarding';
 
 export const ONBOARDING_STEPS: { step: OnboardingStep; label: string }[] = [
   { step: 1, label: 'Shop & Owner' },
-  { step: 2, label: 'Features' },
+  { step: 2, label: 'OTP Verification' },
   { step: 3, label: 'Password' },
-  { step: 4, label: 'OTP Verification' },
+  { step: 4, label: 'Features' },
+  { step: 5, label: 'Subscription' },
+];
+
+export type SubscriptionOption = {
+  id: SubscriptionType;
+  title: string;
+  description: string;
+  icon: string;
+};
+
+export const SUBSCRIPTION_OPTIONS: SubscriptionOption[] = [
+  {
+    id: '1month',
+    title: '1 Month',
+    description: 'Flexible monthly billing for your shop subscription.',
+    icon: 'calendar-outline',
+  },
+  {
+    id: '3months',
+    title: '3 Months',
+    description: 'Quarterly plan with predictable subscription billing.',
+    icon: 'albums-outline',
+  },
+  {
+    id: '6months',
+    title: '6 Months',
+    description: 'Half-year plan for longer-term shop operations.',
+    icon: 'time-outline',
+  },
+  {
+    id: '1year',
+    title: '1 Year',
+    description: 'Annual plan for the best long-term value.',
+    icon: 'ribbon-outline',
+  },
 ];
 
 export type FeatureOption = {

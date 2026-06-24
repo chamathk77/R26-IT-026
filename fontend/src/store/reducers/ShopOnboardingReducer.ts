@@ -5,6 +5,8 @@ import {
   sendOtpOnboarding_Service,
   verifyOtpOnboarding_Service,
   signupOnboarding_Service,
+  setSubscription_Service,
+  removeOnboardingData_Service,
 } from '../../services/ShopOnboardingService';
 import {
   CreateShopOnboardingResponse,
@@ -12,6 +14,8 @@ import {
   SendOtpOnboardingResponse,
   VerifyOtpOnboardingResponse,
   SignupOnboardingResponse,
+  SetSubscriptionResponse,
+  RemoveOnboardingDataResponse,
 } from '../../type/shopOnboarding';
 
 interface ShopOnboardingState {
@@ -50,6 +54,18 @@ interface ShopOnboardingState {
     success: boolean;
     data: SignupOnboardingResponse | null;
   };
+  setSubscription: {
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+    data: SetSubscriptionResponse | null;
+  };
+  removeOnboardingData: {
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+    data: RemoveOnboardingDataResponse | null;
+  };
 }
 
 const initialState: ShopOnboardingState = {
@@ -83,6 +99,18 @@ const initialState: ShopOnboardingState = {
     data: null,
   },
   signupOwner: {
+    loading: false,
+    error: null,
+    success: false,
+    data: null,
+  },
+  setSubscription: {
+    loading: false,
+    error: null,
+    success: false,
+    data: null,
+  },
+  removeOnboardingData: {
     loading: false,
     error: null,
     success: false,
@@ -210,6 +238,46 @@ export const ShopOnboardingSlice = createSlice({
       state.signupOwner.error =
         (action.payload as string) || action.error.message || 'Account creation failed';
       state.signupOwner.data = null;
+    });
+
+    builder.addCase(setSubscription_Service.pending, (state) => {
+      state.setSubscription.loading = true;
+      state.setSubscription.error = null;
+      state.setSubscription.success = false;
+    });
+    builder.addCase(setSubscription_Service.fulfilled, (state, action) => {
+      state.setSubscription.loading = false;
+      state.setSubscription.success = true;
+      state.setSubscription.error = null;
+      state.setSubscription.data = action.payload;
+    });
+    builder.addCase(setSubscription_Service.rejected, (state, action) => {
+      state.setSubscription.loading = false;
+      state.setSubscription.success = false;
+      state.setSubscription.error =
+        (action.payload as string) || action.error.message || 'Subscription update failed';
+      state.setSubscription.data = null;
+    });
+
+    builder.addCase(removeOnboardingData_Service.pending, (state) => {
+      state.removeOnboardingData.loading = true;
+      state.removeOnboardingData.error = null;
+      state.removeOnboardingData.success = false;
+    });
+    builder.addCase(removeOnboardingData_Service.fulfilled, (state, action) => {
+      state.removeOnboardingData.loading = false;
+      state.removeOnboardingData.success = true;
+      state.removeOnboardingData.error = null;
+      state.removeOnboardingData.data = action.payload;
+    });
+    builder.addCase(removeOnboardingData_Service.rejected, (state, action) => {
+      state.removeOnboardingData.loading = false;
+      state.removeOnboardingData.success = false;
+      state.removeOnboardingData.error =
+        (action.payload as string) ||
+        action.error.message ||
+        'Failed to remove onboarding data';
+      state.removeOnboardingData.data = null;
     });
   },
 });

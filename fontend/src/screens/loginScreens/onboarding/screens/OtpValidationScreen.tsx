@@ -26,7 +26,6 @@ import { useCommonAlert } from '../../../../hooks/useCommonAlert';
 import CommonAlert from '../../../../components/CommonAlert/CommonAlert';
 import {
   sendOtpOnboarding_Service,
-  signupOnboarding_Service,
   verifyOtpOnboarding_Service,
 } from '../../../../services/ShopOnboardingService';
 import { AppDispatch, RootState } from '../../../../store/store';
@@ -39,28 +38,20 @@ const OTP_LENGTH = 6;
 
 export default function OtpValidationScreen({ navigation, route }: Props) {
   const dispatch = useDispatch<AppDispatch>();
-  const {
-    mobileNumber,
-    password,
-    shopId,
-    ownerName,
-    email,
-    shopName,
-    otpTimerSeconds,
-  } = route.params;
+  const { ownerData, otpTimerSeconds } = route.params;
+  const mobileNumber = ownerData.ownerMobileNumber;
+  const shopId = ownerData.shopId ?? '';
+  const shopName = ownerData.shopName;
   const timerDuration = otpTimerSeconds ?? DEFAULT_TIMER_DURATION_SEC;
   const { paperTheme, resolvedTheme } = useTheme();
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
   const verifyOtpLoading = useSelector(
     (state: RootState) => state.shopOnboarding.verifyOtp.loading,
   );
-  const signupOwnerLoading = useSelector(
-    (state: RootState) => state.shopOnboarding.signupOwner.loading,
-  );
   const sendOtpLoading = useSelector(
     (state: RootState) => state.shopOnboarding.sendOtp.loading,
   );
-  const isSubmitting = verifyOtpLoading || signupOwnerLoading;
+  const isSubmitting = verifyOtpLoading;
 
   const [timer, setTimer] = useState(timerDuration);
   const [forceFocus, setForceFocus] = useState(0);
@@ -118,7 +109,7 @@ export default function OtpValidationScreen({ navigation, route }: Props) {
   }, [timerDuration]);
 
   const onResend = async () => {
-    if (timer > 0 || sendOtpLoading) {
+    if (timer > 0 || sendOtpLoading || !shopId) {
       return;
     }
 
@@ -158,6 +149,19 @@ export default function OtpValidationScreen({ navigation, route }: Props) {
       return;
     }
 
+    if (!shopId) {
+      show_Alert(
+        'error',
+        'Error',
+        'Shop id is missing. Please go back and complete previous steps.',
+        1,
+        true,
+        'OK',
+        () => {},
+      );
+      return;
+    }
+
     if (otpCode.length !== OTP_LENGTH) {
       show_Alert(
         'error',
@@ -177,31 +181,7 @@ export default function OtpValidationScreen({ navigation, route }: Props) {
         verifyOtpOnboarding_Service({ shopId, otp: otpCode }),
       ).unwrap();
 
-      await dispatch(
-        signupOnboarding_Service({
-          shopId,
-          name: ownerName,
-          email,
-          password,
-          role: 'owner',
-          phone: mobileNumber,
-        }),
-      ).unwrap();
-
-      show_Alert(
-        'success',
-        'Account Created',
-        'User created successfully. Please log in to continue.',
-        1,
-        false,
-        'Go to Login',
-        () => {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'LoginScreen' }],
-          });
-        },
-      );
+      navigation.navigate('CreatePasswordScreen', { ownerData });
     } catch (error: unknown) {
       console.log('error in verify OTP', parseApiError(error));
       show_Alert(
@@ -230,7 +210,7 @@ export default function OtpValidationScreen({ navigation, route }: Props) {
           onPressLeftBtn={() => navigation.goBack()}
         />
         <View style={[s.container, styles.screenBody]}>
-          <OnboardingStepIndicator currentStep={4} />
+          <OnboardingStepIndicator currentStep={2} />
           <KeyboardAwareScrollView
             style={styles.keyboardScroll}
             contentContainerStyle={styles.scrollContent}

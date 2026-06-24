@@ -87,3 +87,27 @@ export interface SignupOnboardingResponse {
   shopId: string;
   message: string;
 }
+
+export interface SetSubscriptionRequest {
+  shopId: string;
+  subscriptionType: string;
+}
+
+export interface SetSubscriptionResponse {
+  success: boolean;
+  shopId: string;
+  subscriptionType: string;
+  onboardStep: string;
+  message: string;
+}
+
+export interface RemoveOnboardingDataRequest {
+  shopId: string;
+}
+
+export interface RemoveOnboardingDataResponse {
+  success: boolean;
+  shopId: string;
+  removedUsers: number;
+  message: string;
+}

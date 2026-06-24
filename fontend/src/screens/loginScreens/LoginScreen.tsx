@@ -33,6 +33,8 @@ import {
 import { useCommonAlert } from "../../hooks/useCommonAlert";
 import { getApiErrorMessage, parseApiError } from "../../utils/apiErrorAlert";
 import CommonAlert from "../../components/CommonAlert/CommonAlert";
+import { LoginShop } from "../../type/auth";
+import { OnboardingOwnerData } from "../../type/onboarding";
 
 const MOBILE_DIGIT_LENGTH = 10;
 const LOCAL_MOBILE_PATTERN = /^0\d{9}$/;
@@ -47,6 +49,19 @@ function toLocalMobileNumber(text: string): string {
 
 function isValidLocalMobileNumber(value: string): boolean {
   return LOCAL_MOBILE_PATTERN.test(value);
+}
+
+function buildOwnerDataFromShop(shop: LoginShop): OnboardingOwnerData {
+  return {
+    shopId: shop.shopId,
+    shopName: shop.shopName?.trim() ?? "",
+    address: shop.address?.trim() ?? "",
+    shopMobileNumber: shop.shopMobileNumber?.trim() ?? "",
+    ownerFirstName: shop.ownerFirstName?.trim() ?? "",
+    ownerLastName: shop.ownerLastName?.trim() ?? "",
+    email: shop.email?.trim() ?? "",
+    ownerMobileNumber: shop.ownerMobileNumber?.trim() ?? "",
+  };
 }
 
 function formatTrialEndDate(isoDate: string | null | undefined): string {
@@ -332,11 +347,27 @@ export default function LoginScreen({ navigation }: Props) {
           // if (response.user.isFirsttimeLogin === true) {
 
           if (response.shop.onboardStep === "shopRegistered") {
-            navigation.navigate("SelectFeaturesScreen");
+            navigation.navigate("OtpValidationScreen", {
+              ownerData: buildOwnerDataFromShop(response.shop),
+            });
             return;
-          } 
+          }
+          if (response.shop.onboardStep === "otpVerified") {
+            navigation.navigate("CreatePasswordScreen", {
+              ownerData: buildOwnerDataFromShop(response.shop),
+            });
+            return;
+          }
+          if (response.shop.onboardStep === "passwordSet") {
+            navigation.navigate("SelectFeaturesScreen", {
+              ownerData: buildOwnerDataFromShop(response.shop),
+            });
+            return;
+          }
           if (response.shop.onboardStep === "featureSelected") {
-            navigation.navigate("CreatePasswordScreen");
+            navigation.navigate("SelectSubscriptionScreen", {
+              ownerData: buildOwnerDataFromShop(response.shop),
+            });
             return;
           }
           if (response.shop?.isTrailStared === false && response.shop.onboardStep === "completed") {

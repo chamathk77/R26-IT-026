@@ -7,6 +7,8 @@ const SUBSCRIPTION_TYPES = ['1month', '3months', '6months', '1year'];
 const ONBOARD_STEPS = [
   'startOnboarding',
   'shopRegistered',
+  'otpVerified',
+  'passwordSet',
   'featureSelected',
   'subscriptionSelected',
   'completed',
@@ -37,7 +39,6 @@ const shopsDataSchema = new mongoose.Schema(
     shopMobileNumber: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
     },
     ownerFirstName: {

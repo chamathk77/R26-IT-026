@@ -101,6 +101,11 @@ const signupOnboarding = async (req, res) => {
       shopId: normalizedShopId,
     });
 
+    await ShopsData.updateOne(
+      { shopId: normalizedShopId },
+      { $set: { onboardStep: 'passwordSet' } },
+    );
+
     res.status(201).json({
       success: true,
       shopId: user.shopId,
@@ -234,7 +239,7 @@ const verifyOtp = async (req, res) => {
     const otpTimerSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
 
     shop.isVerifyPhoneNumber = true;
-    shop.onboardStep = 'completed';
+    shop.onboardStep = 'otpVerified';
     shop.otp = null;
     shop.otpExpiresAt = null;
     await shop.save();

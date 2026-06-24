@@ -9,5 +9,6 @@ export interface ApiErrorResponse {
   tokenExpired?: boolean;
   tokenInvalid?: boolean;
   trialExpired?: boolean;
-  timestamp?: string;       // e.g., "2025-06-03T06:58:26.8983106+05:30"
+  shopId?: string;
+  timestamp?: string;
 }

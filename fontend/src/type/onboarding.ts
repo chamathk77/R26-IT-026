@@ -19,7 +19,9 @@ export type ShopFeatureKey =
 
 export type ShopFeaturesState = Record<ShopFeatureKey, boolean>;
 
-export type OnboardingStep = 1 | 2 | 3 | 4;
+export type OnboardingStep = 1 | 2 | 3 | 4 | 5;
+
+export type SubscriptionType = '1month' | '3months' | '6months' | '1year';
 
 export const DEFAULT_MAX_USERS = 3;
 export const ADDITIONAL_USER_MONTHLY_PRICE_LKR = 499;

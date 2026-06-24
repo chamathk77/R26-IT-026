@@ -6,6 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import OnboardingScreen from '../screens/loginScreens/onboarding/screens/OnboardingScreen';
 import OnboardOwnerScreen from '../screens/loginScreens/onboarding/screens/OnboardOwnerScreen';
 import SelectFeaturesScreen from '../screens/loginScreens/onboarding/screens/SelectFeaturesScreen';
+import SelectSubscriptionScreen from '../screens/loginScreens/onboarding/screens/SelectSubscriptionScreen';
 import CreatePasswordScreen from '../screens/loginScreens/onboarding/screens/CreatePasswordScreen';
 import OtpValidationScreen from '../screens/loginScreens/onboarding/screens/OtpValidationScreen';
 import LoginScreen from '../screens/loginScreens/LoginScreen';
@@ -50,6 +51,7 @@ export default function AppNavigator() {
         <Stack.Screen name="OnboardingScreen" component={OnboardingScreen} />
         <Stack.Screen name="OnboardOwnerScreen" component={OnboardOwnerScreen} />
         <Stack.Screen name="SelectFeaturesScreen" component={SelectFeaturesScreen} />
+        <Stack.Screen name="SelectSubscriptionScreen" component={SelectSubscriptionScreen} />
         <Stack.Screen name="CreatePasswordScreen" component={CreatePasswordScreen} />
         <Stack.Screen name="OtpValidationScreen" component={OtpValidationScreen} />
         <Stack.Screen name="LoginScreen" component={LoginScreen} />
