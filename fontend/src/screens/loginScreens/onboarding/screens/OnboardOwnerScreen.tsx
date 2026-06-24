@@ -15,17 +15,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { TextInput as PaperTextInput } from "react-native-paper";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { RootStackParamList } from "../../navigation/RootStackParamsList";
-import { useTheme } from "../../context/ThemeContext";
-import { fonts } from "../../constants/fonts";
-import CommonHeader from "../../components/CommonHeader/CommonHeader";
-import OnboardingStepIndicator from "./onboarding/OnboardingStepIndicator";
-import { onboardingStyles as s } from "./onboarding/onboardingStyles";
-import { useCommonAlert } from "../../hooks/useCommonAlert";
-import CommonAlert from "../../components/CommonAlert/CommonAlert";
-import { createShopOnboarding_Service } from "../../services/ShopOnboardingService";
-import { getApiErrorMessage, parseApiError } from "../../utils/apiErrorAlert";
-import { AppDispatch, RootState } from "../../store/store";
+import { RootStackParamList } from "../../../../navigation/RootStackParamsList";
+import { useTheme } from "../../../../context/ThemeContext";
+import { fonts } from "../../../../constants/fonts";
+import CommonHeader from "../../../../components/CommonHeader/CommonHeader";
+import OnboardingStepIndicator from "./OnboardingStepIndicator";
+import { onboardingStyles as s } from "../styles/onboardingStyles";
+import { useCommonAlert } from "../../../../hooks/useCommonAlert";
+import CommonAlert from "../../../../components/CommonAlert/CommonAlert";
+import { createShopOnboarding_Service } from "../../../../services/ShopOnboardingService";
+import { getApiErrorMessage, parseApiError } from "../../../../utils/apiErrorAlert";
+import { AppDispatch, RootState } from "../../../../store/store";
 
 type Props = NativeStackScreenProps<RootStackParamList, "OnboardOwnerScreen">;
 

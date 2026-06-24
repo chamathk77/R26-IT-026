@@ -1,4 +1,4 @@
-import { OnboardingStep, ShopFeatureKey, ShopFeaturesState } from '../../../type/onboarding';
+import { OnboardingStep, ShopFeatureKey, ShopFeaturesState } from '../../../../type/onboarding';
 
 export const ONBOARDING_STEPS: { step: OnboardingStep; label: string }[] = [
   { step: 1, label: 'Shop & Owner' },

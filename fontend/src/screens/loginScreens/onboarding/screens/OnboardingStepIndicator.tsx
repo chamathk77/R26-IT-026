@@ -1,9 +1,9 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '../../../context/ThemeContext';
-import { fonts } from '../../../constants/fonts';
+import { useTheme } from '../../../../context/ThemeContext';
+import { fonts } from '../../../../constants/fonts';
 import { ONBOARDING_STEPS } from './onboardingConstants';
-import { OnboardingStep } from '../../../type/onboarding';
+import { OnboardingStep } from '../../../../type/onboarding';
 
 type Props = {
   currentStep: OnboardingStep;

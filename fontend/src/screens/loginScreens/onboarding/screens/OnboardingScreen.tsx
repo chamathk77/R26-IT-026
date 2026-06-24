@@ -15,9 +15,9 @@ import LottieView from 'lottie-react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
-import { RootStackParamList } from '../../navigation/RootStackParamsList';
-import { fonts } from '../../constants/fonts';
-import { useTheme } from '../../context/ThemeContext';
+import { RootStackParamList } from '../../../../navigation/RootStackParamsList';
+import { fonts } from '../../../../constants/fonts';
+import { useTheme } from '../../../../context/ThemeContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OnboardingScreen'>;
 
@@ -87,7 +87,7 @@ export default function OnboardingScreen({ navigation }: Props) {
               />
               <View style={[styles.lottieFrame, { width: lottieSize, height: lottieSize }]}>
                 <LottieView
-                  source={require('../../../assets/Lottie/onboardLottie.json')}
+                  source={require('../../../../../assets/Lottie/onboardLottie.json')}
                   autoPlay
                   loop
                   style={styles.lottie}
