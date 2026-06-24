@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../../../navigation/RootStackParamsList';
 import { useTheme } from '../../../../context/ThemeContext';
@@ -19,7 +18,7 @@ import { fonts } from '../../../../constants/fonts';
 import CommonHeader from '../../../../components/CommonHeader/CommonHeader';
 import OnboardingStepIndicator from './OnboardingStepIndicator';
 import { onboardingStyles as s } from '../styles/onboardingStyles';
-import { SUBSCRIPTION_OPTIONS } from './onboardingConstants';
+import { formatSubscriptionRs, SUBSCRIPTION_OPTIONS } from './onboardingConstants';
 import { useCommonAlert } from '../../../../hooks/useCommonAlert';
 import CommonAlert from '../../../../components/CommonAlert/CommonAlert';
 import { SubscriptionType } from '../../../../type/onboarding';
@@ -150,50 +149,83 @@ export default function SelectSubscriptionScreen({ navigation, route }: Props) {
                         ? paperTheme.colors.primary
                         : paperTheme.colors.outline,
                     },
+                    isSelected && {
+                      borderWidth: 2,
+                      backgroundColor: paperTheme.colors.primaryContainer,
+                    },
                   ]}
                 >
-                  <View
-                    style={[
-                      styles.iconWrap,
-                      {
-                        backgroundColor: isSelected
-                          ? paperTheme.colors.primaryContainer
-                          : paperTheme.colors.surfaceVariant,
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name={option.icon as keyof typeof Ionicons.glyphMap}
-                      size={22}
-                      color={paperTheme.colors.primary}
-                    />
-                  </View>
-                  <View style={styles.planText}>
-                    <Text style={[styles.planTitle, { color: paperTheme.colors.onSurface }]}>
-                      {option.title}
-                    </Text>
-                    <Text
-                      style={[styles.planDesc, { color: paperTheme.colors.onSurfaceVariant }]}
+                  <View style={styles.planHeader}>
+                    <View style={styles.planTitleRow}>
+                      <Text style={[styles.planTitle, { color: paperTheme.colors.onSurface }]}>
+                        {option.title}
+                      </Text>
+                      {option.isBestValue ? (
+                        <View
+                          style={[
+                            styles.bestValueBadge,
+                            { backgroundColor: paperTheme.colors.primary },
+                          ]}
+                        >
+                          <Text
+                            style={[styles.bestValueText, { color: paperTheme.colors.onPrimary }]}
+                          >
+                            Best Value
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <View
+                      style={[
+                        styles.radioOuter,
+                        {
+                          borderColor: isSelected
+                            ? paperTheme.colors.primary
+                            : paperTheme.colors.outline,
+                        },
+                      ]}
                     >
-                      {option.description}
+                      {isSelected ? (
+                        <View
+                          style={[styles.radioInner, { backgroundColor: paperTheme.colors.primary }]}
+                        />
+                      ) : null}
+                    </View>
+                  </View>
+
+                  <Text style={[styles.totalPrice, { color: paperTheme.colors.onSurface }]}>
+                    {formatSubscriptionRs(option.totalPrice)}
+                  </Text>
+
+                  {option.perMonthPrice != null ? (
+                    <Text
+                      style={[styles.perMonthPrice, { color: paperTheme.colors.onSurfaceVariant }]}
+                    >
+                      {formatSubscriptionRs(option.perMonthPrice)}/month
                     </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.radioOuter,
-                      {
-                        borderColor: isSelected
-                          ? paperTheme.colors.primary
-                          : paperTheme.colors.outline,
-                      },
-                    ]}
+                  ) : null}
+
+                  {option.savings != null ? (
+                    <View
+                      style={[
+                        styles.savingsBadge,
+                        {
+                          backgroundColor:
+                            resolvedTheme === 'dark' ? 'rgba(34, 197, 94, 0.18)' : '#ecfdf3',
+                        },
+                      ]}
+                    >
+                      <Text style={styles.savingsText}>
+                        Save {formatSubscriptionRs(option.savings)}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  <Text
+                    style={[styles.validityLabel, { color: paperTheme.colors.onSurfaceVariant }]}
                   >
-                    {isSelected ? (
-                      <View
-                        style={[styles.radioInner, { backgroundColor: paperTheme.colors.primary }]}
-                      />
-                    ) : null}
-                  </View>
+                    {option.validityLabel}
+                  </Text>
                 </TouchableOpacity>
               );
             })}
@@ -240,34 +272,39 @@ export default function SelectSubscriptionScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   planCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
     borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
   },
-  iconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+  planHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 10,
   },
-  planText: {
+  planTitleRow: {
     flex: 1,
-    minWidth: 0,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
   },
   planTitle: {
     fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 15,
+    fontSize: 16,
+    lineHeight: 22,
   },
-  planDesc: {
-    fontFamily: fonts.PoppinsRegular,
-    fontSize: 12,
-    marginTop: 4,
-    lineHeight: 18,
+  bestValueBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  bestValueText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
+    letterSpacing: 0.3,
   },
   radioOuter: {
     width: 22,
@@ -276,11 +313,41 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 2,
   },
   radioInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
+  },
+  totalPrice: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 24,
+    lineHeight: 30,
+    marginBottom: 4,
+  },
+  perMonthPrice: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  savingsBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 8,
+  },
+  savingsText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 12,
+    color: '#15803d',
+  },
+  validityLabel: {
+    fontFamily: fonts.InterRegular,
+    fontSize: 13,
+    lineHeight: 18,
   },
   primaryButtonDisabled: {
     opacity: 0.7,

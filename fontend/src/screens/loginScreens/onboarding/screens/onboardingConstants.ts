@@ -11,34 +11,53 @@ export const ONBOARDING_STEPS: { step: OnboardingStep; label: string }[] = [
 export type SubscriptionOption = {
   id: SubscriptionType;
   title: string;
-  description: string;
   icon: string;
+  totalPrice: number;
+  perMonthPrice?: number;
+  savings?: number;
+  validityLabel: string;
+  isBestValue?: boolean;
 };
+
+export function formatSubscriptionRs(amount: number): string {
+  return `Rs. ${amount.toLocaleString('en-LK')}`;
+}
 
 export const SUBSCRIPTION_OPTIONS: SubscriptionOption[] = [
   {
     id: '1month',
-    title: '1 Month',
-    description: 'Flexible monthly billing for your shop subscription.',
+    title: 'Monthly Plan',
     icon: 'calendar-outline',
+    totalPrice: 4900,
+    validityLabel: 'Valid for 30 days',
   },
   {
     id: '3months',
-    title: '3 Months',
-    description: 'Quarterly plan with predictable subscription billing.',
+    title: 'Quarterly Plan',
     icon: 'albums-outline',
+    totalPrice: 13800,
+    perMonthPrice: 4600,
+    savings: 900,
+    validityLabel: 'Valid for 3 months',
   },
   {
     id: '6months',
-    title: '6 Months',
-    description: 'Half-year plan for longer-term shop operations.',
+    title: 'Half-Year Plan',
     icon: 'time-outline',
+    totalPrice: 26400,
+    perMonthPrice: 4400,
+    savings: 3000,
+    validityLabel: 'Valid for 6 months',
   },
   {
     id: '1year',
-    title: '1 Year',
-    description: 'Annual plan for the best long-term value.',
+    title: 'Annual Plan',
     icon: 'ribbon-outline',
+    totalPrice: 51600,
+    perMonthPrice: 4300,
+    savings: 7200,
+    validityLabel: 'Valid for 12 months',
+    isBestValue: true,
   },
 ];
 
