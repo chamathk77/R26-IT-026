@@ -43,6 +43,10 @@ export default function CreatePasswordScreen({ navigation, route }: Props) {
     backgroundColor: paperTheme.colors.surfaceVariant,
   };
 
+  const inputTextColor = paperTheme.colors.onSurface;
+  const inputCursorColor = paperTheme.colors.primary;
+  const inputSelectionColor = paperTheme.colors.primary;
+
   useEffect(() => {
     console.log('ownerData ', ownerData);
   }, [ownerData]);
@@ -131,13 +135,16 @@ export default function CreatePasswordScreen({ navigation, route }: Props) {
           mode="flat"
           underlineColor="transparent"
           activeUnderlineColor="transparent"
-          contentStyle={s.inputContent}
+          contentStyle={[s.inputContent, styles.inputText, { color: inputTextColor }]}
           placeholder={label === 'CREATE PASSWORD' ? 'Enter password' : 'Confirm password'}
           placeholderTextColor="#9b9ca5"
           secureTextEntry={secure}
           value={value}
           onChangeText={onChangeText}
           theme={paperTheme}
+          cursorColor={inputCursorColor}
+          selectionColor={inputSelectionColor}
+          textColor={inputTextColor}
           right={
             <PaperTextInput.Icon
               icon={secure ? 'eye-outline' : 'eye-off-outline'}
@@ -231,6 +238,9 @@ export default function CreatePasswordScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
+  inputText: {
+    paddingVertical: 0,
+  },
   primaryButtonDisabled: {
     opacity: 0.7,
   },
