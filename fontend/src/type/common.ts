@@ -1,4 +1,6 @@
 // Common error response (matching your API format)
+import type { LoginShop } from './auth';
+
 export interface ApiErrorResponse {
   success?: boolean;
   error?: string;           // e.g., "Validation Error"
@@ -10,5 +12,7 @@ export interface ApiErrorResponse {
   tokenInvalid?: boolean;
   trialExpired?: boolean;
   shopId?: string;
+  onboardStep?: string;
+  shop?: LoginShop | null;
   timestamp?: string;
 }

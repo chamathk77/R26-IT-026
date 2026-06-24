@@ -3,6 +3,7 @@ import { navigationRef } from "../navigation/RootNavigation";
 import { clearLoginSession } from "../store/reducers/AuthReducer";
 import { store } from "../store/store";
 import type { ApiErrorResponse } from "../type/common";
+import type { LoginShop } from "../type/auth";
 import { clearSavedToken } from "./secureStorage";
 
 export type ShowAlertFn = (
@@ -29,6 +30,8 @@ export interface ParsedApiError {
   tokenInvalid?: boolean;
   trialExpired?: boolean;
   shopId?: string;
+  onboardStep?: string;
+  shop?: LoginShop | null;
 }
 
 const SESSION_ERROR_CODES = new Set([
@@ -51,12 +54,14 @@ export function parseApiError(error: unknown): ParsedApiError {
       tokenInvalid: error.tokenInvalid,
       trialExpired: error.trialExpired,
       shopId: error.shopId,
+      onboardStep: error.onboardStep,
+      shop: (error.shop as LoginShop | null | undefined) ?? null,
     };
   }
 
   if (error && typeof error === "object") {
     const payload = error as ApiErrorResponse;
-    if (payload.message || payload.status || payload.code || payload.shopId) {
+    if (payload.message || payload.status || payload.code || payload.shopId || payload.onboardStep) {
       return {
         status: payload.status,
         code: payload.code,
@@ -66,6 +71,8 @@ export function parseApiError(error: unknown): ParsedApiError {
         tokenInvalid: payload.tokenInvalid,
         trialExpired: payload.trialExpired,
         shopId: payload.shopId,
+        onboardStep: payload.onboardStep,
+        shop: payload.shop ?? null,
       };
     }
   }
@@ -96,6 +103,8 @@ export function toApiErrorResponse(error: unknown): ApiErrorResponse {
     tokenInvalid: parsed.tokenInvalid,
     trialExpired: parsed.trialExpired,
     shopId: parsed.shopId,
+    onboardStep: parsed.onboardStep,
+    shop: parsed.shop ?? null,
     timestamp: new Date().toISOString(),
   };
 }

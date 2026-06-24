@@ -94,6 +94,8 @@ export class ApiClientError extends Error {
   tokenInvalid?: boolean;
   trialExpired?: boolean;
   shopId?: string;
+  onboardStep?: string;
+  shop?: Record<string, unknown> | null;
 
   constructor(
     message: string,
@@ -105,6 +107,8 @@ export class ApiClientError extends Error {
       tokenInvalid?: boolean;
       trialExpired?: boolean;
       shopId?: string;
+      onboardStep?: string;
+      shop?: Record<string, unknown> | null;
     },
   ) {
     super(message);
@@ -116,6 +120,8 @@ export class ApiClientError extends Error {
     this.tokenInvalid = options?.tokenInvalid;
     this.trialExpired = options?.trialExpired;
     this.shopId = options?.shopId;
+    this.onboardStep = options?.onboardStep;
+    this.shop = options?.shop;
     Object.setPrototypeOf(this, ApiClientError.prototype);
   }
 }
@@ -183,6 +189,8 @@ apiClient.interceptors.response.use(
       message?: string;
       code?: string;
       shopId?: string;
+      onboardStep?: string;
+      shop?: Record<string, unknown> | null;
       sessionEnded?: boolean;
       tokenExpired?: boolean;
       tokenInvalid?: boolean;
@@ -199,6 +207,8 @@ apiClient.interceptors.response.use(
         status: error.response?.status,
         code: errorData.code,
         shopId: errorData.shopId,
+        onboardStep: errorData.onboardStep,
+        shop: errorData.shop,
         sessionEnded: errorData.sessionEnded,
         tokenExpired: errorData.tokenExpired,
         tokenInvalid: errorData.tokenInvalid,

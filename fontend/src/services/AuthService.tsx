@@ -1,10 +1,9 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
-import { AnyActionArg } from "react";
 import { apiClient } from "../../config/apiConfig";
 import { ensureInternetConnection } from "../utils/checkInternetConnection";
 import { ApiErrorResponse } from "../type/common";
 import { toApiErrorResponse } from "../utils/apiErrorAlert";
-import {   LoginRequest, LoginResponse, SignUpRequest, SignUpResponse } from "../type/auth";
+import { LoginRequest, LoginResponse, SignUpRequest, SignUpResponse } from "../type/auth";
 
 function isHttpSuccess(status: number): boolean {
   return status >= 200 && status < 300;
@@ -23,7 +22,6 @@ export const login_Service = createAsyncThunk(
 
       if (isHttpSuccess(response.status)) {
         console.log("Login response:", response.data);
-
         return response.data;
       }
 
@@ -33,13 +31,12 @@ export const login_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      throw toApiErrorResponse(error);
+      return rejectWithValue(toApiErrorResponse(error));
     }
   },
 );
-
 
 export const signup_Service = createAsyncThunk(
   "auth/signup",
@@ -54,7 +51,6 @@ export const signup_Service = createAsyncThunk(
 
       if (isHttpSuccess(response.status)) {
         console.log("Signup response:", response.data);
-
         return response.data;
       }
 
@@ -64,14 +60,9 @@ export const signup_Service = createAsyncThunk(
         status: response.status,
         timestamp: new Date().toISOString(),
       };
-      throw apiError;
+      return rejectWithValue(apiError);
     } catch (error: unknown) {
-      throw toApiErrorResponse(error);
+      return rejectWithValue(toApiErrorResponse(error));
     }
   },
 );
-
-
-
-
-

@@ -300,6 +300,18 @@ const login = async (req, res) => {
       const shop = await ShopsData.findOne({ shopId: user.shopId }).lean();
       if (shop) {
         shopLean = shop;
+
+        if (shop.onboardStep !== 'completed') {
+          return res.status(403).json({
+            success: false,
+            message: 'Please complete onboarding before logging in.',
+            code: 'ONBOARDING_INCOMPLETE',
+            shopId: shop.shopId,
+            onboardStep: shop.onboardStep,
+            shop: formatShopForLogin(shop),
+          });
+        }
+
         trialExpired = isTrialEnded(shopLean);
       }
     }
