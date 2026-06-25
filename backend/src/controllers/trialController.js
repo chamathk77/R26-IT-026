@@ -20,6 +20,7 @@ const {
   isTrialEnded,
   finishTrialManually,
 } = require('../utils/trialHelper');
+const { sendSms } = require('../services/smsService');
 
 const MULTI_MONTH_SUBSCRIPTION_TYPES = ['3months', '6months', '1year'];
 const ADDITIONAL_USER_FEE_LKR = 499;
@@ -72,6 +73,45 @@ function buildSubscriptionAdditionalPayments(shop) {
 function calculatePaymentAmount(baseAmount, additionalPayments) {
   const additionalTotal = additionalPayments.reduce((sum, item) => sum + item.amount, 0);
   return baseAmount + additionalTotal;
+}
+
+function formatTrialEndDateTime(date) {
+  return new Date(date).toLocaleString('en-LK', {
+    timeZone: 'Asia/Colombo',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function buildTrialStartedSmsMessage(trialEndDate) {
+  const endLabel = formatTrialEndDateTime(trialEndDate);
+  return `Welcome to Smart Cost - All in one Business solution. You have successfully activated ${TRIAL_DURATION_DAYS} days trial. Your trial will end on ${endLabel}.`;
+}
+
+async function sendTrialStartedSms(shop) {
+  const mobile = shop.ownerMobileNumber?.trim();
+  if (!mobile) {
+    return { sent: false, reason: 'Owner mobile number is not set' };
+  }
+
+  if (!shop.trailEndDate) {
+    return { sent: false, reason: 'Trial end date is not set' };
+  }
+
+  try {
+    await sendSms({
+      to: mobile,
+      message: buildTrialStartedSmsMessage(shop.trailEndDate),
+    });
+    return { sent: true };
+  } catch (error) {
+    console.log('error in sendTrialStartedSms', error.message);
+    return { sent: false, reason: error.message || 'SMS send failed' };
+  }
 }
 
 function buildTrialResponse(
@@ -360,6 +400,11 @@ const startTrail = async (req, res) => {
       subscriptionInvoice = payments.subscriptionPayment;
 
       await shop.save();
+
+      const trialSmsResult = await sendTrialStartedSms(shop);
+      if (!trialSmsResult.sent) {
+        console.log('trial started SMS not sent', trialSmsResult.reason);
+      }
     } else if (!shop.isOneTimePaymentGenerated) {
       const payments = await createTrialPayments(shop);
       upFrontInvoice = payments.upFrontPayment;

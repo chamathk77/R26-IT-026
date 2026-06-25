@@ -8,6 +8,7 @@ const {
 } = require('../../utils/paymentResponseHelper');
 const { addDays } = require('../../utils/trialHelper');
 const { clearShopUserTokens } = require('../../services/trialExpirationService');
+const { sendSms } = require('../../services/smsService');
 
 const { PAYMENT_STATUS } = Payments;
 const REVIEWABLE_STATUS = 'pending';
@@ -186,6 +187,63 @@ async function applyShopUpdatesOnUpfrontApprove(shop) {
   await shop.save();
 }
 
+function formatPaymentTypeSmsLabel(paymentType) {
+  return paymentType === 'upFront' ? 'Up-front payment' : 'Subscription payment';
+}
+
+function buildPaymentApprovedSms({ receiptNumber, paymentType }) {
+  const typeLabel = formatPaymentTypeSmsLabel(paymentType);
+  return `Smart Cost: Your ${typeLabel.toLowerCase()} invoice has been approved. Receipt: ${receiptNumber}. Thank you for using Smart Cost.`;
+}
+
+async function sendPaymentApprovedSms(shop, payment) {
+  const mobile = shop.ownerMobileNumber?.trim();
+  if (!mobile) {
+    return { sent: false, reason: 'Owner mobile number is not set' };
+  }
+
+  try {
+    await sendSms({
+      to: mobile,
+      message: buildPaymentApprovedSms({
+        receiptNumber: payment.receiptNumber,
+        paymentType: payment.paymentType,
+      }),
+    });
+    return { sent: true };
+  } catch (error) {
+    console.log('error in sendPaymentApprovedSms', error.message);
+    return { sent: false, reason: error.message || 'SMS send failed' };
+  }
+}
+
+function buildPaymentRejectedSms({ receiptNumber, paymentType, reason }) {
+  const typeLabel = formatPaymentTypeSmsLabel(paymentType);
+  return `Smart Cost: Your ${typeLabel.toLowerCase()} invoice (Receipt: ${receiptNumber}) was rejected. Reason: ${reason}. Please resubmit your payment in the app.`;
+}
+
+async function sendPaymentRejectedSms(shop, payment, reason) {
+  const mobile = shop.ownerMobileNumber?.trim();
+  if (!mobile) {
+    return { sent: false, reason: 'Owner mobile number is not set' };
+  }
+
+  try {
+    await sendSms({
+      to: mobile,
+      message: buildPaymentRejectedSms({
+        receiptNumber: payment.receiptNumber,
+        paymentType: payment.paymentType,
+        reason,
+      }),
+    });
+    return { sent: true };
+  } catch (error) {
+    console.log('error in sendPaymentRejectedSms', error.message);
+    return { sent: false, reason: error.message || 'SMS send failed' };
+  }
+}
+
 const rejectUpfrontPayment = async (req, res) => {
   try {
     const { paymentId } = req.params;
@@ -232,6 +290,11 @@ const rejectUpfrontPayment = async (req, res) => {
     payment.status = 'rejected';
     payment.reason = reasonTrimmed;
     await payment.save();
+
+    const rejectionSmsResult = await sendPaymentRejectedSms(shop, payment, reasonTrimmed);
+    if (!rejectionSmsResult.sent) {
+      console.log('payment rejected SMS not sent', rejectionSmsResult.reason);
+    }
 
     res.status(200).json({
       success: true,
@@ -300,6 +363,11 @@ const approveUpfrontPayment = async (req, res) => {
 
     await applyShopUpdatesOnUpfrontApprove(shop);
     await payment.save();
+
+    const approvalSmsResult = await sendPaymentApprovedSms(shop, payment);
+    if (!approvalSmsResult.sent) {
+      console.log('payment approved SMS not sent', approvalSmsResult.reason);
+    }
 
     const usersLoggedOut = await clearShopUserTokens(shop.shopId);
 

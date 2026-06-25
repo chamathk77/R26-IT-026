@@ -110,6 +110,11 @@ const shopsDataSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    senderId: {
+      type: String,
+      default: 'NotifyDEMO',
+      trim: true,
+    },
     kpi: {
       type: Boolean,
       default: false,
@@ -282,6 +287,7 @@ module.exports = ShopsData;
 
   // manageInventory removed — inventory is per product (Product.isInventoryAvailable)
   // sendReceiptSms: boolean
+  // senderId: string (default: NotifyDEMO)
   // kpi: boolean
   // analyticsModule: boolean
   // smsMobileNumber: boolean

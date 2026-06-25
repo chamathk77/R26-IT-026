@@ -7,6 +7,7 @@ const {
   unlinkReceiptImageIfLocal,
 } = require('../middleware/uploadReceiptImage');
 const { formatPaymentRecord } = require('../utils/paymentReceiptHelper');
+const { sendSms } = require('../services/smsService');
 
 const { PAYMENT_MONTH_CODES } = Payments;
 
@@ -250,6 +251,67 @@ const SUBMITTABLE_PAYMENT_STATUSES = ['notPaid', 'rejected'];
 
 const OUTSTANDING_UPFRONT_STATUSES = ['pending', 'rejected', 'notPaid'];
 
+const INTERNAL_PAYMENT_NOTIFY_ROLES = ['internalAdmin', 'internalStaff'];
+
+function formatSubmittedPaymentTypeLabel(paymentType) {
+  return paymentType === 'upFront' ? 'up-front payment' : 'subscription payment';
+}
+
+function buildPaymentSubmittedAdminSms({ shopId, paymentType, receiptNumber }) {
+  const typeLabel = formatSubmittedPaymentTypeLabel(paymentType);
+  return `Smart Cost alert: Shop ${shopId} submitted a new ${typeLabel} (Receipt: ${receiptNumber}). Please review in the admin portal.`;
+}
+
+async function notifyInternalStaffPaymentSubmitted(payment) {
+  const internalUsers = await User.find({
+    role: { $in: INTERNAL_PAYMENT_NOTIFY_ROLES },
+  })
+    .select('phone role name')
+    .lean();
+
+  if (!internalUsers.length) {
+    return { sent: 0, failed: 0, skipped: 0, reason: 'No internal admin or staff users found' };
+  }
+
+  const message = buildPaymentSubmittedAdminSms({
+    shopId: normalizeShopId(payment.shopId),
+    paymentType: payment.paymentType,
+    receiptNumber: payment.receiptNumber,
+  });
+
+  let sent = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (const user of internalUsers) {
+    const phone = user.phone?.trim();
+    if (!phone) {
+      skipped += 1;
+      console.log(
+        'payment submitted admin SMS skipped - no phone',
+        user.role,
+        user.name || user._id,
+      );
+      continue;
+    }
+
+    try {
+      await sendSms({ to: phone, message });
+      sent += 1;
+    } catch (error) {
+      failed += 1;
+      console.log(
+        'payment submitted admin SMS failed',
+        user.role,
+        phone,
+        error.message,
+      );
+    }
+  }
+
+  return { sent, failed, skipped, total: internalUsers.length };
+}
+
 /** Submit receipt image for a payment (notPaid or rejected → pending). */
 const paymentSubmit = async (req, res) => {
   let savedReceiptPath = null;
@@ -385,6 +447,11 @@ const paymentSubmit = async (req, res) => {
       previousReceiptPath !== savedReceiptPath
     ) {
       unlinkReceiptImageIfLocal(previousReceiptPath);
+    }
+
+    const notifyResult = await notifyInternalStaffPaymentSubmitted(payment);
+    if (notifyResult.sent === 0) {
+      console.log('payment submitted admin SMS not sent', notifyResult.reason || notifyResult);
     }
 
     res.status(200).json({
