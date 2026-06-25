@@ -24,7 +24,7 @@ import {
   fetchPaymentsByShop_Service,
   getReceiptImageUrl,
 } from '../../../services/PaymentService';
-import { PaymentRecord, PaymentStatus, PaymentType } from '../../../type/payment';
+import { PaymentRecord, PaymentStatus, PaymentType, PaymentSubscriptionType } from '../../../type/payment';
 import { useCommonAlert } from '../../../hooks/useCommonAlert';
 import { handleSessionExpiredApiError } from '../../../utils/apiErrorAlert';
 import CommonAlert from '../../../components/CommonAlert/CommonAlert';
@@ -72,11 +72,78 @@ function formatPaymentMonth(month: string | null): string {
   return month.charAt(0).toUpperCase() + month.slice(1);
 }
 
+const SUBSCRIPTION_TYPE_LABELS: Record<PaymentSubscriptionType, string> = {
+  '1month': 'Monthly Plan',
+  '3months': 'Quarterly Plan',
+  '6months': 'Half-Year Plan',
+  '1year': 'Annual Plan',
+};
+
+const MULTI_MONTH_SUBSCRIPTION_TYPES: PaymentSubscriptionType[] = [
+  '3months',
+  '6months',
+  '1year',
+];
+
+function isMultiMonthSubscriptionPlan(payment: PaymentRecord): boolean {
+  return (
+    payment.paymentType === 'subscription' &&
+    Boolean(
+      payment.subscriptionType &&
+        MULTI_MONTH_SUBSCRIPTION_TYPES.includes(payment.subscriptionType),
+    )
+  );
+}
+
+function shouldShowExpiryDate(payment: PaymentRecord): boolean {
+  if (!payment.expiryDate) return false;
+  return isMultiMonthSubscriptionPlan(payment) || payment.paymentType === 'upFront';
+}
+
+function shouldShowExactPaymentDate(payment: PaymentRecord): boolean {
+  if (!payment.exactPaymentDay) return false;
+  return payment.paymentType === 'upFront' || isMultiMonthSubscriptionPlan(payment);
+}
+
+function formatSubscriptionTypeLabel(type: string | null | undefined): string {
+  if (!type) return '—';
+  return SUBSCRIPTION_TYPE_LABELS[type as PaymentSubscriptionType] ?? type;
+}
+
 function getPaymentTitle(payment: PaymentRecord): string {
   if (payment.paymentType === 'upFront') {
     return 'Up-front payment';
   }
-  return `${formatPaymentMonth(payment.paymentMonth)} subscription`;
+
+  const planLabel = payment.subscriptionType
+    ? formatSubscriptionTypeLabel(payment.subscriptionType)
+    : payment.paymentMonth
+      ? `${formatPaymentMonth(payment.paymentMonth)}`
+      : 'Subscription';
+
+  return `${planLabel} · ${formatPaymentType(payment.paymentType)}`;
+}
+
+function getPaymentPeriodDetail(payment: PaymentRecord): { label: string; value: string } | null {
+  if (payment.paymentType === 'upFront') {
+    return null;
+  }
+
+  if (
+    payment.paymentType === 'subscription' &&
+    payment.subscriptionType &&
+    payment.subscriptionType !== '1month'
+  ) {
+    return {
+      label: 'Subscription plan',
+      value: formatSubscriptionTypeLabel(payment.subscriptionType),
+    };
+  }
+
+  return {
+    label: 'Payment month',
+    value: formatPaymentMonth(payment.paymentMonth),
+  };
 }
 
 function getSummaryTitle(typeFilter: PaymentTypeFilter): string {
@@ -274,6 +341,7 @@ function PaymentHistoryCard({
   const highlight = getStatusHighlight(payment.status, resolvedTheme);
   const receiptImageUrl = getReceiptImageUrl(payment.receiptImagePath);
   const showPayNow = isExpanded && shouldShowPayNow(payment.status);
+  const paymentPeriodDetail = getPaymentPeriodDetail(payment);
 
   return (
     <View
@@ -303,6 +371,27 @@ function PaymentHistoryCard({
           >
             {payment.receiptNumber}
           </Text>
+          {shouldShowExactPaymentDate(payment) ? (
+            <Text
+              style={[
+                paymentStyles.periodText,
+                { color: paperTheme.colors.onSurfaceVariant },
+              ]}
+            >
+              Payment date {formatDate(payment.exactPaymentDay!)}
+            </Text>
+          ) : null}
+          {shouldShowExpiryDate(payment) ? (
+            <Text
+              style={[
+                paymentStyles.expiryText,
+                { color: paperTheme.colors.primary },
+              ]}
+            >
+              {payment.paymentType === 'upFront' ? 'Expires on' : 'Valid until'}{' '}
+              {formatDate(payment.expiryDate!)}
+            </Text>
+          ) : null}
         </View>
         <View style={paymentStyles.historyTopTrailing}>
           <SettingsBadge
@@ -352,16 +441,33 @@ function PaymentHistoryCard({
             value={formatPaymentType(payment.paymentType)}
             paperTheme={paperTheme}
           />
-          <PaymentDetailRow
-            label="Payment month"
-            value={formatPaymentMonth(payment.paymentMonth)}
-            paperTheme={paperTheme}
-          />
-          <PaymentDetailRow
-            label="Exact payment day"
-            value={formatDateTime(payment.exactPaymentDay)}
-            paperTheme={paperTheme}
-          />
+          {paymentPeriodDetail ? (
+            <PaymentDetailRow
+              label={paymentPeriodDetail.label}
+              value={paymentPeriodDetail.value}
+              paperTheme={paperTheme}
+            />
+          ) : null}
+          {shouldShowExactPaymentDate(payment) ? (
+            <PaymentDetailRow
+              label="Exact payment day"
+              value={formatDate(payment.exactPaymentDay!)}
+              paperTheme={paperTheme}
+            />
+          ) : (
+            <PaymentDetailRow
+              label="Exact payment day"
+              value={formatDateTime(payment.exactPaymentDay)}
+              paperTheme={paperTheme}
+            />
+          )}
+          {shouldShowExpiryDate(payment) ? (
+            <PaymentDetailRow
+              label="Expires on"
+              value={formatDate(payment.expiryDate!)}
+              paperTheme={paperTheme}
+            />
+          ) : null}
           <PaymentDetailRow
             label="Receipt upload"
             value={formatReceiptUploadStatus(payment.receiptImagePath)}
@@ -939,6 +1045,16 @@ const paymentStyles = StyleSheet.create({
     fontFamily: fonts.PoppinsRegular,
     fontSize: 12,
     marginTop: 2,
+  },
+  periodText: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  expiryText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 12,
+    marginTop: 4,
   },
   metaRow: {
     flexDirection: 'row',

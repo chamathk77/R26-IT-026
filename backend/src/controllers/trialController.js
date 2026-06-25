@@ -3,6 +3,7 @@ const ShopsData = require('../models/shopsData');
 const User = require('../models/user');
 const {
   generateUpFrontReceiptNumber,
+  generatePlanSubscriptionReceiptNumber,
   formatPaymentRecord,
   UPFRONT_INVOICE_IMAGE_PLACEHOLDER,
 } = require('../utils/paymentReceiptHelper');
@@ -20,16 +21,44 @@ const {
   finishTrialManually,
 } = require('../utils/trialHelper');
 
-function parseStartTrialBoolean(value) {
-  if (typeof value === 'boolean') return value;
-  if (value === 'true' || value === 1 || value === '1') return true;
-  if (value === 'false' || value === 0 || value === '0') return false;
-  return null;
+const MULTI_MONTH_SUBSCRIPTION_TYPES = ['3months', '6months', '1year'];
+
+const SUBSCRIPTION_PLAN_DURATION_DAYS = {
+  '3months': 30 * 3,
+  '6months': 6 * 30,
+  '1year': 12 * 30,
+};
+
+function getSubscriptionFee(subscriptionType) {
+  const entry = ShopsData.SUBSCRIPTION_FEES.find((item) => item.type === subscriptionType);
+  return entry?.fee ?? null;
+}
+
+function shouldCreateInitialSubscriptionPayment(shop) {
+  const subscriptionType = shop.subscriptionType;
+  return Boolean(
+    subscriptionType && MULTI_MONTH_SUBSCRIPTION_TYPES.includes(subscriptionType),
+  );
+}
+
+function getSubscriptionExpiryDate(subscriptionType, exactPaymentDay) {
+  const durationDays = SUBSCRIPTION_PLAN_DURATION_DAYS[subscriptionType];
+  if (!durationDays || !exactPaymentDay) {
+    return null;
+  }
+  return addDays(exactPaymentDay, durationDays);
 }
 
 function buildTrialResponse(
   shop,
-  { message, token, tokenExpiresInSeconds, alreadyActive = false, upFrontPayment = null },
+  {
+    message,
+    token,
+    tokenExpiresInSeconds,
+    alreadyActive = false,
+    upFrontPayment = null,
+    subscriptionPayment = null,
+  },
 ) {
   return {
     success: true,
@@ -47,6 +76,7 @@ function buildTrialResponse(
     tokenExpiresInSeconds,
     token: token ?? null,
     upFrontPayment,
+    subscriptionPayment,
   };
 }
 
@@ -91,6 +121,8 @@ async function createUpFrontInvoiceIfNeeded(shop) {
 
   const receiptNumber = await generateUpFrontReceiptNumber();
   const submittedDate = new Date();
+  const exactPaymentDay = shop.trailStartDate ? new Date(shop.trailStartDate) : submittedDate;
+  const expiryDate = shop.trailEndDate ? new Date(shop.trailEndDate) : null;
 
   const payment = await Payments.create({
     shopId: shop.shopId,
@@ -100,7 +132,8 @@ async function createUpFrontInvoiceIfNeeded(shop) {
     paymentMonth: null,
     paymentAmount: shop.oneTimePaymentAmount,
     paymentType: 'upFront',
-    exactPaymentDay: null,
+    exactPaymentDay,
+    expiryDate,
     status: 'notPaid',
     reason: null,
   });
@@ -110,6 +143,83 @@ async function createUpFrontInvoiceIfNeeded(shop) {
 
   return { created: true, payment: payment.toObject() };
 }
+
+async function findExistingInitialSubscriptionInvoice(shopId, subscriptionType) {
+  return Payments.findOne({
+    shopId,
+    paymentType: 'subscription',
+    subscriptionType,
+    status: 'notPaid',
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+}
+
+/**
+ * Creates a notPaid subscription invoice when trial starts for multi-month plans only.
+ */
+async function createSubscriptionInvoiceIfNeeded(shop) {
+  if (!shouldCreateInitialSubscriptionPayment(shop)) {
+    return { created: false, payment: null };
+  }
+
+  const subscriptionType = shop.subscriptionType;
+  const existing = await findExistingInitialSubscriptionInvoice(shop.shopId, subscriptionType);
+  if (existing) {
+    return { created: false, payment: existing };
+  }
+
+  const fee = getSubscriptionFee(subscriptionType);
+  if (fee == null || fee <= 0) {
+    const error = new Error(
+      `Subscription fee is not configured for plan ${subscriptionType}. Please contact support.`,
+    );
+    error.code = 'SUBSCRIPTION_FEE_NOT_SET';
+    throw error;
+  }
+
+  const submittedDate = new Date();
+  const receiptNumber = await generatePlanSubscriptionReceiptNumber(submittedDate);
+  const exactPaymentDay = shop.trailStartDate ? new Date(shop.trailStartDate) : submittedDate;
+  const expiryDate = getSubscriptionExpiryDate(subscriptionType, exactPaymentDay);
+
+  const payment = await Payments.create({
+    shopId: shop.shopId,
+    receiptNumber,
+    receiptImagePath: UPFRONT_INVOICE_IMAGE_PLACEHOLDER,
+    submittedDate,
+    paymentMonth: null,
+    paymentAmount: fee,
+    paymentType: 'subscription',
+    subscriptionType,
+    exactPaymentDay,
+    expiryDate,
+    status: 'notPaid',
+    reason: null,
+  });
+
+  return { created: true, payment: payment.toObject() };
+}
+
+function parseStartTrialBoolean(value) {
+  if (typeof value === 'boolean') return value;
+  if (value === 'true' || value === 1 || value === '1') return true;
+  if (value === 'false' || value === 0 || value === '0') return false;
+  return null;
+}
+
+async function createTrialPayments(shop) {
+  const upFrontResult = await createUpFrontInvoiceIfNeeded(shop);
+  const subscriptionResult = await createSubscriptionInvoiceIfNeeded(shop);
+
+  return {
+    upFrontPayment: upFrontResult.payment ? formatPaymentRecord(upFrontResult.payment) : null,
+    subscriptionPayment: subscriptionResult.payment
+      ? formatPaymentRecord(subscriptionResult.payment)
+      : null,
+  };
+}
+
 // start trial
 const startTrail = async (req, res) => {
   try {
@@ -171,13 +281,9 @@ const startTrail = async (req, res) => {
 
     const alreadyActive = isActiveTrial(shop);
     let upFrontInvoice = null;
+    let subscriptionInvoice = null;
 
     if (!alreadyActive) {
-      const invoiceResult = await createUpFrontInvoiceIfNeeded(shop);
-      upFrontInvoice = invoiceResult.payment
-        ? formatPaymentRecord(invoiceResult.payment)
-        : null;
-
       const trailStartDate = new Date();
       const trailEndDate = addDays(trailStartDate, TRIAL_DURATION_DAYS);
 
@@ -186,26 +292,50 @@ const startTrail = async (req, res) => {
       shop.trailStartDate = trailStartDate;
       shop.trailEndDate = trailEndDate;
       shop.status = 'trial';
+
+      const payments = await createTrialPayments(shop);
+      upFrontInvoice = payments.upFrontPayment;
+      subscriptionInvoice = payments.subscriptionPayment;
+
       await shop.save();
     } else if (!shop.isOneTimePaymentGenerated) {
-      const invoiceResult = await createUpFrontInvoiceIfNeeded(shop);
-      upFrontInvoice = invoiceResult.payment
-        ? formatPaymentRecord(invoiceResult.payment)
-        : null;
+      const payments = await createTrialPayments(shop);
+      upFrontInvoice = payments.upFrontPayment;
+      subscriptionInvoice = payments.subscriptionPayment;
     } else {
       const existing = await findExistingUpFrontInvoice(shop.shopId);
       upFrontInvoice = existing ? formatPaymentRecord(existing) : null;
+
+      if (shouldCreateInitialSubscriptionPayment(shop)) {
+        const existingSubscription = await findExistingInitialSubscriptionInvoice(
+          shop.shopId,
+          shop.subscriptionType,
+        );
+        subscriptionInvoice = existingSubscription
+          ? formatPaymentRecord(existingSubscription)
+          : null;
+      }
     }
 
     const { token, tokenExpiresInSeconds } = await createAndSaveTrialToken(req.user.id, shop);
 
     await User.findByIdAndUpdate(req.user.id, { isFirsttimeLogin: false });
 
-    const trialMessage = alreadyActive
-      ? 'Trial is already active'
-      : upFrontInvoice?.status === 'notPaid'
-        ? 'Trial started. Please pay the one-time fee and upload your receipt.'
-        : 'Trial started successfully';
+    const hasUnpaidUpFront = upFrontInvoice?.status === 'notPaid';
+    const hasUnpaidSubscription = subscriptionInvoice?.status === 'notPaid';
+
+    let trialMessage = 'Trial started successfully';
+    if (alreadyActive) {
+      trialMessage = 'Trial is already active';
+    } else if (hasUnpaidUpFront && hasUnpaidSubscription) {
+      trialMessage =
+        'Trial started. Please pay the one-time fee and subscription fee, then upload your receipts.';
+    } else if (hasUnpaidUpFront) {
+      trialMessage = 'Trial started. Please pay the one-time fee and upload your receipt.';
+    } else if (hasUnpaidSubscription) {
+      trialMessage =
+        'Trial started. Please pay your subscription fee and upload your receipt.';
+    }
 
     res.status(200).json(
       buildTrialResponse(shop, {
@@ -214,10 +344,11 @@ const startTrail = async (req, res) => {
         tokenExpiresInSeconds,
         alreadyActive,
         upFrontPayment: upFrontInvoice,
+        subscriptionPayment: subscriptionInvoice,
       }),
     );
   } catch (error) {
-    if (error.code === 'ONE_TIME_AMOUNT_NOT_SET') {
+    if (error.code === 'ONE_TIME_AMOUNT_NOT_SET' || error.code === 'SUBSCRIPTION_FEE_NOT_SET') {
       return res.status(400).json({ success: false, message: error.message });
     }
     console.log('error in startTrail', error);

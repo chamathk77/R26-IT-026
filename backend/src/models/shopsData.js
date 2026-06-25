@@ -4,6 +4,12 @@ const SHOP_STATUS = ['trial', 'active', 'disabled', 'due', 'trialExpired','diact
 
 const SUBSCRIPTION_TYPES = ['1month', '3months', '6months', '1year'];
 
+const SUBSCRIPTION_FEES = [
+  { type: '1month', fee: 4900 },
+  { type: '3months', fee: 13800 },
+  { type: '6months', fee: 26400 },
+  { type: '1year', fee: 51600 },
+];
 const ONBOARD_STEPS = [
   'startOnboarding',
   'shopRegistered',
@@ -231,6 +237,7 @@ const ShopsData = mongoose.model('ShopsData', shopsDataSchema);
 ShopsData.SHOP_STATUS = SHOP_STATUS;
 ShopsData.ONBOARD_STEPS = ONBOARD_STEPS;
 ShopsData.SUBSCRIPTION_TYPES = SUBSCRIPTION_TYPES;
+ShopsData.SUBSCRIPTION_FEES = SUBSCRIPTION_FEES;
 
 module.exports = ShopsData;
 

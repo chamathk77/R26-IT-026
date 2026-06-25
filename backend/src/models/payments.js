@@ -19,6 +19,8 @@ const PAYMENT_STATUS = ['pending', 'approve', 'rejected', 'notPaid'];
 
 const PAYMENT_TYPE = ['subscription', 'upFront'];
 
+const SUBSCRIPTION_TYPES = ['1month', '3months', '6months', '1year'];
+
 const paymentsSchema = new mongoose.Schema(
   {
     shopId: {
@@ -61,7 +63,21 @@ const paymentsSchema = new mongoose.Schema(
       default: 'subscription',
       trim: true,
     },
+    subscriptionType: {
+      type: String,
+      default: null,
+      validate: {
+        validator(value) {
+          return value == null || SUBSCRIPTION_TYPES.includes(value);
+        },
+        message: 'subscriptionType must be one of: 1month, 3months, 6months, 1year',
+      },
+    },
     exactPaymentDay: {
+      type: Date,
+      default: null,
+    },
+    expiryDate: {
       type: Date,
       default: null,
     },
@@ -97,6 +113,14 @@ paymentsSchema.pre('validate', function validatePaymentRules() {
     }
   }
 
+  if (this.paymentType === 'upFront') {
+    this.subscriptionType = null;
+  }
+
+  if (this.paymentType === 'subscription' && this.subscriptionType) {
+    this.subscriptionType = String(this.subscriptionType).trim();
+  }
+
   if (this.status === 'rejected') {
     if (!this.reason?.trim()) {
       this.invalidate('reason', 'Reason is required when payment status is rejected');
@@ -118,6 +142,7 @@ const Payments = mongoose.model('Payments', paymentsSchema);
 Payments.PAYMENT_MONTH_CODES = PAYMENT_MONTH_CODES;
 Payments.PAYMENT_STATUS = PAYMENT_STATUS;
 Payments.PAYMENT_TYPE = PAYMENT_TYPE;
+Payments.SUBSCRIPTION_TYPES = SUBSCRIPTION_TYPES;
 
 module.exports = Payments;
 
@@ -130,7 +155,9 @@ module.exports = Payments;
 // submittedDate
 // paymentMonth (enum: january, february, march, april, may, june, july, august, september, october, november, december)
 // paymentType: subscription, upFront
+// subscriptionType: 1month | 3months | 6months | 1year | null
 // exactPaymentDay
+// expiryDate
 // status: pending, approve, rejected, notPaid
 // reason
 

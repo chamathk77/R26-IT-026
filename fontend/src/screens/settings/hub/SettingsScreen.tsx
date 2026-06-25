@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -207,18 +206,21 @@ export default function SettingsScreen({ navigation }: Props) {
   };
 
   const confirmLogout = () => {
-    Alert.alert('Log out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log out',
-        style: 'destructive',
-        onPress: async () => {
-          await clearSavedToken();
-          dispatch(clearLoginSession());
-          logoutSession();
-        },
+    show_Alert(
+      'error',
+      'Log out',
+      'Are you sure you want to log out?',
+      2,
+      false,
+      'Log out',
+      async () => {
+        await clearSavedToken();
+        dispatch(clearLoginSession());
+        logoutSession();
       },
-    ]);
+      'Cancel',
+      () => {},
+    );
   };
 
   const goToPos = () => {

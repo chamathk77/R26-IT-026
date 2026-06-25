@@ -2,6 +2,8 @@ export type PaymentStatus = 'pending' | 'approve' | 'rejected' | 'notPaid';
 
 export type PaymentType = 'subscription' | 'upFront';
 
+export type PaymentSubscriptionType = '1month' | '3months' | '6months' | '1year';
+
 export interface PaymentRecord {
   _id: string;
   shopId: string;
@@ -11,7 +13,9 @@ export interface PaymentRecord {
   paymentMonth: string | null;
   paymentAmount: number | null;
   paymentType: PaymentType;
+  subscriptionType?: PaymentSubscriptionType | null;
   exactPaymentDay: string | null;
+  expiryDate?: string | null;
   status: PaymentStatus;
   reason: string | null;
   createdAt: string;
