@@ -4,6 +4,15 @@ const SalePerson = require('../models/salePerson');
 
 const KPI_PERIOD_KEYS = new Set(['current_month', 'this_month', 'last_month', 'last_3_months']);
 const ORDER_ID_MIN_LENGTH = 6;
+const SUBMITTED_HISTORY_STATUS = 'submited';
+
+function buildKpiSubmittedHistoryFilter(shopId, extra = {}) {
+  return {
+    shopId,
+    status: SUBMITTED_HISTORY_STATUS,
+    ...extra,
+  };
+}
 
 function normalizeShopId(value) {
   return value ? String(value).trim().toUpperCase() : '';
@@ -269,9 +278,14 @@ async function findShopHistoryByOrderId(shopId, orderIdRaw) {
     return { error: 'Valid order id is required' };
   }
 
-  const history = await History.findOne({ shopId, orderId }).lean();
+  const history = await History.findOne(
+    buildKpiSubmittedHistoryFilter(shopId, { orderId }),
+  ).lean();
   if (!history) {
-    return { error: 'History record not found for this order id', status: 404 };
+    return {
+      error: 'Submitted history record not found for this order id',
+      status: 404,
+    };
   }
 
   return { history, orderId };
@@ -309,7 +323,7 @@ const assignKpiHistorySalesPerson = async (req, res) => {
 
     const { history } = lookup;
 
-    if (history.status !== 'submited') {
+    if (history.status !== SUBMITTED_HISTORY_STATUS) {
       return res.status(400).json({
         success: false,
         message: 'Sales person can only be assigned to submitted history records',
@@ -356,11 +370,11 @@ const getKpiSummary = async (req, res) => {
 
     const { rangeStart, rangeEnd, appliedFilters } = rangeResult;
 
-    const records = await History.find({
-      shopId,
-      status: 'submited',
-      checkOutTime: { $gte: rangeStart, $lte: rangeEnd },
-    })
+    const records = await History.find(
+      buildKpiSubmittedHistoryFilter(shopId, {
+        checkOutTime: { $gte: rangeStart, $lte: rangeEnd },
+      }),
+    )
       .select('salesPersonId totalAmount orderId checkOutTime')
       .sort({ checkOutTime: -1 })
       .lean();
@@ -476,12 +490,10 @@ const getKpiHistorySummary = async (req, res) => {
     }
 
     const { page, limit, skip } = parsePagination(req.query);
-    const filter = {
-      shopId,
-      status: 'submited',
+    const filter = buildKpiSubmittedHistoryFilter(shopId, {
       salesPersonId: salesPersonResult.salesPersonId,
       checkOutTime: { $gte: rangeStart, $lte: rangeEnd },
-    };
+    });
 
     const [total, records, salePerson, aggregateResult] = await Promise.all([
       History.countDocuments(filter),
