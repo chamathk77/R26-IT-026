@@ -35,6 +35,8 @@ import {
   SettingsDetailRow,
   SettingsSection,
 } from '../shared/SettingsDetailComponents';
+import PaymentBreakdownList from './PaymentBreakdownList';
+import { formatPaymentAmount } from '../../../utils/paymentBreakdown';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PayNow'>;
 
@@ -140,8 +142,7 @@ function formatDate(isoDate: string | null): string {
 }
 
 function formatAmount(amount: number | null): string {
-  if (amount == null) return '—';
-  return `Rs. ${amount.toLocaleString('en-LK')}`;
+  return formatPaymentAmount(amount);
 }
 
 function formatPaymentMonth(month: string | null): string {
@@ -379,6 +380,10 @@ export default function PayNowScreen({ navigation, route }: Props) {
                 ? 'Upload a new receipt image to resubmit this payment.'
                 : 'Upload your bank transfer receipt to complete this payment.'}
             </Text>
+          </View>
+
+          <View style={screenStyles.breakdownWrap}>
+            <PaymentBreakdownList payment={payment} paperTheme={paperTheme} />
           </View>
 
           <SettingsSection
@@ -679,6 +684,9 @@ const screenStyles = StyleSheet.create({
     lineHeight: 20,
     textAlign: 'center',
     marginTop: 14,
+  },
+  breakdownWrap: {
+    marginBottom: 20,
   },
   reasonCard: {
     borderRadius: 14,

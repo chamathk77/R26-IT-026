@@ -4,6 +4,11 @@ export type PaymentType = 'subscription' | 'upFront';
 
 export type PaymentSubscriptionType = '1month' | '3months' | '6months' | '1year';
 
+export interface AdditionalPaymentItem {
+  name: string;
+  amount: number;
+}
+
 export interface PaymentRecord {
   _id: string;
   shopId: string;
@@ -12,6 +17,7 @@ export interface PaymentRecord {
   submittedDate: string;
   paymentMonth: string | null;
   paymentAmount: number | null;
+  additionalPayments?: AdditionalPaymentItem[];
   paymentType: PaymentType;
   subscriptionType?: PaymentSubscriptionType | null;
   exactPaymentDay: string | null;

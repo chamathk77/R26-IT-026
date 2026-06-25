@@ -99,6 +99,12 @@ function formatPaymentRecord(payment) {
     submittedDate: payment.submittedDate,
     paymentMonth: payment.paymentMonth ?? null,
     paymentAmount: payment.paymentAmount ?? null,
+    additionalPayments: Array.isArray(payment.additionalPayments)
+      ? payment.additionalPayments.map((item) => ({
+          name: item.name,
+          amount: item.amount,
+        }))
+      : [],
     paymentType: payment.paymentType,
     subscriptionType: payment.subscriptionType ?? null,
     exactPaymentDay: payment.exactPaymentDay ?? null,

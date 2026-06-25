@@ -21,6 +21,22 @@ const PAYMENT_TYPE = ['subscription', 'upFront'];
 
 const SUBSCRIPTION_TYPES = ['1month', '3months', '6months', '1year'];
 
+const additionalPaymentItemSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    amount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+  },
+  { _id: false },
+);
+
 const paymentsSchema = new mongoose.Schema(
   {
     shopId: {
@@ -56,6 +72,10 @@ const paymentsSchema = new mongoose.Schema(
       type: Number,
       default: null,
       min: 0,
+    },
+    additionalPayments: {
+      type: [additionalPaymentItemSchema],
+      default: [],
     },
     paymentType: {
       type: String,
@@ -154,6 +174,8 @@ module.exports = Payments;
 // receiptImagePath
 // submittedDate
 // paymentMonth (enum: january, february, march, april, may, june, july, august, september, october, november, december)
+// paymentAmount
+// additionalPayments: [{ name, amount }]
 // paymentType: subscription, upFront
 // subscriptionType: 1month | 3months | 6months | 1year | null
 // exactPaymentDay

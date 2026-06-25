@@ -13,6 +13,10 @@ const { PAYMENT_STATUS } = Payments;
 const REVIEWABLE_STATUS = 'pending';
 const ADMIN_SETTABLE_STATUSES = ['approve', 'rejected'];
 
+const { SUBSCRIPTION_TYPES } = ShopsData;
+const MULTI_MONTH_SUBSCRIPTION_TYPES = ['3months', '6months', '1year'];
+const ONE_MONTH_SUBSCRIPTION_TYPE = '1month';
+
 function startOfDay(date = new Date()) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -106,17 +110,79 @@ const getPaymentDetails = async (req, res) => {
 
 
 
-async function applyShopUpdatesOnUpfrontApprove(shop) {
-  if (!shop.trailStartDate) {
-    throw new Error('Shop trial start date is required to approve upfront payment');
+function validateUpfrontApproveScenario(shop) {
+  const subscriptionType = shop.subscriptionType;
+  const shopStatus = shop.status;
+
+  if (!subscriptionType || !SUBSCRIPTION_TYPES.includes(subscriptionType)) {
+    return {
+      error: 'Shop subscription type must be set before approving upfront payment',
+    };
   }
 
-  const trialStart = startOfDay(shop.trailStartDate);
+  if (MULTI_MONTH_SUBSCRIPTION_TYPES.includes(subscriptionType)) {
+    if (shopStatus === 'trial') {
+      return { scenario: 'multiMonthTrial' };
+    }
+    if (shopStatus === 'trialExpired') {
+      return { scenario: 'multiMonthTrialExpired' };
+    }
+    return {
+      error: `Upfront payment for ${subscriptionType} subscription can only be approved when shop status is trial or trialExpired`,
+      shopStatus,
+      subscriptionType,
+    };
+  }
+
+  if (subscriptionType === ONE_MONTH_SUBSCRIPTION_TYPE) {
+    if (shopStatus !== 'trial' && shopStatus !== 'trialExpired') {
+      return {
+        error: 'Upfront payment for 1-month subscription can only be approved when shop status is trial or trialExpired',
+        shopStatus,
+        subscriptionType,
+      };
+    }
+    if (!shop.trailStartDate) {
+      return {
+        error: 'Shop trial start date is required before approving upfront payment for 1-month subscription',
+      };
+    }
+    return { scenario: 'oneMonthTrial' };
+  }
+
+  return {
+    error: `Unsupported subscription type: ${subscriptionType}`,
+    subscriptionType,
+  };
+}
+
+async function applyShopUpdatesOnUpfrontApprove(shop) {
+  const validation = validateUpfrontApproveScenario(shop);
+  if (validation.error) {
+    const err = new Error(validation.error);
+    err.code = 'UPFRONT_APPROVE_SCENARIO';
+    throw err;
+  }
 
   shop.isOneTimePaymentDone = true;
-  shop.subscriptionStartDate = trialStart;
-  shop.nextPaymentDate = startOfDay(addDays(trialStart, 30));
-  shop.status = 'active';
+
+  switch (validation.scenario) {
+    case 'multiMonthTrial':
+      break;
+    case 'multiMonthTrialExpired':
+      shop.status = 'paymentPending';
+      break;
+    case 'oneMonthTrial': {
+      const trialStart = startOfDay(shop.trailStartDate);
+      shop.subscriptionStartDate = trialStart;
+      shop.nextPaymentDate = startOfDay(addDays(trialStart, 30));
+      shop.status = 'active';
+      break;
+    }
+    default:
+      throw new Error('Unhandled upfront approval scenario');
+  }
+
   await shop.save();
 }
 
@@ -216,10 +282,13 @@ const approveUpfrontPayment = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Shop not found for this payment' });
     }
 
-    if (!shop.trailStartDate) {
+    const scenarioCheck = validateUpfrontApproveScenario(shop);
+    if (scenarioCheck.error) {
       return res.status(400).json({
         success: false,
-        message: 'Shop trial start date is required before approving upfront payment',
+        message: scenarioCheck.error,
+        ...(scenarioCheck.shopStatus && { shopStatus: scenarioCheck.shopStatus }),
+        ...(scenarioCheck.subscriptionType && { subscriptionType: scenarioCheck.subscriptionType }),
       });
     }
 
@@ -242,6 +311,9 @@ const approveUpfrontPayment = async (req, res) => {
       shop: formatShopSummary(shop.toObject()),
     });
   } catch (error) {
+    if (error.code === 'UPFRONT_APPROVE_SCENARIO') {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     if (error.name === 'ValidationError') {
       return res.status(400).json({ success: false, message: error.message });
     }

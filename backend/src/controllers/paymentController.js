@@ -248,6 +248,8 @@ const getRecentPaymentByShop = async (req, res) => {
 
 const SUBMITTABLE_PAYMENT_STATUSES = ['notPaid', 'rejected'];
 
+const OUTSTANDING_UPFRONT_STATUSES = ['pending', 'rejected', 'notPaid'];
+
 /** Submit receipt image for a payment (notPaid or rejected → pending). */
 const paymentSubmit = async (req, res) => {
   let savedReceiptPath = null;
@@ -312,6 +314,44 @@ const paymentSubmit = async (req, res) => {
       });
     }
 
+    if (payment.paymentType === 'subscription') {
+      const shop = access.shop;
+      const outstandingUpFront = await Payments.findOne({
+        shopId,
+        paymentType: 'upFront',
+        status: { $in: OUTSTANDING_UPFRONT_STATUSES },
+      })
+        .sort({ submittedDate: -1 })
+        .lean();
+
+      if (!shop.isOneTimePaymentDone || outstandingUpFront) {
+        unlinkReceiptImageIfLocal(publicReceiptPath(req.file.filename));
+
+        let message =
+          'Please submit your one-time upfront payment before submitting a subscription payment';
+        if (outstandingUpFront?.status === 'pending') {
+          message =
+            'Your upfront payment is awaiting approval. Please wait for approval before submitting a subscription payment';
+        } else if (outstandingUpFront?.status === 'rejected') {
+          message =
+            'Your upfront payment was rejected. Please resubmit your upfront payment before submitting a subscription payment';
+        } else if (outstandingUpFront?.status === 'notPaid') {
+          message =
+            'Please submit your one-time upfront payment receipt before submitting a subscription payment';
+        }
+
+        return res.status(400).json({
+          success: false,
+          message,
+          isOneTimePaymentDone: shop.isOneTimePaymentDone,
+          ...(outstandingUpFront && {
+            upFrontPaymentId: outstandingUpFront._id,
+            upFrontPaymentStatus: outstandingUpFront.status,
+          }),
+        });
+      }
+    }
+
     if (payment.paymentMonth) {
       const existingPending = await Payments.findOne({
         shopId,
@@ -347,19 +387,11 @@ const paymentSubmit = async (req, res) => {
       unlinkReceiptImageIfLocal(previousReceiptPath);
     }
 
-    const shop = await ShopsData.findOne({ shopId });
-    if (shop) {
-      shop.status = 'initialPaymentPending';
-      await shop.save();
-    }
-
     res.status(200).json({
       success: true,
       message: 'Payment submitted successfully',
       payment: formatPayment(payment),
-      shop: shop
-        ? { shopId: shop.shopId, status: shop.status }
-        : { shopId, status: null },
+      shop: { shopId: access.shop.shopId, status: access.shop.status },
     });
   } catch (error) {
     if (savedReceiptPath) {

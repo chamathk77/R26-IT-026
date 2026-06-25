@@ -1,6 +1,15 @@
 const mongoose = require('mongoose');
 
-const SHOP_STATUS = ['trial', 'active', 'disabled', 'due', 'trialExpired','diactiveByAdmin','diactiveByUser','initialPaymentPending','paymentPending'];
+const SHOP_STATUS = [
+  'trial', 
+  'active', 
+  'disabled', 
+  'due', 
+  'trialExpired',
+  'diactiveByAdmin',
+  'diactiveByUser',
+  'paymentPending'
+];
 
 const SUBSCRIPTION_TYPES = ['1month', '3months', '6months', '1year'];
 
@@ -10,6 +19,7 @@ const SUBSCRIPTION_FEES = [
   { type: '6months', fee: 26400 },
   { type: '1year', fee: 51600 },
 ];
+
 const ONBOARD_STEPS = [
   'startOnboarding',
   'shopRegistered',

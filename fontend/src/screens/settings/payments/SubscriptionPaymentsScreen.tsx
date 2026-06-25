@@ -30,6 +30,8 @@ import { handleSessionExpiredApiError } from '../../../utils/apiErrorAlert';
 import CommonAlert from '../../../components/CommonAlert/CommonAlert';
 import { cardShadow, settingsDetailStyles as styles } from '../shared/settingsDetailStyles';
 import { SettingsBadge, SettingsEmptyState } from '../shared/SettingsDetailComponents';
+import PaymentBreakdownList from './PaymentBreakdownList';
+import { hasPaymentBreakdown } from '../../../utils/paymentBreakdown';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SubscriptionPayments'>;
 
@@ -483,6 +485,15 @@ function PaymentHistoryCard({
             value={formatDateTime(payment.updatedAt)}
             paperTheme={paperTheme}
           />
+
+          {hasPaymentBreakdown(payment) ? (
+            <PaymentBreakdownList
+              payment={payment}
+              paperTheme={paperTheme}
+              compact
+              showTotal
+            />
+          ) : null}
 
           {receiptImageUrl ? (
             <TouchableOpacity

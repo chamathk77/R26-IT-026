@@ -22,6 +22,7 @@ const {
 } = require('../utils/trialHelper');
 
 const MULTI_MONTH_SUBSCRIPTION_TYPES = ['3months', '6months', '1year'];
+const ADDITIONAL_USER_FEE_LKR = 499;
 
 const SUBSCRIPTION_PLAN_DURATION_DAYS = {
   '3months': 30 * 3,
@@ -47,6 +48,30 @@ function getSubscriptionExpiryDate(subscriptionType, exactPaymentDay) {
     return null;
   }
   return addDays(exactPaymentDay, durationDays);
+}
+
+function buildSubscriptionAdditionalPayments(shop) {
+  if (!shop.isAdditionalUsersAdded) {
+    return [];
+  }
+
+  const count = Number.parseInt(String(shop.numAdditionalUsers ?? ''), 10);
+  if (!Number.isFinite(count) || count <= 0) {
+    return [];
+  }
+
+  const amount = count * ADDITIONAL_USER_FEE_LKR;
+  return [
+    {
+      name: `Additional users (${count} × Rs. ${ADDITIONAL_USER_FEE_LKR.toLocaleString('en-LK')})`,
+      amount,
+    },
+  ];
+}
+
+function calculatePaymentAmount(baseAmount, additionalPayments) {
+  const additionalTotal = additionalPayments.reduce((sum, item) => sum + item.amount, 0);
+  return baseAmount + additionalTotal;
 }
 
 function buildTrialResponse(
@@ -184,6 +209,8 @@ async function createSubscriptionInvoiceIfNeeded(shop) {
   const receiptNumber = await generatePlanSubscriptionReceiptNumber(submittedDate);
   const exactPaymentDay = shop.trailStartDate ? new Date(shop.trailStartDate) : submittedDate;
   const expiryDate = getSubscriptionExpiryDate(subscriptionType, exactPaymentDay);
+  const additionalPayments = buildSubscriptionAdditionalPayments(shop);
+  const paymentAmount = calculatePaymentAmount(fee, additionalPayments);
 
   const payment = await Payments.create({
     shopId: shop.shopId,
@@ -191,7 +218,8 @@ async function createSubscriptionInvoiceIfNeeded(shop) {
     receiptImagePath: UPFRONT_INVOICE_IMAGE_PLACEHOLDER,
     submittedDate,
     paymentMonth: null,
-    paymentAmount: fee,
+    paymentAmount,
+    additionalPayments,
     paymentType: 'subscription',
     subscriptionType,
     exactPaymentDay,
