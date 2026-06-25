@@ -107,6 +107,7 @@ async function createUpFrontInvoiceIfNeeded(shop) {
 
   if (existingNotPaid) {
     shop.isOneTimePaymentGenerated = true;
+    shop.oneTimePaymentReceiptNo = getPaymentDocumentId(existingNotPaid);
     await shop.save();
     return { created: false, payment: existingNotPaid };
   }
@@ -139,6 +140,7 @@ async function createUpFrontInvoiceIfNeeded(shop) {
   });
 
   shop.isOneTimePaymentGenerated = true;
+  shop.oneTimePaymentReceiptNo = getPaymentDocumentId(payment);
   await shop.save();
 
   return { created: true, payment: payment.toObject() };
@@ -208,9 +210,41 @@ function parseStartTrialBoolean(value) {
   return null;
 }
 
+function getPaymentDocumentId(payment) {
+  if (!payment?._id) {
+    return null;
+  }
+  return String(payment._id);
+}
+
+function syncShopPaymentReceiptIds(shop, upFrontPayment, subscriptionPayment) {
+  const upFrontPaymentId = getPaymentDocumentId(upFrontPayment);
+  const subscriptionPaymentId = getPaymentDocumentId(subscriptionPayment);
+
+  if (upFrontPaymentId) {
+    shop.oneTimePaymentReceiptNo = upFrontPaymentId;
+  }
+
+  if (subscriptionPaymentId) {
+    shop.subscriptionReceiptNo = subscriptionPaymentId;
+  }
+
+  return Boolean(upFrontPaymentId || subscriptionPaymentId);
+}
+
 async function createTrialPayments(shop) {
   const upFrontResult = await createUpFrontInvoiceIfNeeded(shop);
   const subscriptionResult = await createSubscriptionInvoiceIfNeeded(shop);
+
+  const hasReceiptIds = syncShopPaymentReceiptIds(
+    shop,
+    upFrontResult.payment,
+    subscriptionResult.payment,
+  );
+
+  if (hasReceiptIds) {
+    await shop.save();
+  }
 
   return {
     upFrontPayment: upFrontResult.payment ? formatPaymentRecord(upFrontResult.payment) : null,
@@ -306,6 +340,10 @@ const startTrail = async (req, res) => {
       const existing = await findExistingUpFrontInvoice(shop.shopId);
       upFrontInvoice = existing ? formatPaymentRecord(existing) : null;
 
+      if (existing && !shop.oneTimePaymentReceiptNo) {
+        shop.oneTimePaymentReceiptNo = getPaymentDocumentId(existing);
+      }
+
       if (shouldCreateInitialSubscriptionPayment(shop)) {
         const existingSubscription = await findExistingInitialSubscriptionInvoice(
           shop.shopId,
@@ -314,6 +352,14 @@ const startTrail = async (req, res) => {
         subscriptionInvoice = existingSubscription
           ? formatPaymentRecord(existingSubscription)
           : null;
+
+        if (existingSubscription && !shop.subscriptionReceiptNo) {
+          shop.subscriptionReceiptNo = getPaymentDocumentId(existingSubscription);
+        }
+      }
+
+      if (shop.isModified('oneTimePaymentReceiptNo') || shop.isModified('subscriptionReceiptNo')) {
+        await shop.save();
       }
     }
 

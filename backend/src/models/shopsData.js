@@ -164,6 +164,11 @@ const shopsDataSchema = new mongoose.Schema(
       enum: SUBSCRIPTION_TYPES,
       default: null,
     },
+    subscriptionReceiptNo:{
+      type: String,
+      default: null,
+      trim: true,
+    },
     oneTimePaymentAmount: {
       type: Number,
       default: null,
@@ -177,10 +182,17 @@ const shopsDataSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    oneTimePaymentReceiptNo:{
+      type: String,
+      default: null,
+      trim: true,
+    },
+
     trailStartDate: {
       type: Date,
       default: null,
     },
+
     trailEndDate: {
       type: Date,
       default: null,
@@ -278,9 +290,11 @@ module.exports = ShopsData;
   // nextPaymentDate: date
   // subsAmount: number
   // subscriptionType: 1month | 3months | 6months | 1year
+  // subscriptionReceiptNo: subscription payment document id
   // oneTimePaymentAmount: number | null
   // isOneTimePaymentDone: boolean
   // isOneTimePaymentGenerated: boolean
+  // oneTimePaymentReceiptNo: up-front payment document id
   // dueDays: number
   // isTrailStared: boolean
   // isTrailCompleted: boolean
