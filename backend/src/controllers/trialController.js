@@ -256,7 +256,7 @@ async function createSubscriptionInvoiceIfNeeded(shop) {
     shopId: shop.shopId,
     receiptNumber,
     receiptImagePath: UPFRONT_INVOICE_IMAGE_PLACEHOLDER,
-    submittedDate,
+    submittedDate:null,
     paymentMonth: null,
     paymentAmount,
     additionalPayments,

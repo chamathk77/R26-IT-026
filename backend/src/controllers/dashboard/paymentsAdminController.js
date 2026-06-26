@@ -18,6 +18,16 @@ const { SUBSCRIPTION_TYPES } = ShopsData;
 const MULTI_MONTH_SUBSCRIPTION_TYPES = ['3months', '6months', '1year'];
 const ONE_MONTH_SUBSCRIPTION_TYPE = '1month';
 
+const SUBSCRIPTION_DURATION_DAYS = {
+  '1month': 30,
+  '3months': 90,
+  '6months': 180,
+  '1year': 360,
+};
+
+const MULTI_MONTH_FIRST_SUBSCRIPTION_STATUSES = ['trial', 'paymentPending'];
+const SUBSCRIPTION_RENEWAL_STATUSES = ['due', 'paymentPending', 'diactiveByAdmin'];
+
 function startOfDay(date = new Date()) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -182,6 +192,118 @@ async function applyShopUpdatesOnUpfrontApprove(shop) {
     }
     default:
       throw new Error('Unhandled upfront approval scenario');
+  }
+
+  await shop.save();
+}
+
+function matchesSubscriptionReceiptNo(shop, paymentId) {
+  const receiptNo = shop.subscriptionReceiptNo ? String(shop.subscriptionReceiptNo).trim() : '';
+  return receiptNo === String(paymentId);
+}
+
+function validateSubscriptionApproveScenario(shop, paymentId) {
+  if (!matchesSubscriptionReceiptNo(shop, paymentId)) {
+    return { error: 'Payment id does not match shop subscription receipt reference' };
+  }
+
+  const subscriptionType = shop.subscriptionType;
+  if (!subscriptionType || !SUBSCRIPTION_TYPES.includes(subscriptionType)) {
+    return { error: 'Shop subscription type must be set before approving subscription payment' };
+  }
+
+  const shopStatus = shop.status;
+  const hasSubscriptionStart = shop.subscriptionStartDate != null;
+  const hasNextPaymentDate = shop.nextPaymentDate != null;
+
+  if (MULTI_MONTH_SUBSCRIPTION_TYPES.includes(subscriptionType)) {
+    if (!hasSubscriptionStart) {
+      if (!MULTI_MONTH_FIRST_SUBSCRIPTION_STATUSES.includes(shopStatus)) {
+        return {
+          error: `First multi-month subscription approval requires shop status trial or paymentPending (current: ${shopStatus})`,
+          shopStatus,
+          subscriptionType,
+        };
+      }
+      if (!shop.trailStartDate) {
+        return { error: 'Shop trial start date is required for first multi-month subscription approval' };
+      }
+      return { scenario: 'multiMonthFirst' };
+    }
+
+    if (!hasNextPaymentDate) {
+      return { error: 'Shop next payment date is required for multi-month subscription renewal approval' };
+    }
+    if (!SUBSCRIPTION_RENEWAL_STATUSES.includes(shopStatus)) {
+      return {
+        error: `Multi-month subscription renewal requires shop status due, paymentPending, or diactiveByAdmin (current: ${shopStatus})`,
+        shopStatus,
+        subscriptionType,
+      };
+    }
+    return { scenario: 'multiMonthRenewal' };
+  }
+
+  if (subscriptionType === ONE_MONTH_SUBSCRIPTION_TYPE) {
+    if (!hasSubscriptionStart || !hasNextPaymentDate) {
+      return {
+        error: 'Monthly subscription renewal requires subscription start date and next payment date',
+        shopStatus,
+        subscriptionType,
+      };
+    }
+    if (!SUBSCRIPTION_RENEWAL_STATUSES.includes(shopStatus)) {
+      return {
+        error: `Monthly subscription renewal requires shop status due, paymentPending, or diactiveByAdmin (current: ${shopStatus})`,
+        shopStatus,
+        subscriptionType,
+      };
+    }
+    return { scenario: 'oneMonthRenewal' };
+  }
+
+  return {
+    error: `Unsupported subscription type: ${subscriptionType}`,
+    subscriptionType,
+  };
+}
+
+async function applyShopUpdatesOnSubscriptionApprove(shop, payment, scenario) {
+  const subscriptionType = shop.subscriptionType;
+  const durationDays = SUBSCRIPTION_DURATION_DAYS[subscriptionType];
+  if (!durationDays) {
+    const err = new Error(`Subscription duration is not configured for plan ${subscriptionType}`);
+    err.code = 'SUBSCRIPTION_APPROVE_SCENARIO';
+    throw err;
+  }
+
+  const paymentDoneDate = payment.submittedDate ? new Date(payment.submittedDate) : new Date();
+
+  switch (scenario) {
+    case 'multiMonthFirst': {
+      const subscriptionStart = startOfDay(shop.trailStartDate);
+      shop.subscriptionStartDate = subscriptionStart;
+      shop.nextPaymentDate = startOfDay(addDays(subscriptionStart, durationDays));
+      shop.currentPaymentDoneDate = paymentDoneDate;
+      shop.status = 'active';
+      break;
+    }
+    case 'multiMonthRenewal': {
+      shop.nextPaymentDate = startOfDay(addDays(startOfDay(shop.nextPaymentDate), durationDays));
+      shop.currentPaymentDoneDate = paymentDoneDate;
+      shop.status = 'active';
+      break;
+    }
+    case 'oneMonthRenewal': {
+      shop.nextPaymentDate = startOfDay(
+        addDays(startOfDay(shop.nextPaymentDate), SUBSCRIPTION_DURATION_DAYS['1month']),
+      );
+      shop.currentPaymentDoneDate = paymentDoneDate;
+      shop.status = 'active';
+      break;
+    }
+    default:
+      throw new Error('Unhandled subscription approval scenario');
   }
 
   await shop.save();
@@ -369,7 +491,10 @@ const approveUpfrontPayment = async (req, res) => {
       console.log('payment approved SMS not sent', approvalSmsResult.reason);
     }
 
-    const usersLoggedOut = await clearShopUserTokens(shop.shopId);
+    let usersLoggedOut = 0;
+    if (shop.subscriptionType === ONE_MONTH_SUBSCRIPTION_TYPE) {
+      usersLoggedOut = await clearShopUserTokens(shop.shopId);
+    }
 
     res.status(200).json({
       success: true,
@@ -390,11 +515,95 @@ const approveUpfrontPayment = async (req, res) => {
   }
 };
 
+const approveSubscriptionPayment = async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+
+    if (!isValidObjectId(paymentId)) {
+      return res.status(400).json({ success: false, message: 'Invalid payment id' });
+    }
+
+    const payment = await Payments.findById(paymentId);
+    if (!payment) {
+      return res.status(404).json({ success: false, message: 'Payment not found' });
+    }
+
+    if (payment.paymentType !== 'subscription') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only subscription payments can be approved with this action',
+        paymentType: payment.paymentType,
+      });
+    }
+
+    if (payment.status !== REVIEWABLE_STATUS) {
+      return res.status(400).json({
+        success: false,
+        message: `Only payments with status "${REVIEWABLE_STATUS}" can be approved`,
+        currentStatus: payment.status,
+      });
+    }
+
+    const shop = await ShopsData.findOne({ shopId: payment.shopId });
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found for this payment' });
+    }
+
+    const scenarioCheck = validateSubscriptionApproveScenario(shop, paymentId);
+    if (scenarioCheck.error) {
+      return res.status(400).json({
+        success: false,
+        message: scenarioCheck.error,
+        ...(scenarioCheck.shopStatus && { shopStatus: scenarioCheck.shopStatus }),
+        ...(scenarioCheck.subscriptionType && { subscriptionType: scenarioCheck.subscriptionType }),
+      });
+    }
+
+    payment.status = 'approve';
+    payment.reason = null;
+    if (!payment.exactPaymentDay) {
+      payment.exactPaymentDay = startOfDay(payment.submittedDate || new Date());
+    }
+
+    await applyShopUpdatesOnSubscriptionApprove(shop, payment, scenarioCheck.scenario);
+    await payment.save();
+
+    const approvalSmsResult = await sendPaymentApprovedSms(shop, payment);
+    if (!approvalSmsResult.sent) {
+      console.log('subscription payment approved SMS not sent', approvalSmsResult.reason);
+    }
+
+    let usersLoggedOut = 0;
+    if (scenarioCheck.scenario === 'multiMonthFirst') {
+      usersLoggedOut = await clearShopUserTokens(shop.shopId);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Subscription payment approved and shop subscription updated',
+      scenario: scenarioCheck.scenario,
+      usersLoggedOut,
+      payment: formatPaymentRecord(payment.toObject(), req),
+      shop: formatShopSummary(shop.toObject()),
+    });
+  } catch (error) {
+    if (error.code === 'SUBSCRIPTION_APPROVE_SCENARIO') {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    console.log('error in approveSubscriptionPayment', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 
 
 module.exports = {
   listPendingPayments,
   getPaymentDetails,
   approveUpfrontPayment,
+  approveSubscriptionPayment,
   rejectUpfrontPayment,
 };
