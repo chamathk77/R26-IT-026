@@ -33,9 +33,12 @@ function startTrialCron() {
   const task = cron.schedule(
     schedule,
     async () => {
-      console.log('[trial-cron] Running scheduled trial expiration check...');
+      console.log('[trial-cron] Running scheduled trial expiration check (status=trial, trailEndDate passed)...');
       try {
-        await runDailyTrialExpirationCheck();
+        await runDailyTrialExpirationCheck({
+          schedule,
+          timezone,
+        });
       } catch (error) {
         console.error('[trial-cron] Scheduled run failed:', error.message);
       }
@@ -44,7 +47,8 @@ function startTrialCron() {
   );
 
   console.log(
-    `[trial-cron] Started — schedule "${schedule}" (${timezone}, daily midnight by default)`,
+    `[trial-cron] Started — schedule "${schedule}" (${timezone}). ` +
+      'Expires shops with status trial once trailEndDate has passed, sets isTrailCompleted=true, SMS owner.',
   );
 
   return task;
