@@ -65,7 +65,7 @@ async function manageCustomerData(input, options = {}) {
     }
 
     let updateQuery = Customer.findOneAndUpdate({ _id: existing._id, shopId }, update, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     });
     if (session) {
@@ -135,7 +135,7 @@ async function removeCustomerData(input, options = {}) {
       },
     },
     {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
       session: session ?? undefined,
     },

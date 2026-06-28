@@ -163,7 +163,7 @@ async function saveTrialCronReport(report, meta = {}) {
   return TrialCronReport.findOneAndUpdate(
     { reportDate: payload.reportDate },
     { $set: payload },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
   );
 }
 

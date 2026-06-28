@@ -1,10 +1,57 @@
 const mongoose = require('mongoose');
 
-async function connectDatabase() {
-  const uri = process.env.MONGODB_URI;
-  if (!uri || !uri.trim()) {
+const ENV_DATABASE_NAMES = {
+  DEV: 'smartCostDev',
+  LIVE: 'smartCostLive',
+};
+
+function resolveAppEnvironment() {
+  const env = String(process.env.ENV || 'DEV').trim().toUpperCase();
+  const dbName = ENV_DATABASE_NAMES[env];
+
+  if (!dbName) {
+    throw new Error(`ENV must be DEV or LIVE (received: "${process.env.ENV}")`);
+  }
+
+  return { env, dbName };
+}
+
+function replaceMongoDatabase(uri, dbName) {
+  const trimmedUri = uri.trim();
+  const questionIndex = trimmedUri.indexOf('?');
+  const base = questionIndex >= 0 ? trimmedUri.slice(0, questionIndex) : trimmedUri;
+  const query = questionIndex >= 0 ? trimmedUri.slice(questionIndex) : '';
+
+  const protocolSep = base.indexOf('://');
+  if (protocolSep === -1) {
+    throw new Error('Invalid MONGODB_URI format');
+  }
+
+  const afterProtocol = base.slice(protocolSep + 3);
+  const slashIndex = afterProtocol.indexOf('/');
+
+  if (slashIndex === -1) {
+    return `${base}/${dbName}${query}`;
+  }
+
+  const withoutDb = base.slice(0, protocolSep + 3 + slashIndex);
+  return `${withoutDb}/${dbName}${query}`;
+}
+
+function buildMongoUri() {
+  const baseUri = process.env.MONGODB_URI;
+  if (!baseUri || !baseUri.trim()) {
     throw new Error('MONGODB_URI is not set. Add it to your .env file.');
   }
+
+  const { env, dbName } = resolveAppEnvironment();
+  const uri = replaceMongoDatabase(baseUri, dbName);
+
+  return { uri, env, dbName };
+}
+
+async function connectDatabase() {
+  const { uri, env, dbName } = buildMongoUri();
 
   mongoose.set('strictQuery', true);
   try {
@@ -17,7 +64,10 @@ async function connectDatabase() {
     }
     throw err;
   }
-  console.log(`MongoDB connected (database: ${mongoose.connection.db.databaseName})`);
+
+  console.log(
+    `MongoDB connected (ENV=${env}, database: ${mongoose.connection.db.databaseName}, expected: ${dbName})`,
+  );
 
   const Product = require('../models/product');
   try {
@@ -29,4 +79,8 @@ async function connectDatabase() {
   await Product.syncIndexes();
 }
 
-module.exports = { connectDatabase };
+module.exports = {
+  connectDatabase,
+  buildMongoUri,
+  resolveAppEnvironment,
+};

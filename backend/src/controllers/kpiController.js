@@ -341,7 +341,7 @@ const assignKpiHistorySalesPerson = async (req, res) => {
     const updated = await History.findOneAndUpdate(
       { _id: history._id, shopId },
       { $set: { salesPersonId: salesPersonResult.salesPersonId } },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
 
     if (!updated) {

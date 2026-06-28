@@ -215,7 +215,7 @@ async function validateAndDeductInventory(cart, productMap) {
           qty: { $gte: requirement.quantity },
         },
         { $inc: { qty: -requirement.quantity } },
-        { new: true },
+        { returnDocument: 'after' },
       );
 
       if (!updated) {
