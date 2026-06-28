@@ -58,8 +58,7 @@ const paymentsSchema = new mongoose.Schema(
     },
     submittedDate: {
       type: Date,
-      required: true,
-      default: Date.now,
+      default: null,
     },
     paymentMonth: {
       type: String,
@@ -149,6 +148,13 @@ paymentsSchema.pre('validate', function validatePaymentRules() {
     this.reason = null;
   }
 
+  if (['pending', 'approve'].includes(this.status) && !this.submittedDate) {
+    this.invalidate(
+      'submittedDate',
+      'Submitted date is required when payment status is pending or approved',
+    );
+  }
+
   if (this.status === 'approve' && !this.exactPaymentDay) {
     this.exactPaymentDay = new Date();
   }
@@ -172,7 +178,7 @@ module.exports = Payments;
 // shopId
 // receiptNumber
 // receiptImagePath
-// submittedDate
+// submittedDate (set when receipt is uploaded; null for notPaid invoices)
 // paymentMonth (enum: january, february, march, april, may, june, july, august, september, october, november, december)
 // paymentAmount
 // additionalPayments: [{ name, amount }]

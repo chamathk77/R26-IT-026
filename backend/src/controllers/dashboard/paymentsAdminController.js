@@ -285,6 +285,7 @@ async function applyShopUpdatesOnSubscriptionApprove(shop, payment, scenario) {
       shop.subscriptionStartDate = subscriptionStart;
       shop.nextPaymentDate = startOfDay(addDays(subscriptionStart, durationDays));
       shop.currentPaymentDoneDate = paymentDoneDate;
+      shop.isTrailCompleted = true;
       shop.status = 'active';
       break;
     }
@@ -309,6 +310,10 @@ async function applyShopUpdatesOnSubscriptionApprove(shop, payment, scenario) {
   await shop.save();
 }
 
+function getShopCustomerMobile(shop) {
+  return shop.ownerMobileNumber?.trim() || shop.shopMobileNumber?.trim() || '';
+}
+
 function formatPaymentTypeSmsLabel(paymentType) {
   return paymentType === 'upFront' ? 'Up-front payment' : 'Subscription payment';
 }
@@ -319,9 +324,9 @@ function buildPaymentApprovedSms({ receiptNumber, paymentType }) {
 }
 
 async function sendPaymentApprovedSms(shop, payment) {
-  const mobile = shop.ownerMobileNumber?.trim();
+  const mobile = getShopCustomerMobile(shop);
   if (!mobile) {
-    return { sent: false, reason: 'Owner mobile number is not set' };
+    return { sent: false, reason: 'Shop owner mobile number is not set' };
   }
 
   try {
@@ -345,9 +350,9 @@ function buildPaymentRejectedSms({ receiptNumber, paymentType, reason }) {
 }
 
 async function sendPaymentRejectedSms(shop, payment, reason) {
-  const mobile = shop.ownerMobileNumber?.trim();
+  const mobile = getShopCustomerMobile(shop);
   if (!mobile) {
-    return { sent: false, reason: 'Owner mobile number is not set' };
+    return { sent: false, reason: 'Shop owner mobile number is not set' };
   }
 
   try {
@@ -583,6 +588,7 @@ const approveSubscriptionPayment = async (req, res) => {
       message: 'Subscription payment approved and shop subscription updated',
       scenario: scenarioCheck.scenario,
       usersLoggedOut,
+      customerSms: approvalSmsResult,
       payment: formatPaymentRecord(payment.toObject(), req),
       shop: formatShopSummary(shop.toObject()),
     });
@@ -598,6 +604,81 @@ const approveSubscriptionPayment = async (req, res) => {
   }
 };
 
+const rejectSubscriptionPayment = async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const { reason } = req.body;
+
+    if (!isValidObjectId(paymentId)) {
+      return res.status(400).json({ success: false, message: 'Invalid payment id' });
+    }
+
+    const reasonTrimmed = reason != null ? String(reason).trim() : '';
+    if (!reasonTrimmed) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reason is required when rejecting a payment',
+      });
+    }
+
+    const payment = await Payments.findById(paymentId);
+    if (!payment) {
+      return res.status(404).json({ success: false, message: 'Payment not found' });
+    }
+
+    if (payment.paymentType !== 'subscription') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only subscription payments can be rejected with this action',
+        paymentType: payment.paymentType,
+      });
+    }
+
+    if (payment.status !== REVIEWABLE_STATUS) {
+      return res.status(400).json({
+        success: false,
+        message: `Only payments with status "${REVIEWABLE_STATUS}" can be rejected`,
+        currentStatus: payment.status,
+      });
+    }
+
+    const shop = await ShopsData.findOne({ shopId: payment.shopId });
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found for this payment' });
+    }
+
+    if (!matchesSubscriptionReceiptNo(shop, paymentId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment id does not match shop subscription receipt reference',
+      });
+    }
+
+    payment.status = 'rejected';
+    payment.reason = reasonTrimmed;
+    await payment.save();
+
+    const rejectionSmsResult = await sendPaymentRejectedSms(shop, payment, reasonTrimmed);
+    if (!rejectionSmsResult.sent) {
+      console.log('subscription payment rejected SMS not sent', rejectionSmsResult.reason);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Subscription payment rejected',
+      customerSms: rejectionSmsResult,
+      payment: formatPaymentRecord(payment.toObject(), req),
+      shop: formatShopSummary(shop.toObject()),
+    });
+  } catch (error) {
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    console.log('error in rejectSubscriptionPayment', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 
 
 module.exports = {
@@ -606,4 +687,5 @@ module.exports = {
   approveUpfrontPayment,
   approveSubscriptionPayment,
   rejectUpfrontPayment,
+  rejectSubscriptionPayment,
 };

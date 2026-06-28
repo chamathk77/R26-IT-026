@@ -186,15 +186,13 @@ async function createUpFrontInvoiceIfNeeded(shop) {
   }
 
   const receiptNumber = await generateUpFrontReceiptNumber();
-  const submittedDate = new Date();
-  const exactPaymentDay = shop.trailStartDate ? new Date(shop.trailStartDate) : submittedDate;
+  const exactPaymentDay = shop.trailStartDate ? new Date(shop.trailStartDate) : new Date();
   const expiryDate = shop.trailEndDate ? new Date(shop.trailEndDate) : null;
 
   const payment = await Payments.create({
     shopId: shop.shopId,
     receiptNumber,
     receiptImagePath: UPFRONT_INVOICE_IMAGE_PLACEHOLDER,
-    submittedDate,
     paymentMonth: null,
     paymentAmount: shop.oneTimePaymentAmount,
     paymentType: 'upFront',
@@ -245,9 +243,9 @@ async function createSubscriptionInvoiceIfNeeded(shop) {
     throw error;
   }
 
-  const submittedDate = new Date();
-  const receiptNumber = await generatePlanSubscriptionReceiptNumber(submittedDate);
-  const exactPaymentDay = shop.trailStartDate ? new Date(shop.trailStartDate) : submittedDate;
+  const referenceDate = new Date();
+  const receiptNumber = await generatePlanSubscriptionReceiptNumber(referenceDate);
+  const exactPaymentDay = shop.trailStartDate ? new Date(shop.trailStartDate) : referenceDate;
   const expiryDate = getSubscriptionExpiryDate(subscriptionType, exactPaymentDay);
   const additionalPayments = buildSubscriptionAdditionalPayments(shop);
   const paymentAmount = calculatePaymentAmount(fee, additionalPayments);
@@ -256,7 +254,6 @@ async function createSubscriptionInvoiceIfNeeded(shop) {
     shopId: shop.shopId,
     receiptNumber,
     receiptImagePath: UPFRONT_INVOICE_IMAGE_PLACEHOLDER,
-    submittedDate:null,
     paymentMonth: null,
     paymentAmount,
     additionalPayments,

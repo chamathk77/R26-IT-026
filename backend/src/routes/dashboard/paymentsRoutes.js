@@ -6,6 +6,7 @@ const {
   approveUpfrontPayment,
   approveSubscriptionPayment,
   rejectUpfrontPayment,
+  rejectSubscriptionPayment,
 } = require('../../controllers/dashboard/paymentsAdminController');
 
 const router = express.Router();
@@ -15,5 +16,6 @@ router.get('/:paymentId', protectDashboard, getPaymentDetails);
 router.post('/:paymentId/approve-upfront', protectDashboard, approveUpfrontPayment);
 router.post('/:paymentId/approve-subscription', protectDashboard, approveSubscriptionPayment);
 router.post('/:paymentId/reject-upfront', protectDashboard, rejectUpfrontPayment);
+router.post('/:paymentId/reject-subscription', protectDashboard, rejectSubscriptionPayment);
 
 module.exports = router;
