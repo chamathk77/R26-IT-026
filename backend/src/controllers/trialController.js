@@ -23,7 +23,6 @@ const {
 const { sendSms } = require('../services/smsService');
 
 const MULTI_MONTH_SUBSCRIPTION_TYPES = ['3months', '6months', '1year'];
-const ADDITIONAL_USER_FEE_LKR = 499;
 
 const SUBSCRIPTION_PLAN_DURATION_DAYS = {
   '3months': 30 * 3,
@@ -61,10 +60,10 @@ function buildSubscriptionAdditionalPayments(shop) {
     return [];
   }
 
-  const amount = count * ADDITIONAL_USER_FEE_LKR;
+  const amount = count * ShopsData.ADDITIONAL_USER_FEE_LKR;
   return [
     {
-      name: `Additional users (${count} × Rs. ${ADDITIONAL_USER_FEE_LKR.toLocaleString('en-LK')})`,
+      name: `Additional users (${count} × Rs. ${ShopsData.ADDITIONAL_USER_FEE_LKR.toLocaleString('en-LK')})`,
       amount,
     },
   ];

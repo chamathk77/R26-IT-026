@@ -7,8 +7,8 @@ const { startTrialCron } = require('./jobs/trialCron');
 
 async function start() {
   await connectDatabase();
-  startBillingCron();
   startTrialCron();
+  startBillingCron();
   app.listen(config.port, () => {
     console.log(`Server listening on port ${config.port} (${config.nodeEnv})`);
   });

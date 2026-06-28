@@ -20,6 +20,21 @@ const SUBSCRIPTION_FEES = [
   { type: '1year', fee: 51600 },
 ];
 
+/** Per additional user monthly fee (LKR). Change here to update billing everywhere. */
+const ADDITIONAL_USER_FEE_LKR = 499;
+
+const SUBSCRIPTION_DURATION_DAYS = {
+  '1month': 30,
+  '3months': 90,
+  '6months': 180,
+  '1year': 360,
+};
+
+function getSubscriptionFee(subscriptionType) {
+  const entry = SUBSCRIPTION_FEES.find((item) => item.type === subscriptionType);
+  return entry?.fee ?? null;
+}
+
 const ONBOARD_STEPS = [
   'startOnboarding',
   'shopRegistered',
@@ -265,6 +280,9 @@ ShopsData.SHOP_STATUS = SHOP_STATUS;
 ShopsData.ONBOARD_STEPS = ONBOARD_STEPS;
 ShopsData.SUBSCRIPTION_TYPES = SUBSCRIPTION_TYPES;
 ShopsData.SUBSCRIPTION_FEES = SUBSCRIPTION_FEES;
+ShopsData.ADDITIONAL_USER_FEE_LKR = ADDITIONAL_USER_FEE_LKR;
+ShopsData.SUBSCRIPTION_DURATION_DAYS = SUBSCRIPTION_DURATION_DAYS;
+ShopsData.getSubscriptionFee = getSubscriptionFee;
 
 module.exports = ShopsData;
 

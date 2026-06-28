@@ -8,6 +8,10 @@ function isBillingCronEnabled() {
   return process.env.BILLING_CRON_ENABLED !== 'false';
 }
 
+function isTrialCronEnabled() {
+  return process.env.TRIAL_CRON_ENABLED !== 'false';
+}
+
 function getBillingCronSchedule() {
   return process.env.BILLING_CRON_SCHEDULE || DEFAULT_SCHEDULE;
 }
@@ -22,6 +26,13 @@ function startBillingCron() {
     return null;
   }
 
+  if (isTrialCronEnabled()) {
+    console.log(
+      '[billing-cron] Chained to trial cron — runs at midnight right after trial expiration',
+    );
+    return null;
+  }
+
   const schedule = getBillingCronSchedule();
   const timezone = getBillingCronTimezone();
 
@@ -33,9 +44,12 @@ function startBillingCron() {
   const task = cron.schedule(
     schedule,
     async () => {
-      console.log('[billing-cron] Running scheduled next payment check...');
+      console.log('[billing-cron] Running scheduled subscription invoice generation...');
       try {
-        await runDailyBillingCheck();
+        await runDailyBillingCheck({
+          schedule,
+          timezone,
+        });
       } catch (error) {
         console.error('[billing-cron] Scheduled run failed:', error.message);
       }

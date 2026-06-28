@@ -1,11 +1,16 @@
 const cron = require('node-cron');
 const { runDailyTrialExpirationCheck } = require('../services/trialExpirationService');
+const { runDailyBillingCheck } = require('../services/billingCheckService');
 
 const DEFAULT_SCHEDULE = '0 0 * * *';
 const DEFAULT_TIMEZONE = 'Asia/Colombo';
 
 function isTrialCronEnabled() {
   return process.env.TRIAL_CRON_ENABLED !== 'false';
+}
+
+function isBillingCronEnabled() {
+  return process.env.BILLING_CRON_ENABLED !== 'false';
 }
 
 function getTrialCronSchedule() {
@@ -16,9 +21,41 @@ function getTrialCronTimezone() {
   return process.env.TRIAL_CRON_TIMEZONE || DEFAULT_TIMEZONE;
 }
 
+async function runMidnightDailyJobs({ schedule, timezone }) {
+  const meta = { schedule, timezone };
+
+  if (isTrialCronEnabled()) {
+    console.log(
+      '[trial-cron] Running scheduled trial expiration check (status=trial, trailEndDate passed)...',
+    );
+    try {
+      await runDailyTrialExpirationCheck(meta);
+    } catch (error) {
+      console.error('[trial-cron] Scheduled run failed:', error.message);
+    }
+  }
+
+  if (isBillingCronEnabled()) {
+    console.log('[billing-cron] Running subscription invoice generation (after trial cron)...');
+    try {
+      await runDailyBillingCheck(meta);
+    } catch (error) {
+      console.error('[billing-cron] Scheduled run failed:', error.message);
+    }
+  }
+}
+
 function startTrialCron() {
-  if (!isTrialCronEnabled()) {
-    console.log('[trial-cron] Disabled (TRIAL_CRON_ENABLED=false)');
+  const trialEnabled = isTrialCronEnabled();
+  const billingEnabled = isBillingCronEnabled();
+
+  if (!trialEnabled && !billingEnabled) {
+    console.log('[daily-cron] Disabled (TRIAL_CRON_ENABLED=false and BILLING_CRON_ENABLED=false)');
+    return null;
+  }
+
+  if (!trialEnabled && billingEnabled) {
+    console.log('[trial-cron] Disabled — billing cron will schedule independently');
     return null;
   }
 
@@ -33,22 +70,18 @@ function startTrialCron() {
   const task = cron.schedule(
     schedule,
     async () => {
-      console.log('[trial-cron] Running scheduled trial expiration check (status=trial, trailEndDate passed)...');
-      try {
-        await runDailyTrialExpirationCheck({
-          schedule,
-          timezone,
-        });
-      } catch (error) {
-        console.error('[trial-cron] Scheduled run failed:', error.message);
-      }
+      await runMidnightDailyJobs({ schedule, timezone });
     },
     { timezone },
   );
 
+  const billingNote = billingEnabled
+    ? ', then billing invoices'
+    : ' (billing cron disabled)';
+
   console.log(
-    `[trial-cron] Started — schedule "${schedule}" (${timezone}). ` +
-      'Expires shops with status trial once trailEndDate has passed, sets isTrailCompleted=true, SMS owner.',
+    `[trial-cron] Started — schedule "${schedule}" (${timezone}, daily midnight). ` +
+      `Runs trial expiration${billingNote}.`,
   );
 
   return task;
@@ -57,4 +90,5 @@ function startTrialCron() {
 module.exports = {
   startTrialCron,
   runDailyTrialExpirationCheck,
+  runMidnightDailyJobs,
 };
