@@ -34,12 +34,13 @@ function extractSmsErrorMessage(data) {
   return data.errors || data.message || data.error || null;
 }
 
-async function sendSms({ to, message }) {
-  const { apiUrl, userId, apiKey, senderId } = getSmsConfig();
+async function sendSms({ to, message, senderId }) {
+  const { apiUrl, userId, apiKey, senderId: defaultSenderId } = getSmsConfig();
+  const resolvedSenderId = senderId?.trim() || defaultSenderId;
   const payload = {
     user_id: userId,
     api_key: apiKey,
-    sender_id: senderId,
+    sender_id: resolvedSenderId,
     to: formatSmsRecipient(to),
     message,
   };

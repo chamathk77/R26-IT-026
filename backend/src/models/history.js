@@ -98,6 +98,10 @@ const historySchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    isSmsSent: {
+      type: Boolean,
+      default: false,
+    },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

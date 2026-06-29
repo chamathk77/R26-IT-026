@@ -143,10 +143,21 @@ async function sendHistoryReceiptSms({
   orderId,
 }) {
   const shop = await ShopsData.findOne({ shopId })
-    .select("shopName sendReceiptSms")
+    .select("shopName sendReceiptSms senderId")
     .lean();
+
   if (!shop?.sendReceiptSms) {
-    return { sent: false, reason: "SMS disabled for shop" };
+    return { sent: false, reason: "Receipt SMS is not enabled for this shop" };
+  }
+
+  const mobile = sanitizeMobile(customerMobile);
+  if (!isValidCustomerMobile(mobile)) {
+    return { sent: false, reason: "Valid customer mobile number is required" };
+  }
+
+  const shopSenderId = shop.senderId?.trim();
+  if (!shopSenderId) {
+    return { sent: false, reason: "Shop sender ID is not configured" };
   }
 
   const receiptUrl = buildDigitalReceiptUrl(historyRecord._id);
@@ -166,12 +177,14 @@ async function sendHistoryReceiptSms({
     discountedAmount,
     receiptUrl,
   });
+
   await sendSms({
-    to: customerMobile,
+    to: mobile,
     message,
+    senderId: shopSenderId,
   });
 
-  return { sent: true };
+  return { sent: true, senderId: shopSenderId };
 }
 
 function isValidCustomerMobile(mobile) {
@@ -198,6 +211,7 @@ function mapHistoryRecord(record) {
     totalAmount: roundMoney(record.totalAmount),
     customerName: record.customerName ?? "",
     customerMobile: record.customerMobile ?? "",
+    isSmsSent: Boolean(record.isSmsSent),
     userId: record.userId,
     submittedUserId: record.submittedUserId,
     submittedUserName: record.submittedUserName ?? "",
@@ -452,8 +466,6 @@ const createHistory = async (req, res) => {
 
     let smsStatus = { sent: false, reason: "Not attempted" };
     try {
-
-      console.log("1111178887872823723823823923823872893729782738927",);
       smsStatus = await sendHistoryReceiptSms({
         shopId,
         customerMobile: mobile,
@@ -464,6 +476,11 @@ const createHistory = async (req, res) => {
         discountedAmount,
         orderId,
       });
+
+      if (smsStatus.sent) {
+        await History.updateOne({ _id: history._id }, { $set: { isSmsSent: true } });
+        history.isSmsSent = true;
+      }
     } catch (smsError) {
       console.log("error in createHistory receipt SMS", smsError.message);
       smsStatus = {

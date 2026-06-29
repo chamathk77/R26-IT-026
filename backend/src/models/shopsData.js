@@ -121,11 +121,6 @@ const shopsDataSchema = new mongoose.Schema(
       enum: ONBOARD_STEPS,
       default: 'startOnboarding',
     },
-    // isFirstTime: {
-    //   type: Boolean,
-    //   default: true,
-    // },
-
     //module related
     sendReceiptSms: {
       type: Boolean,
@@ -199,6 +194,22 @@ const shopsDataSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    smsNextPaymentDate: { 
+      type: Date,
+      default: null,
+    },
+    smsReceiptNo: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    smsDueDays: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
     subsAmount: {
       type: Number,
       default: null,
@@ -232,11 +243,6 @@ const shopsDataSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
-    smsReceiptNo: {
-      type: String,
-      default: null,
-      trim: true,
-    },
 
     trailStartDate: {
       type: Date,
@@ -260,11 +266,7 @@ const shopsDataSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
-    smsDueDays: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
+
  
 
   },

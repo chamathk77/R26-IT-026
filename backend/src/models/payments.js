@@ -110,6 +110,11 @@ const paymentsSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    description: {
+      type: String,
+      default: null,
+      trim: true,
+    },
   },
   { timestamps: true },
 );
@@ -190,6 +195,7 @@ module.exports = Payments;
 // expiryDate
 // status: pending, approve, rejected, notPaid
 // reason
+// description
 
 
 

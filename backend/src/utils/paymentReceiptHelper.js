@@ -111,6 +111,7 @@ function formatPaymentRecord(payment) {
     expiryDate: payment.expiryDate ?? null,
     status: payment.status,
     reason: payment.reason,
+    description: payment.description ?? null,
     createdAt: payment.createdAt,
     updatedAt: payment.updatedAt,
   };
