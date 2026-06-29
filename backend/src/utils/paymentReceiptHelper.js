@@ -2,6 +2,7 @@ const Payments = require('../models/payments');
 
 const UPFRONT_RECEIPT_PREFIX = 'U';
 const PLAN_SUBSCRIPTION_RECEIPT_PREFIX = 'S';
+const SMS_RECEIPT_PREFIX = 'MS';
 
 const MONTH_RECEIPT_LETTER = {
   january: 'A',
@@ -64,6 +65,27 @@ async function generatePlanSubscriptionReceiptNumber(referenceDate = new Date())
   return `${prefix}${String(sequence).padStart(6, '0')}`;
 }
 
+async function generateSmsReceiptNumber(referenceDate = new Date()) {
+  const yearSuffix = String(referenceDate.getFullYear()).slice(-2);
+  const prefix = `${SMS_RECEIPT_PREFIX}${yearSuffix}`;
+  const receiptPattern = new RegExp(`^${prefix}\\d{6}$`);
+
+  const latest = await Payments.findOne({ receiptNumber: receiptPattern })
+    .sort({ receiptNumber: -1 })
+    .lean();
+
+  let sequence = 1;
+  if (latest?.receiptNumber) {
+    sequence = Number.parseInt(latest.receiptNumber.slice(4), 10) + 1;
+  }
+
+  if (sequence > 999999) {
+    throw new Error('SMS receipt number sequence limit reached for this year');
+  }
+
+  return `${prefix}${String(sequence).padStart(6, '0')}`;
+}
+
 async function generateSubscriptionReceiptNumber(paymentMonth, referenceDate = new Date()) {
   const monthLetter = MONTH_RECEIPT_LETTER[paymentMonth];
   if (!monthLetter) {
@@ -120,6 +142,7 @@ function formatPaymentRecord(payment) {
 module.exports = {
   generateUpFrontReceiptNumber,
   generatePlanSubscriptionReceiptNumber,
+  generateSmsReceiptNumber,
   generateSubscriptionReceiptNumber,
   getPaymentMonthFromDate,
   formatPaymentRecord,

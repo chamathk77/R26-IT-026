@@ -1,6 +1,10 @@
 const cron = require('node-cron');
 const { runDailyTrialExpirationCheck } = require('../services/trialExpirationService');
 const { runDailyBillingCheck } = require('../services/billingCheckService');
+const { runDailySmsBillingCheck } = require('../services/smsBillingCheckService');
+const { isSmsBillingCronEnabled } = require('./smsBillingCron');
+const { runDailyDueDaysCheck } = require('../services/paymentDueCheckService');
+const { isDueDaysCronEnabled } = require('./dueDaysCron');
 
 const DEFAULT_SCHEDULE = '0 0 * * *';
 const DEFAULT_TIMEZONE = 'Asia/Colombo';
@@ -43,6 +47,24 @@ async function runMidnightDailyJobs({ schedule, timezone }) {
       console.error('[billing-cron] Scheduled run failed:', error.message);
     }
   }
+
+  if (isSmsBillingCronEnabled()) {
+    console.log('[sms-billing-cron] Running SMS invoice generation (after subscription billing)...');
+    try {
+      await runDailySmsBillingCheck(meta);
+    } catch (error) {
+      console.error('[sms-billing-cron] Scheduled run failed:', error.message);
+    }
+  }
+
+  if (isDueDaysCronEnabled()) {
+    console.log('[due-days-cron] Running due days check (after SMS billing)...');
+    try {
+      await runDailyDueDaysCheck(meta);
+    } catch (error) {
+      console.error('[due-days-cron] Scheduled run failed:', error.message);
+    }
+  }
 }
 
 function startTrialCron() {
@@ -76,12 +98,14 @@ function startTrialCron() {
   );
 
   const billingNote = billingEnabled
-    ? ', then billing invoices'
+    ? ', then subscription billing'
     : ' (billing cron disabled)';
+  const smsNote = isSmsBillingCronEnabled() ? ', then SMS billing' : '';
+  const dueDaysNote = isDueDaysCronEnabled() ? ', then due days' : '';
 
   console.log(
     `[trial-cron] Started — schedule "${schedule}" (${timezone}, daily midnight). ` +
-      `Runs trial expiration${billingNote}.`,
+      `Runs trial expiration${billingNote}${smsNote}${dueDaysNote}.`,
   );
 
   return task;

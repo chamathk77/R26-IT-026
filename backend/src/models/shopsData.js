@@ -199,6 +199,10 @@ const shopsDataSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    smsCalculationStartDate: {
+      type: Date,
+      default: null,
+    },
     smsReceiptNo: {
       type: String,
       default: null,
@@ -209,6 +213,12 @@ const shopsDataSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    smsStatus: {
+      type: String,
+      enum: ['active', 'due', 'inactive'],
+      default: 'inactive',
+    },
+    
     subsAmount: {
       type: Number,
       default: null,

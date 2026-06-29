@@ -1,6 +1,9 @@
 const cron = require('node-cron');
 const { runDailyBillingCheck } = require('../services/billingCheckService');
-
+const { runDailySmsBillingCheck } = require('../services/smsBillingCheckService');
+const { isSmsBillingCronEnabled } = require('./smsBillingCron');
+const { runDailyDueDaysCheck } = require('../services/paymentDueCheckService');
+const { isDueDaysCronEnabled } = require('./dueDaysCron');
 const DEFAULT_SCHEDULE = '0 0 * * *';
 const DEFAULT_TIMEZONE = 'Asia/Colombo';
 
@@ -50,6 +53,22 @@ function startBillingCron() {
           schedule,
           timezone,
         });
+
+        if (isSmsBillingCronEnabled()) {
+          console.log('[sms-billing-cron] Running SMS invoice generation (after subscription billing)...');
+          await runDailySmsBillingCheck({
+            schedule,
+            timezone,
+          });
+        }
+
+        if (isDueDaysCronEnabled()) {
+          console.log('[due-days-cron] Running due days check (after SMS billing)...');
+          await runDailyDueDaysCheck({
+            schedule,
+            timezone,
+          });
+        }
       } catch (error) {
         console.error('[billing-cron] Scheduled run failed:', error.message);
       }
