@@ -23,7 +23,7 @@ import SettingsScreen from '../screens/settings/hub/SettingsScreen';
 import ProfileDetailsScreen from '../screens/settings/account/ProfileDetailsScreen';
 import ShopDetailsScreen from '../screens/settings/account/ShopDetailsScreen';
 import ManageAccountScreen from '../screens/settings/account/ManageAccountScreen';
-import ManageFeaturesScreen from '../screens/settings/account/ManageFeaturesScreen';
+import ManageFeaturesScreen from '../screens/settings/account/manageFeatures/ManageFeaturesScreen';
 import ManageUserFormScreen from '../screens/settings/account/ManageUserFormScreen';
 import ThemePreferenceScreen from '../screens/settings/preferences/ThemePreferenceScreen';
 import SubscriptionPaymentsScreen from '../screens/settings/payments/SubscriptionPaymentsScreen';
