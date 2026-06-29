@@ -1,4 +1,10 @@
-import { OnboardingStep, ShopFeatureKey, ShopFeaturesState, SubscriptionType } from '../../../../type/onboarding';
+import {
+  OnboardingStep,
+  ShopFeatureKey,
+  ShopFeaturesState,
+  SMS_PRICE_PER_MESSAGE_LKR,
+  SubscriptionType,
+} from '../../../../type/onboarding';
 
 export const ONBOARDING_STEPS: { step: OnboardingStep; label: string }[] = [
   { step: 1, label: 'Shop & Owner' },
@@ -73,7 +79,7 @@ export const FEATURE_OPTIONS: FeatureOption[] = [
     key: 'sendReceiptSms',
     title: 'Send Digital Receipt SMS',
     description:
-      'Automatically send digital receipt links to customers by SMS after checkout. Every SMS is billed monthly with your subscription at 1.4 LKR per message.',
+      `Automatically send digital receipt links to customers by SMS after checkout. Each SMS costs ${SMS_PRICE_PER_MESSAGE_LKR} LKR and is added to your monthly bill.`,
     icon: 'chatbubble-ellipses-outline',
   },
   {

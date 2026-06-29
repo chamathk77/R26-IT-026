@@ -25,7 +25,7 @@ export type SubscriptionType = '1month' | '3months' | '6months' | '1year';
 
 export const DEFAULT_MAX_USERS = 3;
 export const ADDITIONAL_USER_MONTHLY_PRICE_LKR = 499;
-export const SMS_PRICE_PER_MESSAGE_LKR = 1.4;
+export const SMS_PRICE_PER_MESSAGE_LKR = 1.15;
 
 export function formatLkr(amount: number): string {
   return `LKR ${amount.toLocaleString('en-LK', { maximumFractionDigits: 0 })}`;

@@ -33,6 +33,7 @@ import {
 import { useCommonAlert } from "../../hooks/useCommonAlert";
 import { getApiErrorMessage, parseApiError } from "../../utils/apiErrorAlert";
 import CommonAlert from "../../components/CommonAlert/CommonAlert";
+import CommonHeader from "../../components/CommonHeader/CommonHeader";
 
 const MOBILE_DIGIT_LENGTH = 10;
 const LOCAL_MOBILE_PATTERN = /^0\d{9}$/;
@@ -96,6 +97,10 @@ export default function LoginScreen({ navigation }: Props) {
   const phoneKeyboardType =
     Platform.OS === "android" ? "numeric" : "number-pad";
 
+  const goToOnboarding = useCallback(() => {
+    navigation.navigate("OnboardingScreen");
+  }, [navigation]);
+
   useFocusEffect(
     useCallback(() => {
       if (Platform.OS !== "android") {
@@ -103,18 +108,7 @@ export default function LoginScreen({ navigation }: Props) {
       }
 
       const onHardwareBack = () => {
-        show_Alert(
-          "error",
-          "Exit app",
-          "Do you want to exit the app?",
-          1,
-          false,
-          "Exit app",
-          () => {
-            BackHandler.exitApp();
-          },
-        );
-
+        goToOnboarding();
         return true;
       };
 
@@ -123,7 +117,7 @@ export default function LoginScreen({ navigation }: Props) {
         onHardwareBack,
       );
       return () => sub.remove();
-    }, []),
+    }, [goToOnboarding]),
   );
 
   useFocusEffect(
@@ -473,6 +467,12 @@ export default function LoginScreen({ navigation }: Props) {
           { backgroundColor: paperTheme.colors.background },
         ]}
       >
+        <CommonHeader
+          title="Sign in"
+          titleColor={paperTheme.colors.onBackground}
+          iconColor={paperTheme.colors.onBackground}
+          onPressLeftBtn={goToOnboarding}
+        />
         <ScrollView
           showsVerticalScrollIndicator={false}
           bounces={false}

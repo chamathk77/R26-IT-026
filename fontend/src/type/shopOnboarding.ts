@@ -36,13 +36,20 @@ export interface ShopFeaturesPayload {
   marketingModule: boolean;
   isAdditionalUsersAdded: boolean;
   numAdditionalUsers: number | null;
-  maxUsers: number;
+  maxUsers?: number;
+}
+
+export interface GetShopFeaturesResponse {
+  success: boolean;
+  shopId: string;
+  message: string;
+  features: Omit<ShopFeaturesPayload, 'maxUsers'>;
 }
 
 export interface UpdateShopFeaturesResponse {
   success: boolean;
   shopId: string;
-  onboardStep: string;
+  onboardStep?: string;
   message: string;
   features: ShopFeaturesPayload;
 }

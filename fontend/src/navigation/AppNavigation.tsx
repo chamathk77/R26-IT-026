@@ -23,6 +23,7 @@ import SettingsScreen from '../screens/settings/hub/SettingsScreen';
 import ProfileDetailsScreen from '../screens/settings/account/ProfileDetailsScreen';
 import ShopDetailsScreen from '../screens/settings/account/ShopDetailsScreen';
 import ManageAccountScreen from '../screens/settings/account/ManageAccountScreen';
+import ManageFeaturesScreen from '../screens/settings/account/ManageFeaturesScreen';
 import ManageUserFormScreen from '../screens/settings/account/ManageUserFormScreen';
 import ThemePreferenceScreen from '../screens/settings/preferences/ThemePreferenceScreen';
 import SubscriptionPaymentsScreen from '../screens/settings/payments/SubscriptionPaymentsScreen';
@@ -73,6 +74,7 @@ export default function AppNavigator() {
         <Stack.Screen name="ProfileDetails" component={ProfileDetailsScreen} />
         <Stack.Screen name="ShopDetails" component={ShopDetailsScreen} />
         <Stack.Screen name="ManageAccount" component={ManageAccountScreen} />
+        <Stack.Screen name="ManageFeatures" component={ManageFeaturesScreen} />
         <Stack.Screen name="ManageUserForm" component={ManageUserFormScreen} />
         <Stack.Screen name="ThemePreference" component={ThemePreferenceScreen} />
         <Stack.Screen name="SubscriptionPayments" component={SubscriptionPaymentsScreen} />

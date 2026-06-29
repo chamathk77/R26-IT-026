@@ -250,6 +250,19 @@ export default function SettingsScreen({ navigation }: Props) {
       iconColor: primary,
       onPress: () => navigation.navigate('ShopDetails'),
     },
+    ...(displayRole === 'owner'
+      ? [
+          {
+            key: 'manage-features',
+            title: 'Manage features',
+            description: 'SMS, KPI, analytics & other shop modules',
+            icon: 'options-outline' as const,
+            iconBg: '#e0f2fe',
+            iconColor: '#0284c7',
+            onPress: () => navigation.navigate('ManageFeatures'),
+          },
+        ]
+      : []),
     {
       key: 'payments',
       title: 'Subscription payments',

@@ -6,6 +6,7 @@ import { toApiErrorResponse } from "../utils/apiErrorAlert";
 import {
   CreateShopOnboardingRequest,
   CreateShopOnboardingResponse,
+  GetShopFeaturesResponse,
   UpdateShopFeaturesRequest,
   UpdateShopFeaturesResponse,
   SendOtpOnboardingRequest,
@@ -54,19 +55,78 @@ export const createShopOnboarding_Service = createAsyncThunk(
   },
 );
 
-export const updateShopFeatures_Service = createAsyncThunk(
-  "shopOnboarding/updateFeatures",
+export const fetchShopFeatures_Service = createAsyncThunk(
+  "shopOnboarding/fetchFeatures",
+  async (shopId: string | undefined, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const query = shopId?.trim()
+        ? `?shopId=${encodeURIComponent(shopId.trim())}`
+        : "";
+      const response = await apiClient.get<GetShopFeaturesResponse>(
+        `/api/shops/features${query}`,
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: "Error",
+        message: "Could not load shop features",
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const onboardingShopFeatures_Service = createAsyncThunk(
+  "shopOnboarding/onboardingFeatures",
   async (payload: UpdateShopFeaturesRequest, { rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 
       const response = await apiClient.post<UpdateShopFeaturesResponse>(
+        "/api/shops/features/onboarding",
+        payload,
+      );
+
+      if (isHttpSuccess(response.status)) {
+        console.log("Onboarding shop features response:", response.data);
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: "Error",
+        message: "Shop features save failed",
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const updatedShopFeatures_Service = createAsyncThunk(
+  "shopOnboarding/updatedFeatures",
+  async (payload: UpdateShopFeaturesRequest, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.put<UpdateShopFeaturesResponse>(
         "/api/shops/features",
         payload,
       );
 
       if (isHttpSuccess(response.status)) {
-        console.log("Update shop features response:", response.data);
+        console.log("Updated shop features response:", response.data);
         return response.data;
       }
 

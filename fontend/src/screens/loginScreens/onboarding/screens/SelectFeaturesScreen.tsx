@@ -40,7 +40,7 @@ import {
   ShopFeaturesState,
   SMS_PRICE_PER_MESSAGE_LKR,
 } from '../../../../type/onboarding';
-import { updateShopFeatures_Service } from '../../../../services/ShopOnboardingService';
+import { onboardingShopFeatures_Service } from '../../../../services/ShopOnboardingService';
 import { AppDispatch, RootState } from '../../../../store/store';
 import { getApiErrorMessage, parseApiError } from '../../../../utils/apiErrorAlert';
 
@@ -177,7 +177,7 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
     try {
       Keyboard.dismiss();
       await dispatch(
-        updateShopFeatures_Service({
+        onboardingShopFeatures_Service({
           shopId: ownerData.shopId,
           sendReceiptSms: features.sendReceiptSms,
           kpi: features.kpi,
@@ -290,10 +290,10 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
                     >
                       {item.description}
                     </Text>
-                    {isSendReceiptSms && enabled && (
+                    {isSendReceiptSms && (
                       <Text style={[styles.billingNote, { color: paperTheme.colors.primary }]}>
-                        SMS usage ({formatLkrDecimal(SMS_PRICE_PER_MESSAGE_LKR)} per message) will be
-                        added to your monthly subscription.
+                        {formatLkrDecimal(SMS_PRICE_PER_MESSAGE_LKR, 2)} per SMS (usage-based, added
+                        to your monthly subscription).
                       </Text>
                     )}
                   </View>
@@ -431,7 +431,7 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
                   <Text
                     style={[styles.summaryLine, { color: paperTheme.colors.onPrimaryContainer }]}
                   >
-                    • SMS module: {formatLkrDecimal(SMS_PRICE_PER_MESSAGE_LKR)} per SMS (usage-based,
+                    • SMS module: {formatLkrDecimal(SMS_PRICE_PER_MESSAGE_LKR, 2)} per SMS (usage-based,
                     added to monthly bill)
                   </Text>
                 )}

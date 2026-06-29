@@ -98,6 +98,11 @@ export const AuthSlice = createSlice({
       state.Login.data = null;
       state.Login.success = false;
     },
+    patchLoginShopData: (state, action: PayloadAction<Partial<LoginShop>>) => {
+      if (state.Login.shopData) {
+        state.Login.shopData = { ...state.Login.shopData, ...action.payload };
+      }
+    },
   },
   extraReducers: (builder) => {
     builder.addCase(login_Service.pending, (state) => {
@@ -131,6 +136,7 @@ export const AuthSlice = createSlice({
 export const {
   setLoginSession,
   clearLoginSession,
+  patchLoginShopData,
 } = AuthSlice.actions;
 
 export default AuthSlice.reducer;

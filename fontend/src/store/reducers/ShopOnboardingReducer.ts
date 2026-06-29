@@ -1,7 +1,9 @@
 import { createSlice } from '@reduxjs/toolkit';
 import {
   createShopOnboarding_Service,
-  updateShopFeatures_Service,
+  fetchShopFeatures_Service,
+  onboardingShopFeatures_Service,
+  updatedShopFeatures_Service,
   sendOtpOnboarding_Service,
   verifyOtpOnboarding_Service,
   signupOnboarding_Service,
@@ -10,6 +12,7 @@ import {
 } from '../../services/ShopOnboardingService';
 import {
   CreateShopOnboardingResponse,
+  GetShopFeaturesResponse,
   UpdateShopFeaturesResponse,
   SendOtpOnboardingResponse,
   VerifyOtpOnboardingResponse,
@@ -34,6 +37,12 @@ interface ShopOnboardingState {
     data: UpdateShopFeaturesResponse | null;
     shopId: string | null;
     onboardStep: string | null;
+  };
+  shopFeatures: {
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+    data: GetShopFeaturesResponse | null;
   };
   sendOtp: {
     loading: boolean;
@@ -84,6 +93,12 @@ const initialState: ShopOnboardingState = {
     data: null,
     shopId: null,
     onboardStep: null,
+  },
+  shopFeatures: {
+    loading: false,
+    error: null,
+    success: false,
+    data: null,
   },
   sendOtp: {
     loading: false,
@@ -156,12 +171,12 @@ export const ShopOnboardingSlice = createSlice({
       state.createShop.onboardStep = null;
     });
 
-    builder.addCase(updateShopFeatures_Service.pending, (state) => {
+    builder.addCase(onboardingShopFeatures_Service.pending, (state) => {
       state.updateFeatures.loading = true;
       state.updateFeatures.error = null;
       state.updateFeatures.success = false;
     });
-    builder.addCase(updateShopFeatures_Service.fulfilled, (state, action) => {
+    builder.addCase(onboardingShopFeatures_Service.fulfilled, (state, action) => {
       state.updateFeatures.loading = false;
       state.updateFeatures.success = true;
       state.updateFeatures.error = null;
@@ -169,7 +184,32 @@ export const ShopOnboardingSlice = createSlice({
       state.updateFeatures.shopId = action.payload.shopId;
       state.updateFeatures.onboardStep = action.payload.onboardStep;
     });
-    builder.addCase(updateShopFeatures_Service.rejected, (state, action) => {
+    builder.addCase(onboardingShopFeatures_Service.rejected, (state, action) => {
+      state.updateFeatures.loading = false;
+      state.updateFeatures.success = false;
+      state.updateFeatures.error =
+        (action.payload as string) ||
+        action.error.message ||
+        'Shop features save failed';
+      state.updateFeatures.data = null;
+      state.updateFeatures.shopId = null;
+      state.updateFeatures.onboardStep = null;
+    });
+
+    builder.addCase(updatedShopFeatures_Service.pending, (state) => {
+      state.updateFeatures.loading = true;
+      state.updateFeatures.error = null;
+      state.updateFeatures.success = false;
+    });
+    builder.addCase(updatedShopFeatures_Service.fulfilled, (state, action) => {
+      state.updateFeatures.loading = false;
+      state.updateFeatures.success = true;
+      state.updateFeatures.error = null;
+      state.updateFeatures.data = action.payload;
+      state.updateFeatures.shopId = action.payload.shopId;
+      state.updateFeatures.onboardStep = action.payload.onboardStep ?? null;
+    });
+    builder.addCase(updatedShopFeatures_Service.rejected, (state, action) => {
       state.updateFeatures.loading = false;
       state.updateFeatures.success = false;
       state.updateFeatures.error =
@@ -179,6 +219,27 @@ export const ShopOnboardingSlice = createSlice({
       state.updateFeatures.data = null;
       state.updateFeatures.shopId = null;
       state.updateFeatures.onboardStep = null;
+    });
+
+    builder.addCase(fetchShopFeatures_Service.pending, (state) => {
+      state.shopFeatures.loading = true;
+      state.shopFeatures.error = null;
+      state.shopFeatures.success = false;
+    });
+    builder.addCase(fetchShopFeatures_Service.fulfilled, (state, action) => {
+      state.shopFeatures.loading = false;
+      state.shopFeatures.success = true;
+      state.shopFeatures.error = null;
+      state.shopFeatures.data = action.payload;
+    });
+    builder.addCase(fetchShopFeatures_Service.rejected, (state, action) => {
+      state.shopFeatures.loading = false;
+      state.shopFeatures.success = false;
+      state.shopFeatures.error =
+        (action.payload as string) ||
+        action.error.message ||
+        'Could not load shop features';
+      state.shopFeatures.data = null;
     });
 
     builder.addCase(sendOtpOnboarding_Service.pending, (state) => {
