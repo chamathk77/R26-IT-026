@@ -86,6 +86,18 @@ export default function HomeScreen(_props: Props) {
    });
   };
 
+  const showNotificationsComingSoon = () => {
+    show_Alert(
+      'pending',
+      'Coming soon',
+      'Notifications will be available in a future release.',
+      1,
+      false,
+      'OK',
+      () => {},
+    );
+  };
+
   return (
     <>
       <StatusBar
@@ -122,7 +134,7 @@ export default function HomeScreen(_props: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Notifications"
                 style={[styles.iconBtn, { backgroundColor: surface }]}
-                onPress={() => {}}
+                onPress={showNotificationsComingSoon}
               >
                 <Ionicons name="notifications-outline" size={22} color={primary} />
               </TouchableOpacity>
