@@ -23,6 +23,12 @@ const SUBSCRIPTION_FEES = [
 /** Per additional user monthly fee (LKR). Change here to update billing everywhere. */
 const ADDITIONAL_USER_FEE_LKR = 499;
 
+/** Web portal add-on monthly fee (LKR). Billing integration — future release. */
+const WEB_MODULE_FEE_LKR = 2990;
+
+/** Per SMS message fee (LKR). Change here to update SMS billing everywhere. */
+const PER_SMS_FEE_LKR = 1.15;
+
 const SUBSCRIPTION_DURATION_DAYS = {
   '1month': 30,
   '3months': 90,
@@ -164,6 +170,15 @@ const shopsDataSchema = new mongoose.Schema(
       default: null,
       min: 0,
     },
+    /** Future release: shop web portal access (same API as mobile). */
+    webModule: {
+      type: Boolean,
+      default: false,
+    },
+    webModuleEnabledAt: {
+      type: Date,
+      default: null,
+    },
 
     //subscription related
 
@@ -217,6 +232,11 @@ const shopsDataSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    smsReceiptNo: {
+      type: String,
+      default: null,
+      trim: true,
+    },
 
     trailStartDate: {
       type: Date,
@@ -235,7 +255,12 @@ const shopsDataSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    dueDays: {
+    subscriptionDueDays: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    smsDueDays: {
       type: Number,
       default: 0,
       min: 0,
@@ -281,6 +306,8 @@ ShopsData.ONBOARD_STEPS = ONBOARD_STEPS;
 ShopsData.SUBSCRIPTION_TYPES = SUBSCRIPTION_TYPES;
 ShopsData.SUBSCRIPTION_FEES = SUBSCRIPTION_FEES;
 ShopsData.ADDITIONAL_USER_FEE_LKR = ADDITIONAL_USER_FEE_LKR;
+ShopsData.WEB_MODULE_FEE_LKR = WEB_MODULE_FEE_LKR;
+ShopsData.PER_SMS_FEE_LKR = PER_SMS_FEE_LKR;
 ShopsData.SUBSCRIPTION_DURATION_DAYS = SUBSCRIPTION_DURATION_DAYS;
 ShopsData.getSubscriptionFee = getSubscriptionFee;
 
@@ -312,6 +339,9 @@ module.exports = ShopsData;
   // customerManualOrder: boolean
   // costModule: boolean
   // marketingModule: boolean
+  // webModule: boolean (future — web portal add-on)
+  // webModuleEnabledAt: date | null
+  // PER_SMS_FEE_LKR: constant (per SMS message, LKR)
 
 
   // maxUsers: number
@@ -329,7 +359,9 @@ module.exports = ShopsData;
   // isOneTimePaymentDone: boolean
   // isOneTimePaymentGenerated: boolean
   // oneTimePaymentReceiptNo: up-front payment document id
-  // dueDays: number
+  // smsReceiptNo: SMS payment document id
+  // subscriptionDueDays: number
+  // smsDueDays: number
   // isTrailStared: boolean
   // isTrailCompleted: boolean
   // trailStartDate: date

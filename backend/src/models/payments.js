@@ -17,7 +17,7 @@ const PAYMENT_MONTH_CODES = [
 
 const PAYMENT_STATUS = ['pending', 'approve', 'rejected', 'notPaid']; 
 
-const PAYMENT_TYPE = ['subscription', 'upFront'];
+const PAYMENT_TYPE = ['subscription', 'upFront', 'sms'];
 
 const SUBSCRIPTION_TYPES = ['1month', '3months', '6months', '1year'];
 
@@ -129,10 +129,12 @@ paymentsSchema.pre('validate', function validatePaymentRules() {
       this.paymentType = 'upFront';
     } else if (normalizedType === 'subscription') {
       this.paymentType = 'subscription';
+    } else if (normalizedType === 'sms') {
+      this.paymentType = 'sms';
     }
   }
 
-  if (this.paymentType === 'upFront') {
+  if (this.paymentType === 'upFront' || this.paymentType === 'sms') {
     this.subscriptionType = null;
   }
 
@@ -182,7 +184,7 @@ module.exports = Payments;
 // paymentMonth (enum: january, february, march, april, may, june, july, august, september, october, november, december)
 // paymentAmount
 // additionalPayments: [{ name, amount }]
-// paymentType: subscription, upFront
+// paymentType: subscription, upFront, sms
 // subscriptionType: 1month | 3months | 6months | 1year | null
 // exactPaymentDay
 // expiryDate
