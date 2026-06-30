@@ -2,9 +2,7 @@ const ShopsData = require('../models/shopsData');
 const DueDaysCronReport = require('../models/dueDaysCronReport');
 
 const SUBSCRIPTION_DUE_STATUS = 'due';
-const SMS_DUE_STATUS = 'due';
 const SUBSCRIPTION_OVERDUE_STATUS = 'paymentPending';
-const SMS_OVERDUE_STATUS = 'inactive';
 const OVERDUE_DAYS_THRESHOLD = 14;
 
 function processShopDueDays(shop) {
@@ -12,46 +10,27 @@ function processShopDueDays(shop) {
   const result = {
     shopId: shop.shopId,
     subscription: null,
-    sms: null,
   };
 
-  if (shop.status === SUBSCRIPTION_DUE_STATUS) {
-    const previousDueDays = Number(shop.subscriptionDueDays ?? 0);
-    const statusChanged = previousDueDays > OVERDUE_DAYS_THRESHOLD;
-
-    if (statusChanged) {
-      updates.status = SUBSCRIPTION_OVERDUE_STATUS;
-    }
-
-    updates.subscriptionDueDays = previousDueDays + 1;
-
-    result.subscription = {
-      previousDueDays,
-      newDueDays: previousDueDays + 1,
-      statusChanged,
-      newStatus: statusChanged ? SUBSCRIPTION_OVERDUE_STATUS : SUBSCRIPTION_DUE_STATUS,
-    };
+  if (shop.status !== SUBSCRIPTION_DUE_STATUS) {
+    return { updates, result };
   }
 
-  if (shop.smsStatus === SMS_DUE_STATUS) {
-    const previousDueDays = Number(shop.smsDueDays ?? 0);
-    const statusChanged = previousDueDays > OVERDUE_DAYS_THRESHOLD;
+  const previousDueDays = Number(shop.subscriptionDueDays ?? 0);
+  const statusChanged = previousDueDays > OVERDUE_DAYS_THRESHOLD;
 
-    if (statusChanged) {
-      updates.smsStatus = SMS_OVERDUE_STATUS;
-      updates.sendReceiptSms = false;
-    }
-
-    updates.smsDueDays = previousDueDays + 1;
-
-    result.sms = {
-      previousDueDays,
-      newDueDays: previousDueDays + 1,
-      statusChanged,
-      newSmsStatus: statusChanged ? SMS_OVERDUE_STATUS : SMS_DUE_STATUS,
-      sendReceiptSmsDisabled: statusChanged,
-    };
+  if (statusChanged) {
+    updates.status = SUBSCRIPTION_OVERDUE_STATUS;
   }
+
+  updates.subscriptionDueDays = previousDueDays + 1;
+
+  result.subscription = {
+    previousDueDays,
+    newDueDays: previousDueDays + 1,
+    statusChanged,
+    newStatus: statusChanged ? SUBSCRIPTION_OVERDUE_STATUS : SUBSCRIPTION_DUE_STATUS,
+  };
 
   return { updates, result };
 }
@@ -79,7 +58,6 @@ async function saveDueDaysCronReport(report, meta = {}) {
   const checkedAt = new Date(report.checkedAt || Date.now());
   const timezone = meta.timezone || 'Asia/Colombo';
   const subscription = report.subscription || [];
-  const sms = report.sms || [];
   const skipped = report.skipped || [];
   const errors = report.errors || [];
 
@@ -91,14 +69,14 @@ async function saveDueDaysCronReport(report, meta = {}) {
     totalShopsChecked: report.totalShopsChecked ?? 0,
     subscriptionProcessedCount: subscription.length,
     subscriptionStatusChangedCount: subscription.filter((entry) => entry.statusChanged).length,
-    smsProcessedCount: sms.length,
-    smsStatusChangedCount: sms.filter((entry) => entry.statusChanged).length,
+    smsProcessedCount: 0,
+    smsStatusChangedCount: 0,
     skippedCount: skipped.length,
     errorsCount: errors.length,
     fatalError: report.fatalError ?? null,
     reportData: {
       subscription,
-      sms,
+      sms: [],
       skipped,
       errors,
     },
@@ -107,7 +85,7 @@ async function saveDueDaysCronReport(report, meta = {}) {
   payload.runStatus = resolveRunStatus({
     fatalError: payload.fatalError,
     errorsCount: payload.errorsCount,
-    processedCount: payload.subscriptionProcessedCount + payload.smsProcessedCount,
+    processedCount: payload.subscriptionProcessedCount,
   });
 
   return DueDaysCronReport.findOneAndUpdate(
@@ -118,24 +96,21 @@ async function saveDueDaysCronReport(report, meta = {}) {
 }
 
 /**
- * Daily due-days job: increment subscriptionDueDays / smsDueDays for shops with open bills.
- * When due days exceed 14 before increment, move subscription to paymentPending or disable SMS.
+ * Daily due-days job: increment subscriptionDueDays for shops with status due.
+ * When due days exceed 14 before increment, move subscription to paymentPending.
  */
 async function runDailyDueDaysCheck(meta = {}) {
   const report = {
     checkedAt: new Date().toISOString(),
     totalShopsChecked: 0,
     subscription: [],
-    sms: [],
     skipped: [],
     errors: [],
   };
 
   try {
-    const shops = await ShopsData.find({
-      $or: [{ status: SUBSCRIPTION_DUE_STATUS }, { smsStatus: SMS_DUE_STATUS }],
-    })
-      .select('shopId status subscriptionDueDays smsStatus smsDueDays sendReceiptSms')
+    const shops = await ShopsData.find({ status: SUBSCRIPTION_DUE_STATUS })
+      .select('shopId status subscriptionDueDays')
       .lean();
 
     report.totalShopsChecked = shops.length;
@@ -147,19 +122,13 @@ async function runDailyDueDaysCheck(meta = {}) {
         if (Object.keys(updates).length === 0) {
           report.skipped.push({
             shopId: shop.shopId,
-            reason: 'no_due_subscription_or_sms_status',
+            reason: 'subscription_not_due',
           });
           continue;
         }
 
         await ShopsData.updateOne({ shopId: shop.shopId }, { $set: updates });
-
-        if (result.subscription) {
-          report.subscription.push(result);
-        }
-        if (result.sms) {
-          report.sms.push(result);
-        }
+        report.subscription.push(result);
       } catch (error) {
         report.errors.push({
           shopId: shop.shopId,
@@ -168,11 +137,10 @@ async function runDailyDueDaysCheck(meta = {}) {
       }
     }
 
-    console.log('[due-days-cron] Daily due days check');
+    console.log('[due-days-cron] Daily subscription due days check');
     console.log(
       `[due-days-cron] Summary: checked=${report.totalShopsChecked}, ` +
         `subscription=${report.subscription.length}, ` +
-        `sms=${report.sms.length}, ` +
         `skipped=${report.skipped.length}, ` +
         `errors=${report.errors.length}`,
     );

@@ -16,12 +16,8 @@ function isBillingCronEnabled() {
   return process.env.BILLING_CRON_ENABLED !== 'false';
 }
 
-function isSmsBillingCronEnabled() {
-  return process.env.SMS_BILLING_CRON_ENABLED !== 'false';
-}
-
 function isDueDaysCronChained() {
-  return isTrialCronEnabled() || isBillingCronEnabled() || isSmsBillingCronEnabled();
+  return isTrialCronEnabled() || isBillingCronEnabled();
 }
 
 function getDueDaysCronSchedule() {
@@ -40,7 +36,7 @@ function startDueDaysCron() {
 
   if (isDueDaysCronChained()) {
     console.log(
-      '[due-days-cron] Chained to daily cron — runs right after SMS billing',
+      '[due-days-cron] Chained to daily cron — runs after subscription billing',
     );
     return null;
   }

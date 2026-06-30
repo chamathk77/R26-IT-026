@@ -1,10 +1,5 @@
-const mongoose = require('mongoose');
 const ShopsData = require('../models/shopsData');
-const Payments = require('../models/payments');
 const User = require('../models/user');
-
-const SMS_BILLING_CYCLE_DAYS = 30;
-const SMS_DUE_DAYS_BLOCK_THRESHOLD = 14;
 
 function normalizeShopId(shopId) {
   return String(shopId).trim().toUpperCase();
@@ -394,100 +389,6 @@ const onboardingShopFeatures = async (req, res) => {
   }
 };
 
-function startOfToday() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return today;
-}
-
-function addDaysToDate(date, days) {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-}
-
-async function findSmsPaymentByReceiptNo(smsReceiptNo) {
-  const receiptId = String(smsReceiptNo ?? '').trim();
-  if (!receiptId || !mongoose.Types.ObjectId.isValid(receiptId)) {
-    return null;
-  }
-  return Payments.findById(receiptId).lean();
-}
-
-async function applySendReceiptSmsActivationRules(shop, featureUpdates) {
-  const smsReceiptNo = shop.smsReceiptNo?.trim() || null;
-  const smsDueDays = Number(shop.smsDueDays ?? 0);
-
-  if (smsReceiptNo) {
-    const payment = await findSmsPaymentByReceiptNo(smsReceiptNo);
-    if (payment) {
-      if (payment.status === 'notPaid' && smsDueDays > SMS_DUE_DAYS_BLOCK_THRESHOLD) {
-        return {
-          status: 400,
-          body: {
-            success: false,
-            message: 'Please settle unpaid SMS bills first',
-            code: 'SMS_BILL_NOT_PAID',
-          },
-        };
-      }
-
-      if (payment.status === 'pending' && smsDueDays > SMS_DUE_DAYS_BLOCK_THRESHOLD) {
-        return {
-          status: 400,
-          body: {
-            success: false,
-            message:
-              'Please wait — receipt bill status is still pending. After approval you can activate the SMS feature again.',
-            code: 'SMS_BILL_PENDING',
-          },
-        };
-      }
-    }
-  }
-
-  if (!smsReceiptNo && !shop.smsCalculationStartDate && !shop.smsNextPaymentDate) {
-    const calculationStart = startOfToday();
-    featureUpdates.smsCalculationStartDate = calculationStart;
-    featureUpdates.smsNextPaymentDate = addDaysToDate(calculationStart, SMS_BILLING_CYCLE_DAYS);
-  }
-
-  featureUpdates.smsStatus = 'active';
-
-  return null;
-}
-
-async function applySendReceiptSmsDeactivationRules(shop, featureUpdates) {
-  const smsReceiptNo = shop.smsReceiptNo?.trim() || null;
-  const smsDueDays = Number(shop.smsDueDays ?? 0);
-
-  if (smsReceiptNo) {
-    const payment = await findSmsPaymentByReceiptNo(smsReceiptNo);
-    if (
-      payment &&
-      (payment.status === 'pending' || payment.status === 'notPaid') &&
-      smsDueDays < SMS_DUE_DAYS_BLOCK_THRESHOLD
-    ) {
-      return {
-        status: 400,
-        body: {
-          success: false,
-          message: 'Please settle unpaid SMS bills before deactivating',
-          code: 'SMS_BILL_UNSETTLED_BEFORE_DEACTIVATE',
-        },
-      };
-    }
-  }
-
-  featureUpdates.smsReceiptNo = null;
-  featureUpdates.smsCalculationStartDate = null;
-  featureUpdates.smsNextPaymentDate = null;
-  featureUpdates.smsDueDays = 0;
-  featureUpdates.smsStatus = 'inactive';
-
-  return null;
-}
-
 const updatedShopFeatures = async (req, res) => {
   try {
     const shopId = req.body.shopId ?? req.user?.shopId;
@@ -500,28 +401,6 @@ const updatedShopFeatures = async (req, res) => {
 
     if (req.user?.shopId && req.user.shopId !== normalizedShopId) {
       return res.status(403).json({ success: false, message: 'Not authorized for this shop' });
-    }
-
-    const shop = await ShopsData.findOne({ shopId: normalizedShopId })
-      .select(
-        'sendReceiptSms smsReceiptNo smsDueDays smsStatus smsCalculationStartDate smsNextPaymentDate',
-      )
-      .lean();
-
-    if (!shop) {
-      return res.status(404).json({ success: false, message: 'Shop not found' });
-    }
-
-    if (featureUpdates.sendReceiptSms) {
-      const smsActivationError = await applySendReceiptSmsActivationRules(shop, featureUpdates);
-      if (smsActivationError) {
-        return res.status(smsActivationError.status).json(smsActivationError.body);
-      }
-    } else {
-      const smsDeactivationError = await applySendReceiptSmsDeactivationRules(shop, featureUpdates);
-      if (smsDeactivationError) {
-        return res.status(smsDeactivationError.status).json(smsDeactivationError.body);
-      }
     }
 
     if (featureUpdates.isAdditionalUsersAdded) {

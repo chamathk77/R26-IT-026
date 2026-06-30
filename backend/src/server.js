@@ -4,14 +4,12 @@ const config = require('./config');
 const { connectDatabase } = require('./config/database');
 const { startBillingCron } = require('./jobs/billingCron');
 const { startTrialCron } = require('./jobs/trialCron');
-const { startSmsBillingCron } = require('./jobs/smsBillingCron');
 const { startDueDaysCron } = require('./jobs/dueDaysCron');
 
 async function start() {
   await connectDatabase();
   startTrialCron();
   startBillingCron();
-  startSmsBillingCron();
   startDueDaysCron();
   app.listen(config.port, () => {
     console.log(`Server listening on port ${config.port} (${config.nodeEnv})`);
