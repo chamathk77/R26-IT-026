@@ -20,14 +20,25 @@ const SUBSCRIPTION_FEES = [
   { type: '1year', fee: 51600 },
 ];
 
+const SMS_PACKAGES = [
+  { type: '500', messageCount: 500, fee: 575 },
+  { type: '1000', messageCount: 1000, fee: 1150 },
+  { type: '1500', messageCount: 1500, fee: 1725 },
+  { type: '2000', messageCount: 2000, fee: 2300 },
+  { type: '2500', messageCount: 2500, fee: 2875 },
+  { type: '3000', messageCount: 3000, fee: 3450 },
+  { type: '3500', messageCount: 3500, fee: 4025 },
+  { type: '4000', messageCount: 4000, fee: 4600 },
+  { type: '4500', messageCount: 4500, fee: 5175 },
+];
+
+const SMS_PACKAGE_TYPES = SMS_PACKAGES.map((pkg) => pkg.type);
+
 /** Per additional user monthly fee (LKR). Change here to update billing everywhere. */
 const ADDITIONAL_USER_FEE_LKR = 499;
 
 /** Web portal add-on monthly fee (LKR). Billing integration — future release. */
 const WEB_MODULE_FEE_LKR = 2990;
-
-/** Per SMS message fee (LKR). Change here to update SMS billing everywhere. */
-const PER_SMS_FEE_LKR = 1.15;
 
 const SUBSCRIPTION_DURATION_DAYS = {
   '1month': 30,
@@ -46,8 +57,6 @@ const ONBOARD_STEPS = [
   'shopRegistered',
   'otpVerified',
   'passwordSet',
-  'featureSelected',
-  'subscriptionSelected',
   'completed',
 ];
 
@@ -131,6 +140,30 @@ const shopsDataSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    smsPackageType: {
+      type: String,
+      enum: SMS_PACKAGE_TYPES,
+      default: null,
+    },
+    smsMonthlyAllowance: {
+      type: Number,
+      default: null,
+      min: 0,
+    },
+    smsUsedInPeriod: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    smsPackageAmount: {
+      type: Number,
+      default: null,
+      min: 0,
+    },
+    smsNextRenewalDate: {
+      type: Date,
+      default: null,
+    },
     kpi: {
       type: Boolean,
       default: false,
@@ -195,30 +228,6 @@ const shopsDataSchema = new mongoose.Schema(
       default: null,
     },
 
-    smsNextPaymentDate: { 
-      type: Date,
-      default: null,
-    },
-    smsCalculationStartDate: {
-      type: Date,
-      default: null,
-    },
-    smsReceiptNo: {
-      type: String,
-      default: null,
-      trim: true,
-    },
-    smsDueDays: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    smsStatus: {
-      type: String,
-      enum: ['active', 'due', 'inactive'],
-      default: 'inactive',
-    },
-    
     subsAmount: {
       type: Number,
       default: null,
@@ -316,9 +325,10 @@ ShopsData.SHOP_STATUS = SHOP_STATUS;
 ShopsData.ONBOARD_STEPS = ONBOARD_STEPS;
 ShopsData.SUBSCRIPTION_TYPES = SUBSCRIPTION_TYPES;
 ShopsData.SUBSCRIPTION_FEES = SUBSCRIPTION_FEES;
+ShopsData.SMS_PACKAGES = SMS_PACKAGES;
+ShopsData.SMS_PACKAGE_TYPES = SMS_PACKAGE_TYPES;
 ShopsData.ADDITIONAL_USER_FEE_LKR = ADDITIONAL_USER_FEE_LKR;
 ShopsData.WEB_MODULE_FEE_LKR = WEB_MODULE_FEE_LKR;
-ShopsData.PER_SMS_FEE_LKR = PER_SMS_FEE_LKR;
 ShopsData.SUBSCRIPTION_DURATION_DAYS = SUBSCRIPTION_DURATION_DAYS;
 ShopsData.getSubscriptionFee = getSubscriptionFee;
 
@@ -339,11 +349,16 @@ module.exports = ShopsData;
   // isVerifyPhoneNumber: boolean
   // otp: number
   // otpExpiresAt: date
-  // onboardStep: startOnboarding | shopRegistered | featureSelected | completed
+  // onboardStep: startOnboarding | shopRegistered | otpVerified | passwordSet | completed
 
   // manageInventory removed — inventory is per product (Product.isInventoryAvailable)
   // sendReceiptSms: boolean
   // senderId: string | null
+  // smsPackageType: 500 | 1000 | ... | 4500 (monthly message quota)
+  // smsMonthlyAllowance: number | null
+  // smsUsedInPeriod: number
+  // smsPackageAmount: number | null (monthly fee LKR)
+  // smsNextRenewalDate: date | null
   // kpi: boolean
   // analyticsModule: boolean
   // smsMobileNumber: boolean
@@ -352,7 +367,6 @@ module.exports = ShopsData;
   // marketingModule: boolean
   // webModule: boolean (future — web portal add-on)
   // webModuleEnabledAt: date | null
-  // PER_SMS_FEE_LKR: constant (per SMS message, LKR)
 
 
   // maxUsers: number
@@ -370,9 +384,7 @@ module.exports = ShopsData;
   // isOneTimePaymentDone: boolean
   // isOneTimePaymentGenerated: boolean
   // oneTimePaymentReceiptNo: up-front payment document id
-  // smsReceiptNo: SMS payment document id
   // subscriptionDueDays: number
-  // smsDueDays: number
   // isTrailStared: boolean
   // isTrailCompleted: boolean
   // trailStartDate: date

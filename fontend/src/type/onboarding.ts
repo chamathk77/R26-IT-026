@@ -19,7 +19,16 @@ export type ShopFeatureKey =
 
 export type ShopFeaturesState = Record<ShopFeatureKey, boolean>;
 
-export type OnboardingStep = 1 | 2 | 3 | 4 | 5;
+export type OnboardingStep = 1 | 2 | 3 | 4;
+
+export type OnboardingModuleKey =
+  | 'kpi'
+  | 'analyticsModule'
+  | 'customerManualOrder'
+  | 'costModule'
+  | 'marketingModule';
+
+export type OnboardingModulesState = Record<OnboardingModuleKey, boolean>;
 
 export type SubscriptionType = '1month' | '3months' | '6months' | '1year';
 

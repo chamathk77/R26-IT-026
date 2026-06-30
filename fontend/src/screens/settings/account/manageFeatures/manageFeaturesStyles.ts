@@ -67,7 +67,10 @@ export const manageFeaturesStyles = StyleSheet.create({
     fontSize: 15,
   },
   scrollWithFooter: {
-    paddingBottom: 120,
+    paddingBottom: 140,
+  },
+  scrollAfterBillingAddons: {
+    paddingBottom: 64,
   },
   heroCard: {
     borderRadius: 24,
@@ -266,7 +269,7 @@ export const manageFeaturesStyles = StyleSheet.create({
     borderWidth: 1,
     padding: 14,
     marginTop: 4,
-    marginBottom: 8,
+    marginBottom: 48,
   },
   summaryTitle: {
     fontFamily: fonts.PoppinsSemiBold,

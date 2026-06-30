@@ -154,7 +154,7 @@ const createShopOnboarding = async (req, res) => {
 };
 
 const SHOP_FEATURE_FIELDS =
-  'shopId sendReceiptSms kpi analyticsModule customerManualOrder costModule marketingModule isAdditionalUsersAdded numAdditionalUsers';
+  'shopId sendReceiptSms senderId smsPackageType smsMonthlyAllowance smsUsedInPeriod smsPackageAmount smsNextRenewalDate kpi analyticsModule customerManualOrder costModule marketingModule isAdditionalUsersAdded numAdditionalUsers';
 
 const DEFAULT_MAX_USERS = 3;
 
@@ -165,9 +165,38 @@ function resolveMaxUsers(isAdditionalUsersAdded, numAdditionalUsers) {
   return DEFAULT_MAX_USERS;
 }
 
+function findSmsPackage(packageType) {
+  const normalized = String(packageType ?? '').trim();
+  return ShopsData.SMS_PACKAGES.find((pkg) => pkg.type === normalized) ?? null;
+}
+
+function normalizeSmsPackageType(value) {
+  const normalized = String(value ?? '').trim();
+  if (!ShopsData.SMS_PACKAGE_TYPES.includes(normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+function mapSmsPackageResponse(shop) {
+  const selectedSmsPackage = shop.smsPackageType
+    ? findSmsPackage(shop.smsPackageType)
+    : null;
+
+  return {
+    smsPackageType: shop.smsPackageType ?? null,
+    smsMonthlyAllowance: shop.smsMonthlyAllowance ?? null,
+    smsUsedInPeriod: shop.smsUsedInPeriod ?? 0,
+    smsPackageAmount: shop.smsPackageAmount ?? null,
+    smsNextRenewalDate: shop.smsNextRenewalDate ?? null,
+    selectedSmsPackage,
+  };
+}
+
 function mapShopFeaturesResponse(shop) {
   return {
     sendReceiptSms: shop.sendReceiptSms,
+    ...mapSmsPackageResponse(shop),
     kpi: shop.kpi,
     analyticsModule: shop.analyticsModule,
     customerManualOrder: shop.customerManualOrder,
@@ -216,10 +245,75 @@ const getShopFeatures = async (req, res) => {
   }
 };
 
+const getSmsPackages = async (req, res) => {
+  try {
+    return res.status(200).json({
+      success: true,
+      message: 'SMS packages loaded',
+      packages: ShopsData.SMS_PACKAGES,
+    });
+  } catch (error) {
+    console.log('error in getSmsPackages', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+function resolveSmsPackageUpdates({ smsPackageType, sendReceiptSms, shop }) {
+  if (!sendReceiptSms) {
+    return { updates: {} };
+  }
+
+  const hasIncomingPackage =
+    smsPackageType !== undefined && smsPackageType !== null && String(smsPackageType).trim() !== '';
+  const normalizedType = hasIncomingPackage
+    ? normalizeSmsPackageType(smsPackageType)
+    : shop.smsPackageType;
+
+  if (hasIncomingPackage && !normalizedType) {
+    return {
+      error: {
+        status: 400,
+        body: {
+          success: false,
+          message: `smsPackageType must be one of: ${ShopsData.SMS_PACKAGE_TYPES.join(', ')}`,
+          code: 'INVALID_SMS_PACKAGE',
+        },
+      },
+    };
+  }
+
+  if (!normalizedType) {
+    return {
+      error: {
+        status: 400,
+        body: {
+          success: false,
+          message: 'smsPackageType is required when sendReceiptSms is enabled',
+          code: 'SMS_PACKAGE_REQUIRED',
+        },
+      },
+    };
+  }
+
+  const selectedPackage = findSmsPackage(normalizedType);
+  const updates = {
+    smsPackageType: selectedPackage.type,
+    smsMonthlyAllowance: selectedPackage.messageCount,
+    smsPackageAmount: selectedPackage.fee,
+  };
+
+  if (shop.smsPackageType !== selectedPackage.type) {
+    updates.smsUsedInPeriod = 0;
+  }
+
+  return { updates, selectedPackage };
+}
+
 async function parseShopFeaturesInput(body) {
   const {
     shopId,
     sendReceiptSms,
+    smsPackageType,
     kpi,
     analyticsModule,
     customerManualOrder,
@@ -342,10 +436,20 @@ async function parseShopFeaturesInput(body) {
     numAdditionalUsersValue ?? 0,
   );
 
+  const smsPackageResult = resolveSmsPackageUpdates({
+    smsPackageType,
+    sendReceiptSms: sendReceiptSmsParsed.value,
+    shop,
+  });
+  if (smsPackageResult.error) {
+    return { error: smsPackageResult.error };
+  }
+
   return {
     normalizedShopId,
     featureUpdates: {
       sendReceiptSms: sendReceiptSmsParsed.value,
+      ...smsPackageResult.updates,
       kpi: kpiParsed.value,
       analyticsModule: analyticsModuleParsed.value,
       customerManualOrder: customerManualOrderParsed.value,
@@ -358,9 +462,102 @@ async function parseShopFeaturesInput(body) {
   };
 }
 
+function mapOnboardingFeaturesResponse(shop) {
+  return {
+    kpi: shop.kpi,
+    analyticsModule: shop.analyticsModule,
+    customerManualOrder: shop.customerManualOrder,
+    costModule: shop.costModule,
+    marketingModule: shop.marketingModule,
+  };
+}
+
+async function parseOnboardingShopFeaturesInput(body) {
+  const {
+    shopId,
+    kpi,
+    analyticsModule,
+    customerManualOrder,
+    costModule,
+    marketingModule,
+  } = body;
+
+  if (!shopId?.trim()) {
+    return { error: { status: 400, body: { success: false, message: 'Shop id is required' } } };
+  }
+
+  const normalizedShopId = normalizeShopId(shopId);
+
+  if (!isValidShopIdFormat(normalizedShopId)) {
+    return { error: { status: 400, body: { success: false, message: 'Invalid shop id format' } } };
+  }
+
+  const shop = await ShopsData.findOne({ shopId: normalizedShopId });
+  if (!shop) {
+    return { error: { status: 404, body: { success: false, message: 'Shop not found' } } };
+  }
+
+  const kpiParsed = requireBooleanField(kpi, 'kpi');
+  if (kpiParsed.error) {
+    return { error: { status: 400, body: { success: false, message: kpiParsed.error } } };
+  }
+
+  const analyticsModuleParsed = requireBooleanField(analyticsModule, 'analyticsModule');
+  if (analyticsModuleParsed.error) {
+    return { error: { status: 400, body: { success: false, message: analyticsModuleParsed.error } } };
+  }
+
+  const customerManualOrderParsed = requireBooleanField(
+    customerManualOrder,
+    'customerManualOrder',
+  );
+  if (customerManualOrderParsed.error) {
+    return {
+      error: { status: 400, body: { success: false, message: customerManualOrderParsed.error } },
+    };
+  }
+
+  const costModuleParsed = requireBooleanField(costModule, 'costModule');
+  if (costModuleParsed.error) {
+    return { error: { status: 400, body: { success: false, message: costModuleParsed.error } } };
+  }
+
+  const marketingModuleParsed = requireBooleanField(marketingModule, 'marketingModule');
+  if (marketingModuleParsed.error) {
+    return {
+      error: { status: 400, body: { success: false, message: marketingModuleParsed.error } },
+    };
+  }
+
+  const featureUpdates = {
+    kpi: kpiParsed.value,
+    analyticsModule: analyticsModuleParsed.value,
+    customerManualOrder: customerManualOrderParsed.value,
+    costModule: costModuleParsed.value,
+    marketingModule: marketingModuleParsed.value,
+  };
+
+  if (!Object.values(featureUpdates).some(Boolean)) {
+    return {
+      error: {
+        status: 400,
+        body: {
+          success: false,
+          message: 'Please enable at least one module',
+        },
+      },
+    };
+  }
+
+  return {
+    normalizedShopId,
+    featureUpdates,
+  };
+}
+
 const onboardingShopFeatures = async (req, res) => {
   try {
-    const parsed = await parseShopFeaturesInput(req.body);
+    const parsed = await parseOnboardingShopFeaturesInput(req.body);
     if (parsed.error) {
       return res.status(parsed.error.status).json(parsed.error.body);
     }
@@ -369,7 +566,7 @@ const onboardingShopFeatures = async (req, res) => {
 
     const updated = await ShopsData.findOneAndUpdate(
       { shopId: normalizedShopId },
-      { $set: { ...featureUpdates, onboardStep: 'featureSelected' } },
+      { $set: { ...featureUpdates, onboardStep: 'completed' } },
       { returnDocument: 'after', runValidators: true },
     ).lean();
 
@@ -378,10 +575,7 @@ const onboardingShopFeatures = async (req, res) => {
       shopId: updated.shopId,
       onboardStep: updated.onboardStep,
       message: 'Shop features saved',
-      features: {
-        ...mapShopFeaturesResponse(updated),
-        maxUsers: updated.maxUsers,
-      },
+      features: mapOnboardingFeaturesResponse(updated),
     });
   } catch (error) {
     console.log('error in onboardingShopFeatures', error);
@@ -446,6 +640,72 @@ function normalizeSubscriptionType(value) {
   }
   return normalized;
 }
+
+const setSmsPackage = async (req, res) => {
+  try {
+    const shopId = req.body.shopId ?? req.user?.shopId;
+    const { smsPackageType } = req.body;
+
+    if (!shopId?.trim()) {
+      return res.status(400).json({ success: false, message: 'Shop id is required' });
+    }
+
+    const normalizedShopId = normalizeShopId(shopId);
+
+    if (!isValidShopIdFormat(normalizedShopId)) {
+      return res.status(400).json({ success: false, message: 'Invalid shop id format' });
+    }
+
+    if (req.user?.shopId && req.user.shopId !== normalizedShopId) {
+      return res.status(403).json({ success: false, message: 'Not authorized for this shop' });
+    }
+
+    if (smsPackageType === undefined || smsPackageType === null || smsPackageType === '') {
+      return res.status(400).json({ success: false, message: 'smsPackageType is required' });
+    }
+
+    const normalizedPackageType = normalizeSmsPackageType(smsPackageType);
+    if (!normalizedPackageType) {
+      return res.status(400).json({
+        success: false,
+        message: `smsPackageType must be one of: ${ShopsData.SMS_PACKAGE_TYPES.join(', ')}`,
+        code: 'INVALID_SMS_PACKAGE',
+      });
+    }
+
+    const shop = await ShopsData.findOne({ shopId: normalizedShopId });
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found' });
+    }
+
+    const selectedPackage = findSmsPackage(normalizedPackageType);
+    const updates = {
+      smsPackageType: selectedPackage.type,
+      smsMonthlyAllowance: selectedPackage.messageCount,
+      smsPackageAmount: selectedPackage.fee,
+    };
+
+    if (shop.smsPackageType !== selectedPackage.type) {
+      updates.smsUsedInPeriod = 0;
+    }
+
+    const updated = await ShopsData.findOneAndUpdate(
+      { shopId: normalizedShopId },
+      { $set: updates },
+      { returnDocument: 'after', runValidators: true },
+    ).lean();
+
+    res.status(200).json({
+      success: true,
+      shopId: updated.shopId,
+      message: 'SMS package saved',
+      smsPackage: mapSmsPackageResponse(updated),
+    });
+  } catch (error) {
+    console.log('error in setSmsPackage', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 const setSubscription = async (req, res) => {
   try {
@@ -551,8 +811,10 @@ const removeOnboardingData = async (req, res) => {
 module.exports = {
   createShopOnboarding,
   getShopFeatures,
+  getSmsPackages,
   onboardingShopFeatures,
   updatedShopFeatures,
+  setSmsPackage,
   setSubscription,
   removeOnboardingData,
 };

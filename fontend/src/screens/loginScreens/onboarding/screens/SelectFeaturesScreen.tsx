@@ -1,10 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { TextInput } from 'react-native';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  findNodeHandle,
   Keyboard,
-  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -15,8 +12,6 @@ import {
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { TextInput as PaperTextInput } from 'react-native-paper';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../../../navigation/RootStackParamsList';
@@ -26,31 +21,17 @@ import CommonHeader from '../../../../components/CommonHeader/CommonHeader';
 import OnboardingStepIndicator from './OnboardingStepIndicator';
 import { onboardingStyles as s } from '../styles/onboardingStyles';
 import {
-  createDefaultFeatures,
-  FEATURE_OPTIONS,
+  createDefaultOnboardingModules,
+  ONBOARDING_MODULE_OPTIONS,
 } from './onboardingConstants';
 import { useCommonAlert } from '../../../../hooks/useCommonAlert';
 import CommonAlert from '../../../../components/CommonAlert/CommonAlert';
-import {
-  ADDITIONAL_USER_MONTHLY_PRICE_LKR,
-  DEFAULT_MAX_USERS,
-  formatLkr,
-  formatLkrDecimal,
-  ShopFeatureKey,
-  ShopFeaturesState,
-  SMS_PRICE_PER_MESSAGE_LKR,
-} from '../../../../type/onboarding';
+import { OnboardingModuleKey, OnboardingModulesState } from '../../../../type/onboarding';
 import { onboardingShopFeatures_Service } from '../../../../services/ShopOnboardingService';
 import { AppDispatch, RootState } from '../../../../store/store';
 import { getApiErrorMessage, parseApiError } from '../../../../utils/apiErrorAlert';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SelectFeaturesScreen'>;
-
-const KEYBOARD_EXTRA_SCROLL = Platform.OS === 'ios' ? 80 : 120;
-
-function toAdditionalUserCount(text: string): string {
-  return text.replace(/\D/g, '').slice(0, 4);
-}
 
 export default function SelectFeaturesScreen({ navigation, route }: Props) {
   const dispatch = useDispatch<AppDispatch>();
@@ -61,68 +42,10 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
     (state: RootState) => state.shopOnboarding.updateFeatures.loading,
   );
   const isSubmitting = updateFeaturesLoading;
-  const [features, setFeatures] = useState<ShopFeaturesState>(createDefaultFeatures);
-  const [needMoreUsers, setNeedMoreUsers] = useState(false);
-  const [additionalUsersCount, setAdditionalUsersCount] = useState('');
+  const [modules, setModules] = useState<OnboardingModulesState>(createDefaultOnboardingModules);
 
-  const additionalUsersInputRef = useRef<TextInput>(null);
-  const additionalUsersFieldRef = useRef<View>(null);
-  const keyboardScrollRef = useRef<ScrollView | null>(null);
-
-  const inputSurface = {
-    backgroundColor: paperTheme.colors.surfaceVariant,
-  };
-
-  const inputTextColor = paperTheme.colors.onSurface;
-
-  const parsedAdditionalUsers = useMemo(() => {
-    const value = parseInt(additionalUsersCount, 10);
-    if (!additionalUsersCount.trim() || Number.isNaN(value) || value < 1) {
-      return 0;
-    }
-    return value;
-  }, [additionalUsersCount]);
-
-  const additionalUsersMonthlyCost = useMemo(
-    () => parsedAdditionalUsers * ADDITIONAL_USER_MONTHLY_PRICE_LKR,
-    [parsedAdditionalUsers],
-  );
-
-  const showSubscriptionSummary = features.sendReceiptSms || (needMoreUsers && parsedAdditionalUsers > 0);
-
-  const scrollToField = useCallback((fieldRef: React.RefObject<View | null>) => {
-    const field = fieldRef.current;
-    const scrollView = keyboardScrollRef.current;
-    if (!field || !scrollView) {
-      return;
-    }
-
-    const scrollNode = findNodeHandle(scrollView);
-    if (!scrollNode) {
-      return;
-    }
-
-    field.measureLayout(
-      scrollNode,
-      (_left, top) => {
-        scrollView.scrollTo({
-          y: Math.max(0, top - KEYBOARD_EXTRA_SCROLL),
-          animated: true,
-        });
-      },
-      () => {},
-    );
-  }, []);
-
-  const toggleFeature = (key: ShopFeatureKey) => {
-    setFeatures((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const onToggleNeedMoreUsers = (enabled: boolean) => {
-    setNeedMoreUsers(enabled);
-    if (!enabled) {
-      setAdditionalUsersCount('');
-    }
+  const toggleModule = (key: OnboardingModuleKey) => {
+    setModules((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const onContinue = async () => {
@@ -130,12 +53,12 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
       return;
     }
 
-    const hasSelection = Object.values(features).some(Boolean);
+    const hasSelection = Object.values(modules).some(Boolean);
     if (!hasSelection) {
       show_Alert(
         'error',
         'Validation',
-        'Please select at least one feature to continue.',
+        'Please select at least one module to continue.',
         1,
         true,
         'OK',
@@ -157,40 +80,33 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
       return;
     }
 
-    let numAdditionalUsers: number | null = null;
-    if (needMoreUsers) {
-      if (parsedAdditionalUsers < 1) {
-        show_Alert(
-          'error',
-          'Validation',
-          'Please enter how many additional users you need (minimum 1).',
-          1,
-          true,
-          'OK',
-          () => {},
-        );
-        return;
-      }
-      numAdditionalUsers = parsedAdditionalUsers;
-    }
-
     try {
       Keyboard.dismiss();
       await dispatch(
         onboardingShopFeatures_Service({
           shopId: ownerData.shopId,
-          sendReceiptSms: features.sendReceiptSms,
-          kpi: features.kpi,
-          analyticsModule: features.analyticsModule,
-          customerManualOrder: features.customerManualOrder,
-          costModule: features.costModule,
-          marketingModule: features.marketingModule,
-          isAdditionalUsersAdded: needMoreUsers,
-          numAdditionalUsers: needMoreUsers ? numAdditionalUsers : null,
+          kpi: modules.kpi,
+          analyticsModule: modules.analyticsModule,
+          customerManualOrder: modules.customerManualOrder,
+          costModule: modules.costModule,
+          marketingModule: modules.marketingModule,
         }),
       ).unwrap();
 
-      navigation.navigate('SelectSubscriptionScreen', { ownerData });
+      show_Alert(
+        'success',
+        'Onboarding complete',
+        'Your shop has been set up successfully. Please log in to continue.',
+        1,
+        false,
+        'Go to Login',
+        () => {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'LoginScreen' }],
+          });
+        },
+      );
     } catch (error: unknown) {
       console.log('error in select features screen', parseApiError(error));
       show_Alert(
@@ -204,10 +120,6 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
       );
     }
   };
-
-  useEffect(() => {
-    console.log('ownerData', ownerData);
-  }, [ownerData]);
 
   return (
     <>
@@ -224,31 +136,20 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
         />
         <View style={[s.container, styles.screenBody]}>
           <OnboardingStepIndicator currentStep={4} />
-          <KeyboardAwareScrollView
-            innerRef={(ref) => {
-              keyboardScrollRef.current = ref as ScrollView | null;
-            }}
-            style={styles.keyboardScroll}
-            contentContainerStyle={[s.scrollContent, styles.keyboardScrollContent]}
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={[s.scrollContent, styles.scrollContent]}
             showsVerticalScrollIndicator={false}
             bounces={false}
-            enableOnAndroid
-            enableAutomaticScroll
-            enableResetScrollToCoords={false}
-            extraScrollHeight={KEYBOARD_EXTRA_SCROLL}
-            extraHeight={KEYBOARD_EXTRA_SCROLL}
-            keyboardOpeningTime={0}
             keyboardShouldPersistTaps="handled"
-            viewIsInsideTabBar={false}
           >
             <Text style={[s.heading, { color: paperTheme.colors.onSurface }]}>Choose modules</Text>
             <Text style={[s.subheading, { color: paperTheme.colors.onSurfaceVariant }]}>
-              Enable the tools your shop needs. You can change these later.
+              Enable the tools your shop needs. SMS and add-ons can be configured later in settings.
             </Text>
 
-            {FEATURE_OPTIONS.map((item) => {
-              const enabled = features[item.key];
-              const isSendReceiptSms = item.key === 'sendReceiptSms';
+            {ONBOARDING_MODULE_OPTIONS.map((item) => {
+              const enabled = modules[item.key];
               return (
                 <View
                   key={item.key}
@@ -290,16 +191,10 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
                     >
                       {item.description}
                     </Text>
-                    {isSendReceiptSms && (
-                      <Text style={[styles.billingNote, { color: paperTheme.colors.primary }]}>
-                        {formatLkrDecimal(SMS_PRICE_PER_MESSAGE_LKR, 2)} per SMS (usage-based, added
-                        to your monthly subscription).
-                      </Text>
-                    )}
                   </View>
                   <Switch
                     value={enabled}
-                    onValueChange={() => toggleFeature(item.key)}
+                    onValueChange={() => toggleModule(item.key)}
                     trackColor={{
                       false: paperTheme.colors.surfaceVariant,
                       true: paperTheme.colors.primaryContainer,
@@ -313,144 +208,7 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
                 </View>
               );
             })}
-
-            <View
-              ref={additionalUsersFieldRef}
-              collapsable={false}
-              style={[
-                styles.usersCard,
-                {
-                  backgroundColor: paperTheme.colors.surface,
-                  borderColor: needMoreUsers
-                    ? paperTheme.colors.primary
-                    : paperTheme.colors.outline,
-                },
-              ]}
-            >
-              <View style={styles.usersCardHeader}>
-                <View
-                  style={[
-                    styles.iconWrap,
-                    {
-                      backgroundColor: needMoreUsers
-                        ? paperTheme.colors.primaryContainer
-                        : paperTheme.colors.surfaceVariant,
-                    },
-                  ]}
-                >
-                  <Ionicons name="people-outline" size={22} color={paperTheme.colors.primary} />
-                </View>
-                <View style={styles.featureText}>
-                  <Text style={[styles.featureTitle, { color: paperTheme.colors.onSurface }]}>
-                    Need more users?
-                  </Text>
-                  <Text
-                    style={[styles.featureDesc, { color: paperTheme.colors.onSurfaceVariant }]}
-                  >
-                    Your plan includes {DEFAULT_MAX_USERS} users by default. Each additional user
-                    costs {formatLkr(ADDITIONAL_USER_MONTHLY_PRICE_LKR)} per month and will be
-                    added to your monthly subscription.
-                  </Text>
-                </View>
-                <Switch
-                  value={needMoreUsers}
-                  onValueChange={onToggleNeedMoreUsers}
-                  trackColor={{
-                    false: paperTheme.colors.surfaceVariant,
-                    true: paperTheme.colors.primaryContainer,
-                  }}
-                  thumbColor={
-                    needMoreUsers ? paperTheme.colors.primary : paperTheme.colors.outline
-                  }
-                  ios_backgroundColor={paperTheme.colors.surfaceVariant}
-                  accessibilityLabel="Toggle additional users"
-                />
-              </View>
-
-              {needMoreUsers && (
-                <View style={styles.expandedSection}>
-                  <Text
-                    style={[styles.inputLabel, { color: paperTheme.colors.onSurfaceVariant }]}
-                  >
-                    HOW MANY ADDITIONAL USERS?
-                  </Text>
-                  <View style={[styles.inputWrapper, inputSurface]}>
-                    <PaperTextInput
-                      ref={additionalUsersInputRef}
-                      style={s.input}
-                      mode="flat"
-                      underlineColor="transparent"
-                      activeUnderlineColor="transparent"
-                      contentStyle={[s.inputContent, { color: inputTextColor }]}
-                      placeholder="Enter number of users"
-                      placeholderTextColor="#9b9ca5"
-                      value={additionalUsersCount}
-                      onChangeText={(text) =>
-                        setAdditionalUsersCount(toAdditionalUserCount(text))
-                      }
-                      keyboardType="number-pad"
-                      theme={paperTheme}
-                      cursorColor={paperTheme.colors.primary}
-                      selectionColor={paperTheme.colors.primary}
-                      textColor={inputTextColor}
-                      onFocus={() => scrollToField(additionalUsersFieldRef)}
-                    />
-                  </View>
-                  <Text style={[styles.usersHint, { color: paperTheme.colors.onSurfaceVariant }]}>
-                    {parsedAdditionalUsers > 0
-                      ? `Total users: ${DEFAULT_MAX_USERS} included + ${parsedAdditionalUsers} additional = ${
-                          DEFAULT_MAX_USERS + parsedAdditionalUsers
-                        }`
-                      : `${DEFAULT_MAX_USERS} users included in your plan.`}
-                  </Text>
-                  {parsedAdditionalUsers > 0 && (
-                    <Text style={[styles.billingNote, { color: paperTheme.colors.primary }]}>
-                      {parsedAdditionalUsers} × {formatLkr(ADDITIONAL_USER_MONTHLY_PRICE_LKR)} ={' '}
-                      {formatLkr(additionalUsersMonthlyCost)} / month added to your monthly
-                      subscription.
-                    </Text>
-                  )}
-                </View>
-              )}
-            </View>
-
-            {showSubscriptionSummary && (
-              <View
-                style={[
-                  styles.summaryCard,
-                  {
-                    backgroundColor: paperTheme.colors.primaryContainer,
-                    borderColor: paperTheme.colors.primary,
-                  },
-                ]}
-              >
-                <Text style={[styles.summaryTitle, { color: paperTheme.colors.onPrimaryContainer }]}>
-                  Monthly subscription add-ons
-                </Text>
-                {features.sendReceiptSms && (
-                  <Text
-                    style={[styles.summaryLine, { color: paperTheme.colors.onPrimaryContainer }]}
-                  >
-                    • SMS module: {formatLkrDecimal(SMS_PRICE_PER_MESSAGE_LKR, 2)} per SMS (usage-based,
-                    added to monthly bill)
-                  </Text>
-                )}
-                {needMoreUsers && parsedAdditionalUsers > 0 && (
-                  <Text
-                    style={[styles.summaryLine, { color: paperTheme.colors.onPrimaryContainer }]}
-                  >
-                    • Additional users: {formatLkr(additionalUsersMonthlyCost)} / month (
-                    {parsedAdditionalUsers} × {formatLkr(ADDITIONAL_USER_MONTHLY_PRICE_LKR)})
-                  </Text>
-                )}
-                {needMoreUsers && parsedAdditionalUsers > 0 && (
-                  <Text style={[styles.summaryTotal, { color: paperTheme.colors.primary }]}>
-                    Fixed add-on this month: {formatLkr(additionalUsersMonthlyCost)}
-                  </Text>
-                )}
-              </View>
-            )}
-          </KeyboardAwareScrollView>
+          </ScrollView>
 
           <TouchableOpacity
             style={[
@@ -466,7 +224,7 @@ export default function SelectFeaturesScreen({ navigation, route }: Props) {
               <ActivityIndicator color={paperTheme.colors.onPrimary} />
             ) : (
               <Text style={[s.primaryButtonText, { color: paperTheme.colors.onPrimary }]}>
-                Continue
+                Complete setup
               </Text>
             )}
           </TouchableOpacity>
@@ -495,12 +253,12 @@ const styles = StyleSheet.create({
   screenBody: {
     flex: 1,
   },
-  keyboardScroll: {
+  scroll: {
     flex: 1,
   },
-  keyboardScrollContent: {
+  scrollContent: {
     flexGrow: 1,
-    paddingBottom: 120,
+    paddingBottom: 24,
   },
   featureCard: {
     flexDirection: 'row',
@@ -510,23 +268,6 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 12,
     gap: 12,
-  },
-  usersCard: {
-    borderRadius: 14,
-    borderWidth: 1.5,
-    padding: 14,
-    marginBottom: 12,
-  },
-  usersCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  expandedSection: {
-    marginTop: 14,
-    paddingTop: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#d4d4d8',
   },
   iconWrap: {
     width: 44,
@@ -548,52 +289,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.InterRegular,
     fontSize: 13,
     lineHeight: 18,
-  },
-  billingNote: {
-    fontFamily: fonts.PoppinsMedium,
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 8,
-  },
-  inputLabel: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 11,
-    letterSpacing: 1.4,
-    marginBottom: 8,
-  },
-  inputWrapper: {
-    minHeight: 52,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    justifyContent: 'center',
-  },
-  usersHint: {
-    fontFamily: fonts.InterRegular,
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 10,
-  },
-  summaryCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 12,
-    gap: 6,
-  },
-  summaryTitle: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  summaryLine: {
-    fontFamily: fonts.InterRegular,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  summaryTotal: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 13,
-    marginTop: 6,
   },
   primaryButtonDisabled: {
     opacity: 0.7,

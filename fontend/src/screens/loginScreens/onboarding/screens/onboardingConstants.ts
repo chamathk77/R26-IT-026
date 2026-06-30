@@ -1,8 +1,9 @@
 import {
   OnboardingStep,
+  OnboardingModuleKey,
+  OnboardingModulesState,
   ShopFeatureKey,
   ShopFeaturesState,
-  SMS_PRICE_PER_MESSAGE_LKR,
   SubscriptionType,
 } from '../../../../type/onboarding';
 
@@ -11,7 +12,6 @@ export const ONBOARDING_STEPS: { step: OnboardingStep; label: string }[] = [
   { step: 2, label: 'OTP Verification' },
   { step: 3, label: 'Password' },
   { step: 4, label: 'Features' },
-  { step: 5, label: 'Subscription' },
 ];
 
 export type SubscriptionOption = {
@@ -74,14 +74,14 @@ export type FeatureOption = {
   icon: string;
 };
 
-export const FEATURE_OPTIONS: FeatureOption[] = [
-  {
-    key: 'sendReceiptSms',
-    title: 'Send Digital Receipt SMS',
-    description:
-      `Automatically send digital receipt links to customers by SMS after checkout. Each SMS costs ${SMS_PRICE_PER_MESSAGE_LKR} LKR and is added to your monthly bill.`,
-    icon: 'chatbubble-ellipses-outline',
-  },
+export type OnboardingModuleOption = {
+  key: OnboardingModuleKey;
+  title: string;
+  description: string;
+  icon: string;
+};
+
+export const ONBOARDING_MODULE_OPTIONS: OnboardingModuleOption[] = [
   {
     key: 'kpi',
     title: 'KPI (Key Performance Indicators)',
@@ -114,6 +114,33 @@ export const FEATURE_OPTIONS: FeatureOption[] = [
     icon: 'megaphone-outline',
   },
 ];
+
+export const FEATURE_OPTIONS: FeatureOption[] = [
+  {
+    key: 'sendReceiptSms',
+    title: 'Send Digital Receipt SMS',
+    description: 'Automatically send digital receipt links to customers by SMS after checkout.',
+    icon: 'chatbubble-ellipses-outline',
+  },
+  ...ONBOARDING_MODULE_OPTIONS,
+];
+
+const DEFAULT_ENABLED_ONBOARDING_MODULES: ReadonlySet<OnboardingModuleKey> = new Set([
+  'kpi',
+  'analyticsModule',
+  'costModule',
+  'marketingModule',
+]);
+
+export function createDefaultOnboardingModules(): OnboardingModulesState {
+  return ONBOARDING_MODULE_OPTIONS.reduce(
+    (acc, item) => {
+      acc[item.key] = DEFAULT_ENABLED_ONBOARDING_MODULES.has(item.key);
+      return acc;
+    },
+    {} as OnboardingModulesState,
+  );
+}
 
 const DEFAULT_ENABLED_FEATURES: ReadonlySet<ShopFeatureKey> = new Set([
   'kpi',

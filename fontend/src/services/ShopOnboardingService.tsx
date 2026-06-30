@@ -7,6 +7,7 @@ import {
   CreateShopOnboardingRequest,
   CreateShopOnboardingResponse,
   GetShopFeaturesResponse,
+  OnboardingShopFeaturesRequest,
   UpdateShopFeaturesRequest,
   UpdateShopFeaturesResponse,
   SendOtpOnboardingRequest,
@@ -87,7 +88,7 @@ export const fetchShopFeatures_Service = createAsyncThunk(
 
 export const onboardingShopFeatures_Service = createAsyncThunk(
   "shopOnboarding/onboardingFeatures",
-  async (payload: UpdateShopFeaturesRequest, { rejectWithValue }) => {
+  async (payload: OnboardingShopFeaturesRequest, { rejectWithValue }) => {
     try {
       await ensureInternetConnection();
 

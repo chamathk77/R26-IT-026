@@ -15,6 +15,23 @@ export interface CreateShopOnboardingResponse {
   message: string;
 }
 
+export interface OnboardingShopFeaturesRequest {
+  shopId: string;
+  kpi: boolean;
+  analyticsModule: boolean;
+  customerManualOrder: boolean;
+  costModule: boolean;
+  marketingModule: boolean;
+}
+
+export interface OnboardingShopFeaturesPayload {
+  kpi: boolean;
+  analyticsModule: boolean;
+  customerManualOrder: boolean;
+  costModule: boolean;
+  marketingModule: boolean;
+}
+
 export interface UpdateShopFeaturesRequest {
   shopId: string;
   sendReceiptSms: boolean;
@@ -25,6 +42,7 @@ export interface UpdateShopFeaturesRequest {
   marketingModule: boolean;
   isAdditionalUsersAdded: boolean;
   numAdditionalUsers?: number | null;
+  smsPackageType?: string;
 }
 
 export interface ShopFeaturesPayload {
@@ -51,7 +69,7 @@ export interface UpdateShopFeaturesResponse {
   shopId: string;
   onboardStep?: string;
   message: string;
-  features: ShopFeaturesPayload;
+  features: ShopFeaturesPayload | OnboardingShopFeaturesPayload;
 }
 
 export interface SendOtpOnboardingRequest {

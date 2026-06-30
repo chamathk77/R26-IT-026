@@ -562,6 +562,7 @@ export default function ManageFeaturesScreen({ navigation }: Props) {
             <ScrollView
               contentContainerStyle={[
                 sharedStyles.scroll,
+                showBillingSummary && styles.scrollAfterBillingAddons,
                 hasChanges && styles.scrollWithFooter,
               ]}
               showsVerticalScrollIndicator={false}
