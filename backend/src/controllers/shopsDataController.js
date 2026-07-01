@@ -171,6 +171,111 @@ function resolveMaxUsers(isAdditionalUsersAdded, numAdditionalUsers) {
   return DEFAULT_MAX_USERS;
 }
 
+function shopMobileUserFilter(shopId) {
+  return {
+    shopId,
+    isInternalUser: { $ne: true },
+  };
+}
+
+async function getShopMobileUserCount(shopId) {
+  return User.countDocuments(shopMobileUserFilter(shopId));
+}
+
+async function validateUserCapacityAgainstExistingUsers(shopId, proposedMaxUsers) {
+  const existingUserCount = await getShopMobileUserCount(shopId);
+
+  if (proposedMaxUsers >= existingUserCount) {
+    return { existingUserCount };
+  }
+
+  const minimumAdditionalUsers = Math.max(0, existingUserCount - DEFAULT_MAX_USERS);
+
+  return {
+    error: {
+      status: 400,
+      body: {
+        success: false,
+        message:
+          `Cannot reduce user capacity below your current team size. ` +
+          `This shop has ${existingUserCount} user(s), but the new limit would be ${proposedMaxUsers}. ` +
+          `Remove users first or set at least ${minimumAdditionalUsers} additional user(s).`,
+        code: 'USER_CAPACITY_BELOW_EXISTING',
+        currentUserCount: existingUserCount,
+        proposedMaxUsers,
+        minimumAdditionalUsers,
+        includedUsers: DEFAULT_MAX_USERS,
+      },
+    },
+  };
+}
+
+const FEATURE_UPDATE_ALLOWED_ROLES = new Set(['owner', 'admin']);
+
+async function resolveFeatureUpdateRoleAccess(req) {
+  const user = await User.findById(req.user.id).select('role').lean();
+  if (!user) {
+    return {
+      error: {
+        status: 401,
+        body: { success: false, message: 'Not authorized, user not found' },
+      },
+    };
+  }
+
+  if (!FEATURE_UPDATE_ALLOWED_ROLES.has(user.role)) {
+    return {
+      error: {
+        status: 403,
+        body: {
+          success: false,
+          message: 'Only shop owners and admins can update feature settings.',
+          code: 'FEATURE_UPDATE_ROLE_FORBIDDEN',
+        },
+      },
+    };
+  }
+
+  return { userRole: user.role };
+}
+
+async function resolveFeatureUpdateAccess(req, normalizedShopId) {
+  const roleAccess = await resolveFeatureUpdateRoleAccess(req);
+  if (roleAccess.error) {
+    return roleAccess;
+  }
+
+  const shop = await ShopsData.findOne({ shopId: normalizedShopId })
+    .select('shopId status')
+    .lean();
+
+  if (!shop) {
+    return {
+      error: {
+        status: 404,
+        body: { success: false, message: 'Shop not found' },
+      },
+    };
+  }
+
+  if (shop.status === 'trial') {
+    return {
+      error: {
+        status: 400,
+        body: {
+          success: false,
+          message:
+            'Feature settings cannot be updated while your shop is on a trial. Please subscribe or activate your account first.',
+          code: 'FEATURE_UPDATE_NOT_ALLOWED_IN_TRIAL',
+          status: shop.status,
+        },
+      },
+    };
+  }
+
+  return { shop, userRole: roleAccess.userRole };
+}
+
 function findSmsPackage(packageType) {
   const normalized = String(packageType ?? '').trim();
   return ShopsData.SMS_PACKAGES.find((pkg) => pkg.type === normalized) ?? null;
@@ -713,6 +818,11 @@ const updateShopModuleFeatures = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Not authorized for this shop' });
     }
 
+    const access = await resolveFeatureUpdateRoleAccess(req);
+    if (access.error) {
+      return res.status(access.error.status).json(access.error.body);
+    }
+
     const updated = await ShopsData.findOneAndUpdate(
       { shopId: normalizedShopId },
       { $set: featureUpdates },
@@ -745,6 +855,19 @@ const updateShopUsersFeatures = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Not authorized for this shop' });
     }
 
+    const access = await resolveFeatureUpdateAccess(req, normalizedShopId);
+    if (access.error) {
+      return res.status(access.error.status).json(access.error.body);
+    }
+
+    const capacityCheck = await validateUserCapacityAgainstExistingUsers(
+      normalizedShopId,
+      featureUpdates.maxUsers,
+    );
+    if (capacityCheck.error) {
+      return res.status(capacityCheck.error.status).json(capacityCheck.error.body);
+    }
+
     const updated = await ShopsData.findOneAndUpdate(
       { shopId: normalizedShopId },
       { $set: featureUpdates },
@@ -775,6 +898,11 @@ const updateShopSmsFeatures = async (req, res) => {
 
     if (req.user?.shopId && req.user.shopId !== normalizedShopId) {
       return res.status(403).json({ success: false, message: 'Not authorized for this shop' });
+    }
+
+    const access = await resolveFeatureUpdateAccess(req, normalizedShopId);
+    if (access.error) {
+      return res.status(access.error.status).json(access.error.body);
     }
 
     const updated = await ShopsData.findOneAndUpdate(

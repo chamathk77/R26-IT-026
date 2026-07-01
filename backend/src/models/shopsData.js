@@ -1,14 +1,15 @@
 const mongoose = require('mongoose');
 
 const SHOP_STATUS = [
-  'trial', 
-  'active', 
   'disabled', 
-  'due', 
+  'trial', 
   'trialExpired',
+  'initialPaymentPending',
+  'intialPaymentUnderReview',
+  'active', 
+  'due', 
+  'paymentPending',
   'diactiveByAdmin',
-  'diactiveByUser',
-  'paymentPending'
 ];
 
 const SUBSCRIPTION_TYPES = ['1month', '3months', '6months', '1year'];
