@@ -109,7 +109,7 @@ export default function ManageFeaturesScreen({ navigation }: Props) {
       icon: 'people-outline',
       iconBg: '#e0e7ff',
       iconColor: '#4338ca',
-      onPress: () => {},
+      onPress: () => navigation.navigate('ManageAddUsers'),
     },
   ];
 

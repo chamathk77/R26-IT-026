@@ -55,6 +55,32 @@ export interface UpdateShopModuleFeaturesResponse {
   features: OnboardingShopFeaturesPayload;
 }
 
+export interface ShopUsersFeaturesPayload {
+  isAdditionalUsersAdded: boolean;
+  numAdditionalUsers: number | null;
+  maxUsers: number;
+}
+
+export interface GetShopUsersFeaturesResponse {
+  success: boolean;
+  shopId: string;
+  message: string;
+  features: ShopUsersFeaturesPayload;
+}
+
+export interface UpdateShopUsersFeaturesRequest {
+  shopId: string;
+  isAdditionalUsersAdded: boolean;
+  numAdditionalUsers?: number | null;
+}
+
+export interface UpdateShopUsersFeaturesResponse {
+  success: boolean;
+  shopId: string;
+  message: string;
+  features: ShopUsersFeaturesPayload;
+}
+
 export interface UpdateShopFeaturesRequest {
   shopId: string;
   sendReceiptSms: boolean;

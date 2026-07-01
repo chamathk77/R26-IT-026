@@ -13,6 +13,9 @@ import {
   UpdateShopFeaturesResponse,
   UpdateShopModuleFeaturesRequest,
   UpdateShopModuleFeaturesResponse,
+  GetShopUsersFeaturesResponse,
+  UpdateShopUsersFeaturesRequest,
+  UpdateShopUsersFeaturesResponse,
   SendOtpOnboardingRequest,
   SendOtpOnboardingResponse,
   VerifyOtpOnboardingRequest,
@@ -138,6 +141,65 @@ export const updateShopModuleFeatures_Service = createAsyncThunk(
       const apiError: ApiErrorResponse = {
         error: "Error",
         message: "Shop module features update failed",
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const fetchShopUsersFeatures_Service = createAsyncThunk(
+  "shopOnboarding/fetchUsersFeatures",
+  async (shopId: string | undefined, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const query = shopId?.trim()
+        ? `?shopId=${encodeURIComponent(shopId.trim())}`
+        : "";
+      const response = await apiClient.get<GetShopUsersFeaturesResponse>(
+        `/api/shops/features/users${query}`,
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: "Error",
+        message: "Could not load shop user settings",
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const updateShopUsersFeatures_Service = createAsyncThunk(
+  "shopOnboarding/updateUsersFeatures",
+  async (payload: UpdateShopUsersFeaturesRequest, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.put<UpdateShopUsersFeaturesResponse>(
+        "/api/shops/features/users",
+        payload,
+      );
+
+      if (isHttpSuccess(response.status)) {
+        console.log("Updated shop user settings response:", response.data);
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: "Error",
+        message: "Shop user settings update failed",
         status: response.status,
         timestamp: new Date().toISOString(),
       };

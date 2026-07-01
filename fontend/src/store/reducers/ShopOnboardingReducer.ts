@@ -3,9 +3,11 @@ import {
   createShopOnboarding_Service,
   fetchShopFeatures_Service,
   fetchShopModuleFeatures_Service,
+  fetchShopUsersFeatures_Service,
   onboardingShopFeatures_Service,
   updatedShopFeatures_Service,
   updateShopModuleFeatures_Service,
+  updateShopUsersFeatures_Service,
   sendOtpOnboarding_Service,
   verifyOtpOnboarding_Service,
   signupOnboarding_Service,
@@ -18,6 +20,8 @@ import {
   GetShopModuleFeaturesResponse,
   UpdateShopFeaturesResponse,
   UpdateShopModuleFeaturesResponse,
+  GetShopUsersFeaturesResponse,
+  UpdateShopUsersFeaturesResponse,
   SendOtpOnboardingResponse,
   VerifyOtpOnboardingResponse,
   SignupOnboardingResponse,
@@ -59,6 +63,18 @@ interface ShopOnboardingState {
     error: string | null;
     success: boolean;
     data: UpdateShopModuleFeaturesResponse | null;
+  };
+  shopUsersFeatures: {
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+    data: GetShopUsersFeaturesResponse | null;
+  };
+  updateUsersFeatures: {
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+    data: UpdateShopUsersFeaturesResponse | null;
   };
   sendOtp: {
     loading: boolean;
@@ -123,6 +139,18 @@ const initialState: ShopOnboardingState = {
     data: null,
   },
   updateModuleFeatures: {
+    loading: false,
+    error: null,
+    success: false,
+    data: null,
+  },
+  shopUsersFeatures: {
+    loading: false,
+    error: null,
+    success: false,
+    data: null,
+  },
+  updateUsersFeatures: {
     loading: false,
     error: null,
     success: false,
@@ -310,6 +338,48 @@ export const ShopOnboardingSlice = createSlice({
         action.error.message ||
         'Shop module features update failed';
       state.updateModuleFeatures.data = null;
+    });
+
+    builder.addCase(fetchShopUsersFeatures_Service.pending, (state) => {
+      state.shopUsersFeatures.loading = true;
+      state.shopUsersFeatures.error = null;
+      state.shopUsersFeatures.success = false;
+    });
+    builder.addCase(fetchShopUsersFeatures_Service.fulfilled, (state, action) => {
+      state.shopUsersFeatures.loading = false;
+      state.shopUsersFeatures.success = true;
+      state.shopUsersFeatures.error = null;
+      state.shopUsersFeatures.data = action.payload;
+    });
+    builder.addCase(fetchShopUsersFeatures_Service.rejected, (state, action) => {
+      state.shopUsersFeatures.loading = false;
+      state.shopUsersFeatures.success = false;
+      state.shopUsersFeatures.error =
+        (action.payload as string) ||
+        action.error.message ||
+        'Could not load shop user settings';
+      state.shopUsersFeatures.data = null;
+    });
+
+    builder.addCase(updateShopUsersFeatures_Service.pending, (state) => {
+      state.updateUsersFeatures.loading = true;
+      state.updateUsersFeatures.error = null;
+      state.updateUsersFeatures.success = false;
+    });
+    builder.addCase(updateShopUsersFeatures_Service.fulfilled, (state, action) => {
+      state.updateUsersFeatures.loading = false;
+      state.updateUsersFeatures.success = true;
+      state.updateUsersFeatures.error = null;
+      state.updateUsersFeatures.data = action.payload;
+    });
+    builder.addCase(updateShopUsersFeatures_Service.rejected, (state, action) => {
+      state.updateUsersFeatures.loading = false;
+      state.updateUsersFeatures.success = false;
+      state.updateUsersFeatures.error =
+        (action.payload as string) ||
+        action.error.message ||
+        'Shop user settings update failed';
+      state.updateUsersFeatures.data = null;
     });
 
     builder.addCase(sendOtpOnboarding_Service.pending, (state) => {

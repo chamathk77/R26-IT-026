@@ -48,6 +48,7 @@ export type RootStackParamList = {
   ManageAccount: undefined;
   ManageFeatures: undefined;
   ManageGeneralFeatures: undefined;
+  ManageAddUsers: undefined;
   ManageUserForm: { userId?: string } | undefined;
   ThemePreference: undefined;
   SubscriptionPayments: undefined;
