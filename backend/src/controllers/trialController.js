@@ -132,10 +132,6 @@ async function createUpFrontInvoiceIfNeeded(shop) {
   }
 
   const receiptNumber = await generateUpFrontReceiptNumber();
-  const exactPaymentDay = shop.trailStartDate
-    ? new Date(shop.trailStartDate)
-    : new Date();
-  const expiryDate = shop.trailEndDate ? new Date(shop.trailEndDate) : null;
 
   const payment = await Payments.create({
     shopId: shop.shopId,
@@ -144,8 +140,8 @@ async function createUpFrontInvoiceIfNeeded(shop) {
     paymentMonth: null,
     paymentAmount: shop.oneTimePaymentAmount,
     paymentType: "upFront",
-    exactPaymentDay,
-    expiryDate,
+    exactPaymentDay: null,
+    expiryDate: null,
     status: "notPaid",
     reason: null,
     description: "this is one time payment for initial setup",

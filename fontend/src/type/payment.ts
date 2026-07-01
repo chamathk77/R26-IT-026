@@ -14,7 +14,7 @@ export interface PaymentRecord {
   shopId: string;
   receiptNumber: string;
   receiptImagePath: string;
-  submittedDate: string;
+  submittedDate: string | null;
   paymentMonth: string | null;
   paymentAmount: number | null;
   additionalPayments?: AdditionalPaymentItem[];
@@ -24,6 +24,7 @@ export interface PaymentRecord {
   expiryDate?: string | null;
   status: PaymentStatus;
   reason: string | null;
+  description?: string | null;
   createdAt: string;
   updatedAt: string;
 }

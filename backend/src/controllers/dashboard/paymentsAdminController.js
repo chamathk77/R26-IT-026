@@ -122,78 +122,20 @@ const getPaymentDetails = async (req, res) => {
 
 
 function validateUpfrontApproveScenario(shop) {
-  const subscriptionType = shop.subscriptionType;
-  const shopStatus = shop.status;
-
-  if (!subscriptionType || !SUBSCRIPTION_TYPES.includes(subscriptionType)) {
+  if (shop.isOneTimePaymentDone) {
     return {
-      error: 'Shop subscription type must be set before approving upfront payment',
+      error: 'Upfront payment has already been approved for this shop',
+      shopStatus: shop.status,
     };
   }
 
-  if (MULTI_MONTH_SUBSCRIPTION_TYPES.includes(subscriptionType)) {
-    if (shopStatus === 'trial') {
-      return { scenario: 'multiMonthTrial' };
-    }
-    if (shopStatus === 'trialExpired') {
-      return { scenario: 'multiMonthTrialExpired' };
-    }
-    return {
-      error: `Upfront payment for ${subscriptionType} subscription can only be approved when shop status is trial or trialExpired`,
-      shopStatus,
-      subscriptionType,
-    };
-  }
-
-  if (subscriptionType === ONE_MONTH_SUBSCRIPTION_TYPE) {
-    if (shopStatus !== 'trial' && shopStatus !== 'trialExpired') {
-      return {
-        error: 'Upfront payment for 1-month subscription can only be approved when shop status is trial or trialExpired',
-        shopStatus,
-        subscriptionType,
-      };
-    }
-    if (!shop.trailStartDate) {
-      return {
-        error: 'Shop trial start date is required before approving upfront payment for 1-month subscription',
-      };
-    }
-    return { scenario: 'oneMonthTrial' };
-  }
-
-  return {
-    error: `Unsupported subscription type: ${subscriptionType}`,
-    subscriptionType,
-  };
+  return {};
 }
 
 async function applyShopUpdatesOnUpfrontApprove(shop) {
-  const validation = validateUpfrontApproveScenario(shop);
-  if (validation.error) {
-    const err = new Error(validation.error);
-    err.code = 'UPFRONT_APPROVE_SCENARIO';
-    throw err;
-  }
-
+  shop.status = 'initialPaymentApproved';
+  shop.isTrailCompleted = true;
   shop.isOneTimePaymentDone = true;
-
-  switch (validation.scenario) {
-    case 'multiMonthTrial':
-      break;
-    case 'multiMonthTrialExpired':
-      shop.status = 'paymentPending';
-      break;
-    case 'oneMonthTrial': {
-      const trialStart = startOfDay(shop.trailStartDate);
-      shop.subscriptionStartDate = trialStart;
-      shop.nextPaymentDate = startOfDay(addDays(trialStart, 30));
-      shop.status = 'active';
-      break;
-    }
-    default:
-      throw new Error('Unhandled upfront approval scenario');
-  }
-
   await shop.save();
 }
 
@@ -316,6 +258,30 @@ function getShopCustomerMobile(shop) {
 
 function formatPaymentTypeSmsLabel(paymentType) {
   return paymentType === 'upFront' ? 'Up-front payment' : 'Subscription payment';
+}
+
+function buildUpfrontPaymentApprovedSms({ receiptNumber }) {
+  return `Smart Cost: Your upfront payment has been approved. Receipt: ${receiptNumber}. Please log in to the app and select a subscription plan to continue.`;
+}
+
+async function sendUpfrontPaymentApprovedSms(shop, payment) {
+  const mobile = getShopCustomerMobile(shop);
+  if (!mobile) {
+    return { sent: false, reason: 'Shop owner mobile number is not set' };
+  }
+
+  try {
+    await sendSms({
+      to: mobile,
+      message: buildUpfrontPaymentApprovedSms({
+        receiptNumber: payment.receiptNumber,
+      }),
+    });
+    return { sent: true };
+  } catch (error) {
+    console.log('error in sendUpfrontPaymentApprovedSms', error.message);
+    return { sent: false, reason: error.message || 'SMS send failed' };
+  }
 }
 
 function buildPaymentApprovedSms({ receiptNumber, paymentType }) {
@@ -478,7 +444,6 @@ const approveUpfrontPayment = async (req, res) => {
         success: false,
         message: scenarioCheck.error,
         ...(scenarioCheck.shopStatus && { shopStatus: scenarioCheck.shopStatus }),
-        ...(scenarioCheck.subscriptionType && { subscriptionType: scenarioCheck.subscriptionType }),
       });
     }
 
@@ -491,27 +456,21 @@ const approveUpfrontPayment = async (req, res) => {
     await applyShopUpdatesOnUpfrontApprove(shop);
     await payment.save();
 
-    const approvalSmsResult = await sendPaymentApprovedSms(shop, payment);
+    const usersLoggedOut = await clearShopUserTokens(shop.shopId);
+
+    const approvalSmsResult = await sendUpfrontPaymentApprovedSms(shop, payment);
     if (!approvalSmsResult.sent) {
       console.log('payment approved SMS not sent', approvalSmsResult.reason);
     }
 
-    let usersLoggedOut = 0;
-    if (shop.subscriptionType === ONE_MONTH_SUBSCRIPTION_TYPE) {
-      usersLoggedOut = await clearShopUserTokens(shop.shopId);
-    }
-
     res.status(200).json({
       success: true,
-      message: 'Upfront payment approved and shop subscription updated',
+      message: 'Upfront payment approved. Shop status updated to initialPaymentApproved.',
       usersLoggedOut,
       payment: formatPaymentRecord(payment.toObject(), req),
       shop: formatShopSummary(shop.toObject()),
     });
   } catch (error) {
-    if (error.code === 'UPFRONT_APPROVE_SCENARIO') {
-      return res.status(400).json({ success: false, message: error.message });
-    }
     if (error.name === 'ValidationError') {
       return res.status(400).json({ success: false, message: error.message });
     }

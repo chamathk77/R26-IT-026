@@ -35,7 +35,6 @@ import {
   SettingsDetailRow,
   SettingsSection,
 } from '../shared/SettingsDetailComponents';
-import PaymentBreakdownList from './PaymentBreakdownList';
 import { formatPaymentAmount } from '../../../utils/paymentBreakdown';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PayNow'>;
@@ -130,14 +129,17 @@ async function ensureCameraPermission(show_Alert: ShowAlertFn): Promise<boolean>
   return false;
 }
 
-function formatDate(isoDate: string | null): string {
+function formatDateTime(isoDate: string | null | undefined): string {
   if (!isoDate) return '—';
   const parsed = new Date(isoDate);
   if (Number.isNaN(parsed.getTime())) return isoDate;
-  return parsed.toLocaleDateString('en-LK', {
+  return parsed.toLocaleString('en-LK', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
   });
 }
 
@@ -145,16 +147,15 @@ function formatAmount(amount: number | null): string {
   return formatPaymentAmount(amount);
 }
 
-function formatPaymentMonth(month: string | null): string {
-  if (!month) return '—';
-  return month.charAt(0).toUpperCase() + month.slice(1);
+function formatPaymentType(type: PaymentRecord['paymentType']): string {
+  return type === 'upFront' ? 'Up-front' : 'Subscription';
 }
 
 function getPaymentTitle(payment: PaymentRecord): string {
   if (payment.paymentType === 'upFront') {
     return 'Up-front payment';
   }
-  return `${formatPaymentMonth(payment.paymentMonth)} subscription`;
+  return 'Subscription payment';
 }
 
 function getStatusMeta(status: PaymentStatus) {
@@ -382,15 +383,47 @@ export default function PayNowScreen({ navigation, route }: Props) {
             </Text>
           </View>
 
-          <View style={screenStyles.breakdownWrap}>
-            <PaymentBreakdownList payment={payment} paperTheme={paperTheme} />
-          </View>
-
           <SettingsSection
             title="Payment details"
             paperTheme={paperTheme}
             resolvedTheme={resolvedTheme}
           >
+            <SettingsDetailRow
+              icon="layers-outline"
+              label="Payment type"
+              value={formatPaymentType(payment.paymentType)}
+              paperTheme={paperTheme}
+            />
+            <SettingsDetailRow
+              icon="cash-outline"
+              label="Payment amount"
+              value={formatAmount(payment.paymentAmount)}
+              paperTheme={paperTheme}
+            />
+            <SettingsDetailRow
+              icon="flag-outline"
+              label="Status"
+              value={statusMeta.label}
+              paperTheme={paperTheme}
+            />
+            <SettingsDetailRow
+              icon="document-text-outline"
+              label="Description"
+              value={payment.description?.trim() || '—'}
+              paperTheme={paperTheme}
+            />
+            <SettingsDetailRow
+              icon="time-outline"
+              label="Created at"
+              value={formatDateTime(payment.createdAt)}
+              paperTheme={paperTheme}
+            />
+            <SettingsDetailRow
+              icon="refresh-outline"
+              label="Updated at"
+              value={formatDateTime(payment.updatedAt)}
+              paperTheme={paperTheme}
+            />
             <SettingsDetailRow
               icon="barcode-outline"
               label="Shop ID"
@@ -398,49 +431,13 @@ export default function PayNowScreen({ navigation, route }: Props) {
               paperTheme={paperTheme}
             />
             <SettingsDetailRow
-              icon="layers-outline"
-              label="Payment type"
-              value={payment.paymentType === 'upFront' ? 'Up-front' : 'Subscription'}
-              paperTheme={paperTheme}
-            />
-            <SettingsDetailRow
-              icon="calendar-outline"
-              label="Payment month"
-              value={formatPaymentMonth(payment.paymentMonth)}
-              paperTheme={paperTheme}
-            />
-            <SettingsDetailRow
-              icon="time-outline"
-              label="Submitted date"
-              value={formatDate(payment.submittedDate)}
-              paperTheme={paperTheme}
-            />
-            <SettingsDetailRow
-              icon="cash-outline"
-              label="Due amount"
-              value={formatAmount(payment.paymentAmount)}
+              icon="receipt-outline"
+              label="Receipt number"
+              value={payment.receiptNumber}
               paperTheme={paperTheme}
               isLast
             />
           </SettingsSection>
-
-          {payment.reason ? (
-            <View
-              style={[
-                screenStyles.reasonCard,
-                {
-                  backgroundColor: resolvedTheme === 'dark' ? '#450a0a' : '#fef2f2',
-                  borderColor: '#fecaca',
-                },
-              ]}
-            >
-              <View style={screenStyles.reasonHeader}>
-                <Ionicons name="alert-circle-outline" size={18} color="#dc2626" />
-                <Text style={screenStyles.reasonTitle}>Rejection reason</Text>
-              </View>
-              <Text style={screenStyles.reasonText}>{payment.reason}</Text>
-            </View>
-          ) : null}
 
           <Text
             style={[
@@ -684,32 +681,6 @@ const screenStyles = StyleSheet.create({
     lineHeight: 20,
     textAlign: 'center',
     marginTop: 14,
-  },
-  breakdownWrap: {
-    marginBottom: 20,
-  },
-  reasonCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 20,
-  },
-  reasonHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  reasonTitle: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 13,
-    color: '#dc2626',
-  },
-  reasonText: {
-    fontFamily: fonts.PoppinsRegular,
-    fontSize: 13,
-    lineHeight: 20,
-    color: '#b91c1c',
   },
   uploadSectionLabel: {
     fontFamily: fonts.PoppinsSemiBold,

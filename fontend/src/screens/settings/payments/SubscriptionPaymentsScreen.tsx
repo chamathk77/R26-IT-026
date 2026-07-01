@@ -52,7 +52,8 @@ const STATUS_OPTIONS: { key: StatusFilter; label: string }[] = [
   { key: 'notPaid', label: 'Not paid' },
 ];
 
-function formatDate(isoDate: string): string {
+function formatDate(isoDate: string | null | undefined): string {
+  if (!isoDate) return '—';
   const parsed = new Date(isoDate);
   if (Number.isNaN(parsed.getTime())) {
     return isoDate;
@@ -99,7 +100,7 @@ function isMultiMonthSubscriptionPlan(payment: PaymentRecord): boolean {
 
 function shouldShowExpiryDate(payment: PaymentRecord): boolean {
   if (!payment.expiryDate) return false;
-  return isMultiMonthSubscriptionPlan(payment) || payment.paymentType === 'upFront';
+  return isMultiMonthSubscriptionPlan(payment);
 }
 
 function shouldShowExactPaymentDate(payment: PaymentRecord): boolean {
@@ -422,7 +423,9 @@ function PaymentHistoryCard({
               { color: paperTheme.colors.onSurfaceVariant },
             ]}
           >
-            Submitted {formatDate(payment.submittedDate)}
+            {payment.submittedDate
+              ? `Submitted ${formatDate(payment.submittedDate)}`
+              : 'Not submitted yet'}
           </Text>
         </View>
         <Text style={[paymentStyles.amountText, { color: paperTheme.colors.onSurface }]}>
@@ -453,16 +456,10 @@ function PaymentHistoryCard({
           {shouldShowExactPaymentDate(payment) ? (
             <PaymentDetailRow
               label="Exact payment day"
-              value={formatDate(payment.exactPaymentDay!)}
+              value={formatDate(payment.exactPaymentDay)}
               paperTheme={paperTheme}
             />
-          ) : (
-            <PaymentDetailRow
-              label="Exact payment day"
-              value={formatDateTime(payment.exactPaymentDay)}
-              paperTheme={paperTheme}
-            />
-          )}
+          ) : null}
           {shouldShowExpiryDate(payment) ? (
             <PaymentDetailRow
               label="Expires on"
@@ -632,10 +629,11 @@ export default function SubscriptionPaymentsScreen({ navigation }: Props) {
       .filter(
         (payment) => statusFilter === 'all' || payment.status === statusFilter,
       )
-      .sort(
-        (a, b) =>
-          new Date(b.submittedDate).getTime() - new Date(a.submittedDate).getTime(),
-      );
+      .sort((a, b) => {
+        const aTime = new Date(a.submittedDate ?? a.createdAt).getTime();
+        const bTime = new Date(b.submittedDate ?? b.createdAt).getTime();
+        return bTime - aTime;
+      });
   }, [payments, paymentTypeFilter, statusFilter]);
 
   const latestPayment = filteredPayments[0] ?? null;
