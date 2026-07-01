@@ -343,15 +343,6 @@ export default function LoginScreen({ navigation }: Props) {
 
         }
 
-        if (response.shop?.isTrailStared === true && response.shop.status === "initialPaymentPending" && 
-          response.shop.isTrailCompleted === false) {
-          void StartTrial(response.shop?.shopId);
-
-        }
-
-        
-
-
         if ( response.shop?.isTrailStared === true && response.shop.status === "trialExpired") {
           show_Alert(
             "pending",
@@ -367,26 +358,16 @@ export default function LoginScreen({ navigation }: Props) {
           return;
         }
 
+        if (response.shop?.status === "initialPaymentApproved") {
+          navigation.navigate("SelectSubscriptionScreen", {
+            shopId: response.shop.shopId ?? response.user?.shopId ?? "",
+          });
+          return;
+        }
+
         if (response.shop?.status === "active") {
           navigation.reset({ index: 0, routes: [{ name: "PosMain" }] });
         }
-
-
-        if (response.shop?.status === "initialPaymentPending" && response.shop.isTrailCompleted === true) {
-          show_Alert(
-            "pending",
-            "Payment Pending",
-            "Your payment submitted successfully. Please wait for the admin to approve your payment.",
-            2,
-            false,
-            "OK",
-            () => { },
-            "Contact Admin",
-            () => {
-              console.log("Contact Admin pressed");
-            },
-          );
-        }  
         
         if (response.shop?.status === "paymentPending") {
           show_Alert(

@@ -14,29 +14,29 @@ import { Ionicons } from '@expo/vector-icons';
 import { TextInput as PaperTextInput } from 'react-native-paper';
 import { Portal } from 'react-native-paper';
 import { useDispatch, useSelector } from 'react-redux';
-import { RootStackParamList } from '../../../../navigation/RootStackParamsList';
-import { useTheme } from '../../../../context/ThemeContext';
-import { AppDispatch, RootState } from '../../../../store/store';
-import { patchLoginShopData } from '../../../../store/reducers/AuthReducer';
-import CommonHeader from '../../../../components/CommonHeader/CommonHeader';
-import CommonAlert from '../../../../components/CommonAlert/CommonAlert';
-import { useCommonAlert } from '../../../../hooks/useCommonAlert';
+import { RootStackParamList } from '../../../../../navigation/RootStackParamsList';
+import { useTheme } from '../../../../../context/ThemeContext';
+import { AppDispatch, RootState } from '../../../../../store/store';
+import { patchLoginShopData } from '../../../../../store/reducers/AuthReducer';
+import CommonHeader from '../../../../../components/CommonHeader/CommonHeader';
+import CommonAlert from '../../../../../components/CommonAlert/CommonAlert';
+import { useCommonAlert } from '../../../../../hooks/useCommonAlert';
 import {
   fetchShopUsersFeatures_Service,
   updateShopUsersFeatures_Service,
-} from '../../../../services/ShopOnboardingService';
+} from '../../../../../services/ShopOnboardingService';
 import {
   ADDITIONAL_USER_MONTHLY_PRICE_LKR,
   DEFAULT_MAX_USERS,
   formatLkr,
-} from '../../../../type/onboarding';
-import type { ShopUsersFeaturesPayload } from '../../../../type/shopOnboarding';
+} from '../../../../../type/onboarding';
+import type { ShopUsersFeaturesPayload } from '../../../../../type/shopOnboarding';
 import {
   getApiErrorMessage,
   handleSessionExpiredApiError,
-} from '../../../../utils/apiErrorAlert';
-import { cardShadow, settingsDetailStyles as sharedStyles } from '../../shared/settingsDetailStyles';
-import { manageFeaturesStyles as styles } from './manageFeaturesStyles';
+} from '../../../../../utils/apiErrorAlert';
+import { cardShadow, settingsDetailStyles as sharedStyles } from '../../../shared/settingsDetailStyles';
+import { manageUsersFeatureStyles as styles } from './manageUsersFeatureStyles';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageAddUsers'>;
 

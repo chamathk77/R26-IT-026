@@ -1,5 +1,14 @@
 const ShopsData = require('../models/shopsData');
 const User = require('../models/user');
+const Payments = require('../models/payments');
+const { addDays } = require('../utils/trialHelper');
+const {
+  generatePlanSubscriptionReceiptNumber,
+  UPFRONT_INVOICE_IMAGE_PLACEHOLDER,
+} = require('../utils/paymentReceiptHelper');
+
+const ONE_MONTH_SUBSCRIPTION = '1month';
+const MULTI_MONTH_SUBSCRIPTION_TYPES = ['3months', '6months', '1year'];
 
 function normalizeShopId(shopId) {
   return String(shopId).trim().toUpperCase();
@@ -424,6 +433,19 @@ const getSmsPackages = async (req, res) => {
     });
   } catch (error) {
     console.log('error in getSmsPackages', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getSubscriptionPlans = async (req, res) => {
+  try {
+    return res.status(200).json({
+      success: true,
+      message: 'Subscription plans loaded',
+      subscriptions: ShopsData.buildSubscriptionPlansList(),
+    });
+  } catch (error) {
+    console.log('error in getSubscriptionPlans', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -931,10 +953,38 @@ function normalizeSubscriptionType(value) {
   return normalized;
 }
 
+function startOfDay(date = new Date()) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function getSubscriptionPlanLabel(subscriptionType) {
+  const labels = {
+    '1month': '1-month',
+    '3months': '3-month',
+    '6months': '6-month',
+    '1year': '1-year',
+  };
+  return labels[subscriptionType] || subscriptionType;
+}
+
+function getFirstSubscriptionPaymentDescription(subscriptionType) {
+  return `Subscription payment for ${getSubscriptionPlanLabel(subscriptionType)} plan. Please pay to activate your subscription.`;
+}
+
+function getSubscriptionExpiryDate(subscriptionType, billingDay) {
+  const durationDays = ShopsData.SUBSCRIPTION_DURATION_DAYS[subscriptionType];
+  if (!durationDays) {
+    return null;
+  }
+  return startOfDay(addDays(startOfDay(billingDay), durationDays));
+}
 
 const setSubscription = async (req, res) => {
   try {
-    const { shopId, subscriptionType } = req.body;
+    const shopId = req.body.shopId ?? req.user?.shopId;
+    const { subscriptionType } = req.body;
 
     if (!shopId?.trim()) {
       return res.status(400).json({ success: false, message: 'Shop id is required' });
@@ -944,6 +994,10 @@ const setSubscription = async (req, res) => {
 
     if (!isValidShopIdFormat(normalizedShopId)) {
       return res.status(400).json({ success: false, message: 'Invalid shop id format' });
+    }
+
+    if (req.user?.shopId && req.user.shopId !== normalizedShopId) {
+      return res.status(403).json({ success: false, message: 'Not authorized for this shop' });
     }
 
     if (subscriptionType === undefined || subscriptionType === null || subscriptionType === '') {
@@ -963,26 +1017,123 @@ const setSubscription = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Shop not found' });
     }
 
-    const updates = {
-      subscriptionType: normalizedSubscriptionType,
-    };
+    const onboardStepUpdate =
+      shop.onboardStep !== 'completed' ? { onboardStep: 'completed' } : {};
 
-    if (shop.onboardStep !== 'completed') {
-      updates.onboardStep = 'completed';
+    if (normalizedSubscriptionType === ONE_MONTH_SUBSCRIPTION) {
+      const subscriptionStartDate = startOfDay();
+      const nextPaymentDate = startOfDay(addDays(subscriptionStartDate, 30));
+
+      const updated = await ShopsData.findOneAndUpdate(
+        { shopId: normalizedShopId },
+        {
+          $set: {
+            subscriptionType: ONE_MONTH_SUBSCRIPTION,
+            subscriptionStartDate,
+            nextPaymentDate,
+            status: 'active',
+            ...onboardStepUpdate,
+          },
+        },
+        { returnDocument: 'after', runValidators: true },
+      ).lean();
+
+      return res.status(200).json({
+        success: true,
+        shopId: updated.shopId,
+        subscriptionType: updated.subscriptionType,
+        subscriptionStartDate: updated.subscriptionStartDate,
+        nextPaymentDate: updated.nextPaymentDate,
+        status: updated.status,
+        onboardStep: updated.onboardStep,
+        message: '1-month subscription activated',
+      });
     }
+
+    if (!MULTI_MONTH_SUBSCRIPTION_TYPES.includes(normalizedSubscriptionType)) {
+      return res.status(400).json({
+        success: false,
+        message: `Unsupported subscription type: ${normalizedSubscriptionType}`,
+      });
+    }
+
+    const baseFee = ShopsData.getSubscriptionFee(normalizedSubscriptionType);
+    if (baseFee == null || baseFee <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Subscription fee is not configured for the selected plan',
+        subscriptionType: normalizedSubscriptionType,
+      });
+    }
+
+    const existingOpenInvoice = await Payments.findOne({
+      shopId: normalizedShopId,
+      paymentType: 'subscription',
+      status: { $in: ['notPaid', 'pending'] },
+    }).lean();
+
+    if (existingOpenInvoice) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'An open subscription invoice already exists. Please complete or cancel it before selecting a new plan.',
+        paymentId: String(existingOpenInvoice._id),
+        paymentStatus: existingOpenInvoice.status,
+      });
+    }
+
+    const billingDay = startOfDay();
+    const receiptNumber = await generatePlanSubscriptionReceiptNumber(billingDay);
+    const expiryDate = getSubscriptionExpiryDate(normalizedSubscriptionType, billingDay);
+    const description = getFirstSubscriptionPaymentDescription(normalizedSubscriptionType);
+
+    const payment = await Payments.create({
+      shopId: normalizedShopId,
+      receiptNumber,
+      receiptImagePath: UPFRONT_INVOICE_IMAGE_PLACEHOLDER,
+      paymentAmount: baseFee,
+      additionalPayments: [],
+      paymentType: 'subscription',
+      subscriptionType: normalizedSubscriptionType,
+      exactPaymentDay: billingDay,
+      expiryDate,
+      status: 'notPaid',
+      description,
+    });
 
     const updated = await ShopsData.findOneAndUpdate(
       { shopId: normalizedShopId },
-      { $set: updates },
+      {
+        $set: {
+          subscriptionType: normalizedSubscriptionType,
+          status: 'subscriptionPaymentPending',
+          subscriptionReceiptNo: String(payment._id),
+          ...onboardStepUpdate,
+        },
+      },
       { returnDocument: 'after', runValidators: true },
     ).lean();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       shopId: updated.shopId,
       subscriptionType: updated.subscriptionType,
+      status: updated.status,
       onboardStep: updated.onboardStep,
-      message: 'Subscription saved',
+      subscriptionReceiptNo: updated.subscriptionReceiptNo,
+      message: 'Subscription plan selected. Please pay the subscription invoice to activate.',
+      payment: {
+        _id: payment._id,
+        shopId: payment.shopId,
+        receiptNumber: payment.receiptNumber,
+        paymentAmount: payment.paymentAmount,
+        paymentType: payment.paymentType,
+        subscriptionType: payment.subscriptionType,
+        exactPaymentDay: payment.exactPaymentDay,
+        expiryDate: payment.expiryDate,
+        status: payment.status,
+        description: payment.description,
+      },
     });
   } catch (error) {
     console.log('error in setSubscription', error);
@@ -1039,10 +1190,12 @@ module.exports = {
   getShopUsersFeatures,
   getShopSmsFeatures,
   getSmsPackages,
+  getSubscriptionPlans,
   onboardingShopFeatures,
   updateShopModuleFeatures,
   updateShopUsersFeatures,
   updateShopSmsFeatures,
   setSubscription,
   removeOnboardingData,
+  
 };

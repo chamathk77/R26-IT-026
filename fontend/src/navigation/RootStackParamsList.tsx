@@ -12,7 +12,8 @@ export type RootStackParamList = {
     ownerData: OnboardingOwnerData;
   };
   SelectSubscriptionScreen: {
-    ownerData: OnboardingOwnerData;
+    shopId?: string;
+    ownerData?: OnboardingOwnerData;
   };
   CreatePasswordScreen: {
     ownerData: OnboardingOwnerData;

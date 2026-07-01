@@ -12,6 +12,7 @@ import {
   verifyOtpOnboarding_Service,
   signupOnboarding_Service,
   setSubscription_Service,
+  fetchSubscriptionPlans_Service,
   removeOnboardingData_Service,
 } from '../../services/ShopOnboardingService';
 import {
@@ -26,6 +27,7 @@ import {
   VerifyOtpOnboardingResponse,
   SignupOnboardingResponse,
   SetSubscriptionResponse,
+  GetSubscriptionPlansResponse,
   RemoveOnboardingDataResponse,
 } from '../../type/shopOnboarding';
 
@@ -100,6 +102,12 @@ interface ShopOnboardingState {
     error: string | null;
     success: boolean;
     data: SetSubscriptionResponse | null;
+  };
+  subscriptionPlans: {
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+    data: GetSubscriptionPlansResponse | null;
   };
   removeOnboardingData: {
     loading: boolean;
@@ -176,6 +184,12 @@ const initialState: ShopOnboardingState = {
     data: null,
   },
   setSubscription: {
+    loading: false,
+    error: null,
+    success: false,
+    data: null,
+  },
+  subscriptionPlans: {
     loading: false,
     error: null,
     success: false,
@@ -458,6 +472,25 @@ export const ShopOnboardingSlice = createSlice({
       state.setSubscription.error =
         (action.payload as string) || action.error.message || 'Subscription update failed';
       state.setSubscription.data = null;
+    });
+
+    builder.addCase(fetchSubscriptionPlans_Service.pending, (state) => {
+      state.subscriptionPlans.loading = true;
+      state.subscriptionPlans.error = null;
+      state.subscriptionPlans.success = false;
+    });
+    builder.addCase(fetchSubscriptionPlans_Service.fulfilled, (state, action) => {
+      state.subscriptionPlans.loading = false;
+      state.subscriptionPlans.success = true;
+      state.subscriptionPlans.error = null;
+      state.subscriptionPlans.data = action.payload;
+    });
+    builder.addCase(fetchSubscriptionPlans_Service.rejected, (state, action) => {
+      state.subscriptionPlans.loading = false;
+      state.subscriptionPlans.success = false;
+      state.subscriptionPlans.error =
+        (action.payload as string) || action.error.message || 'Could not load subscription plans';
+      state.subscriptionPlans.data = null;
     });
 
     builder.addCase(removeOnboardingData_Service.pending, (state) => {

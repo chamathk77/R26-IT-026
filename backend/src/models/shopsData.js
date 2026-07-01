@@ -5,6 +5,7 @@ const SHOP_STATUS = [
   'trial', 
   'trialExpired',
   'initialPaymentApproved',
+  'subscriptionPaymentPending',
   'active', 
   'due', 
   'paymentPending',
@@ -50,6 +51,28 @@ const SUBSCRIPTION_DURATION_DAYS = {
 function getSubscriptionFee(subscriptionType) {
   const entry = SUBSCRIPTION_FEES.find((item) => item.type === subscriptionType);
   return entry?.fee ?? null;
+}
+
+function getSubscriptionSaveAmount(subscriptionType, fee) {
+  const oneMonthFee = getSubscriptionFee('1month');
+  const includedDays = SUBSCRIPTION_DURATION_DAYS[subscriptionType];
+  const oneMonthDays = SUBSCRIPTION_DURATION_DAYS['1month'];
+
+  if (!oneMonthFee || !includedDays || !oneMonthDays || subscriptionType === '1month') {
+    return 0;
+  }
+
+  const equivalentMonthlyTotal = oneMonthFee * (includedDays / oneMonthDays);
+  return Math.max(0, Math.round(equivalentMonthlyTotal - fee));
+}
+
+function buildSubscriptionPlansList() {
+  return SUBSCRIPTION_FEES.map(({ type, fee }) => ({
+    type,
+    fee,
+    includedDays: SUBSCRIPTION_DURATION_DAYS[type],
+    saveAmount: getSubscriptionSaveAmount(type, fee),
+  }));
 }
 
 const ONBOARD_STEPS = [
@@ -335,6 +358,7 @@ ShopsData.ADDITIONAL_USER_FEE_LKR = ADDITIONAL_USER_FEE_LKR;
 ShopsData.WEB_MODULE_FEE_LKR = WEB_MODULE_FEE_LKR;
 ShopsData.SUBSCRIPTION_DURATION_DAYS = SUBSCRIPTION_DURATION_DAYS;
 ShopsData.getSubscriptionFee = getSubscriptionFee;
+ShopsData.buildSubscriptionPlansList = buildSubscriptionPlansList;
 
 module.exports = ShopsData;
 

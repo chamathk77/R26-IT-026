@@ -13,26 +13,26 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Portal } from 'react-native-paper';
 import { useDispatch, useSelector } from 'react-redux';
-import { RootStackParamList } from '../../../../navigation/RootStackParamsList';
-import { useTheme } from '../../../../context/ThemeContext';
-import { AppDispatch, RootState } from '../../../../store/store';
-import { patchLoginShopData } from '../../../../store/reducers/AuthReducer';
-import CommonHeader from '../../../../components/CommonHeader/CommonHeader';
-import CommonAlert from '../../../../components/CommonAlert/CommonAlert';
-import { useCommonAlert } from '../../../../hooks/useCommonAlert';
+import { RootStackParamList } from '../../../../../navigation/RootStackParamsList';
+import { useTheme } from '../../../../../context/ThemeContext';
+import { AppDispatch, RootState } from '../../../../../store/store';
+import { patchLoginShopData } from '../../../../../store/reducers/AuthReducer';
+import CommonHeader from '../../../../../components/CommonHeader/CommonHeader';
+import CommonAlert from '../../../../../components/CommonAlert/CommonAlert';
+import { useCommonAlert } from '../../../../../hooks/useCommonAlert';
 import {
   fetchShopModuleFeatures_Service,
   updateShopModuleFeatures_Service,
-} from '../../../../services/ShopOnboardingService';
-import { ONBOARDING_MODULE_OPTIONS } from '../../../loginScreens/onboarding/screens/onboardingConstants';
-import { OnboardingModuleKey, OnboardingModulesState } from '../../../../type/onboarding';
-import type { OnboardingShopFeaturesPayload } from '../../../../type/shopOnboarding';
+} from '../../../../../services/ShopOnboardingService';
+import { ONBOARDING_MODULE_OPTIONS } from '../../../../loginScreens/onboarding/screens/onboardingConstants';
+import { OnboardingModuleKey, OnboardingModulesState } from '../../../../../type/onboarding';
+import type { OnboardingShopFeaturesPayload } from '../../../../../type/shopOnboarding';
 import {
   getApiErrorMessage,
   handleSessionExpiredApiError,
-} from '../../../../utils/apiErrorAlert';
-import { cardShadow, settingsDetailStyles as sharedStyles } from '../../shared/settingsDetailStyles';
-import { FEATURE_ACCENTS, manageFeaturesStyles as styles } from './manageFeaturesStyles';
+} from '../../../../../utils/apiErrorAlert';
+import { cardShadow, settingsDetailStyles as sharedStyles } from '../../../shared/settingsDetailStyles';
+import { FEATURE_ACCENTS, manageGeneralFeaturesStyles as styles } from './manageGeneralFeaturesStyles';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageGeneralFeatures'>;
 

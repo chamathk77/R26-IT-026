@@ -167,12 +167,43 @@ export interface SetSubscriptionRequest {
   subscriptionType: string;
 }
 
+export interface SubscriptionPlan {
+  type: string;
+  fee: number;
+  includedDays: number;
+  saveAmount: number;
+}
+
+export interface GetSubscriptionPlansResponse {
+  success: boolean;
+  message: string;
+  subscriptions: SubscriptionPlan[];
+}
+
+export interface SetSubscriptionPaymentSummary {
+  _id: string;
+  shopId: string;
+  receiptNumber: string;
+  paymentAmount: number;
+  paymentType: string;
+  subscriptionType: string;
+  exactPaymentDay: string | null;
+  expiryDate: string | null;
+  status: string;
+  description: string | null;
+}
+
 export interface SetSubscriptionResponse {
   success: boolean;
   shopId: string;
   subscriptionType: string;
-  onboardStep: string;
+  onboardStep?: string;
+  status?: string;
+  subscriptionStartDate?: string;
+  nextPaymentDate?: string;
+  subscriptionReceiptNo?: string;
   message: string;
+  payment?: SetSubscriptionPaymentSummary;
 }
 
 export interface RemoveOnboardingDataRequest {
