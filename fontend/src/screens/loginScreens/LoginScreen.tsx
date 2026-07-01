@@ -326,15 +326,21 @@ export default function LoginScreen({ navigation }: Props) {
                 setTimeout(() => {
                   show_Alert(
                     "pending",
-                    "Activate account",
-                    "Please contact the admin to activate your full account.",
-                    1,
+                    "Skip trial?",
+                    "Are you sure you want to skip the free trial? You will need to complete your one-time upfront payment to activate your account and continue using Smart Cost.",
+                    2,
                     false,
-                    "OK",
+                    "Skip trial",
+                    () => {
+                      navigation.reset({
+                        index: 0,
+                        routes: [{ name: "PayUpfrontScreen" }],
+                      });
+                    },
+                    "Cancel",
                     () => {},
                   );
-                }, 300);
-          
+                }, 350);
               },
             );
             return;
