@@ -22,6 +22,9 @@ export type RootStackParamList = {
     otpTimerSeconds?: number;
   };
   LoginScreen: undefined;
+  TrialDetailScreen: {
+    shopId?: string;
+  };
   SignUpScreen: undefined;
   PosMain: undefined;
   ManageCatogory: undefined;
@@ -44,6 +47,7 @@ export type RootStackParamList = {
   ShopDetails: undefined;
   ManageAccount: undefined;
   ManageFeatures: undefined;
+  ManageGeneralFeatures: undefined;
   ManageUserForm: { userId?: string } | undefined;
   ThemePreference: undefined;
   SubscriptionPayments: undefined;

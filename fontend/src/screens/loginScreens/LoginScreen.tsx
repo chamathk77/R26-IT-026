@@ -248,32 +248,6 @@ export default function LoginScreen({ navigation }: Props) {
     [dispatch, navigation, show_Alert, trialLoading],
   );
 
-  const showTrialPendingAlert = useCallback(
-    (shopId?: string) => {
-      show_Alert(
-        "pending",
-        "Trial Pending",
-        "Do you want to start the 14 days trial?",
-        2,
-        true,
-        "Continue",
-        () => {
-          void StartTrial(shopId);
-        },
-        "Cancel",
-        () => {
-          console.log("Cancel trial pressed");
-        },
-        undefined,
-        () => {
-          console.log("Skip Trial button pressed");
-        },
-        "Skip Trial",
-      );
-    },
-    [StartTrial, show_Alert],
-  );
-
   const onLogin = async () => {
     if (loginLoading) {
       return;
@@ -325,27 +299,42 @@ export default function LoginScreen({ navigation }: Props) {
         if (response.shop?.status === "disabled") {
           devLog("response.shop.onboardStep", response.shop.onboardStep);
 
-          if (response.shop?.isTrailStared === false && response.shop.onboardStep === "completed") {
+          if (
+            response.shop.onboardStep === "completed" &&
+            response.shop.isTrailStared === false
+          ) {
+            const pendingShopId =
+              response.shop.shopId ?? response.user?.shopId ?? "";
+
             show_Alert(
-              "error",
-              "Account Pending",
-              "Your account is pending. Please contact the admin to activate your account.",
+              "pending",
+              "Account pending",
+              "Your account is still pending. Do you want to activate your account or start the trial version?",
               2,
               false,
-              "Start Trial",
+              "Trial",
               () => {
-                const trialShopId =
-                  response.shop?.shopId ?? response.user?.shopId;
-                setTimeout(() => {
-                  showTrialPendingAlert(trialShopId);
-                }, 350);
+                navigation.navigate("TrialDetailScreen", {
+                  shopId: pendingShopId,
+                });
               },
-              "Contact Admin",
+              "Activate",
               () => {
-                console.log("Contact Admin pressed");
+                setTimeout(() => {
+                  show_Alert(
+                    "pending",
+                    "Activate account",
+                    "Please contact the admin to activate your full account.",
+                    1,
+                    false,
+                    "OK",
+                    () => {},
+                  );
+                }, 300);
+          
               },
             );
-            // }
+            return;
           }
         }
 
@@ -449,10 +438,7 @@ export default function LoginScreen({ navigation }: Props) {
     }
   };
 
-  const onSignUp = () => {
-    Keyboard.dismiss();
-    navigation.navigate("SignUpScreen");
-  };
+  
 
   return (
     <>
@@ -637,18 +623,7 @@ export default function LoginScreen({ navigation }: Props) {
                   )}
                 </TouchableOpacity>
 
-                <View style={styles.dividerRow}>
-                  <View style={styles.divider} />
-                  <Text
-                    style={[
-                      styles.dividerText,
-                      { color: paperTheme.colors.onSurfaceVariant },
-                    ]}
-                  >
-                    Or Authenticate With
-                  </Text>
-                  <View style={styles.divider} />
-                </View>
+
 
                 {/* <TouchableOpacity onPress={onSignUp}>
                 <Text style={[styles.registerText, { color: paperTheme.colors.onSurfaceVariant }]}>

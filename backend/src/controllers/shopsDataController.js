@@ -153,8 +153,14 @@ const createShopOnboarding = async (req, res) => {
   }
 };
 
-const SHOP_FEATURE_FIELDS =
-  'shopId sendReceiptSms senderId smsPackageType smsMonthlyAllowance smsUsedInPeriod smsPackageAmount smsNextRenewalDate kpi analyticsModule customerManualOrder costModule marketingModule isAdditionalUsersAdded numAdditionalUsers';
+const SHOP_MODULE_FEATURE_FIELDS =
+  'shopId kpi analyticsModule customerManualOrder costModule marketingModule';
+
+const SHOP_USERS_FEATURE_FIELDS =
+  'shopId maxUsers isAdditionalUsersAdded numAdditionalUsers';
+
+const SHOP_SMS_FEATURE_FIELDS =
+  'shopId smsPackageType smsUsedInPeriod smsNextRenewalDate smsPackageAmount smsFeatureStatus';
 
 const DEFAULT_MAX_USERS = 3;
 
@@ -193,40 +199,45 @@ function mapSmsPackageResponse(shop) {
   };
 }
 
-function mapShopFeaturesResponse(shop) {
+function mapShopSmsFeaturesResponse(shop) {
   return {
-    sendReceiptSms: shop.sendReceiptSms,
-    ...mapSmsPackageResponse(shop),
-    kpi: shop.kpi,
-    analyticsModule: shop.analyticsModule,
-    customerManualOrder: shop.customerManualOrder,
-    costModule: shop.costModule,
-    marketingModule: shop.marketingModule,
-    isAdditionalUsersAdded: shop.isAdditionalUsersAdded,
-    numAdditionalUsers: shop.numAdditionalUsers,
+    smsPackageType: shop.smsPackageType ?? null,
+    smsUsedInPeriod: shop.smsUsedInPeriod ?? 0,
+    smsNextRenewalDate: shop.smsNextRenewalDate ?? null,
+    smsPackageAmount: shop.smsPackageAmount ?? null,
+    smsFeatureStatus: shop.smsFeatureStatus ?? 'disabled',
   };
 }
 
-const getShopFeatures = async (req, res) => {
+function resolveShopFeaturesGetRequest(req) {
+  const shopId = req.query.shopId ?? req.params.shopId ?? req.user?.shopId;
+
+  if (!shopId?.trim()) {
+    return { error: { status: 400, body: { success: false, message: 'Shop id is required' } } };
+  }
+
+  const normalizedShopId = normalizeShopId(shopId);
+
+  if (!isValidShopIdFormat(normalizedShopId)) {
+    return { error: { status: 400, body: { success: false, message: 'Invalid shop id format' } } };
+  }
+
+  if (req.user?.shopId && req.user.shopId !== normalizedShopId) {
+    return { error: { status: 403, body: { success: false, message: 'Not authorized for this shop' } } };
+  }
+
+  return { normalizedShopId };
+}
+
+const getShopModuleFeatures = async (req, res) => {
   try {
-    const shopId = req.query.shopId ?? req.params.shopId ?? req.user?.shopId;
-
-    if (!shopId?.trim()) {
-      return res.status(400).json({ success: false, message: 'Shop id is required' });
+    const resolved = resolveShopFeaturesGetRequest(req);
+    if (resolved.error) {
+      return res.status(resolved.error.status).json(resolved.error.body);
     }
 
-    const normalizedShopId = normalizeShopId(shopId);
-
-    if (!isValidShopIdFormat(normalizedShopId)) {
-      return res.status(400).json({ success: false, message: 'Invalid shop id format' });
-    }
-
-    if (req.user?.shopId && req.user.shopId !== normalizedShopId) {
-      return res.status(403).json({ success: false, message: 'Not authorized for this shop' });
-    }
-
-    const shop = await ShopsData.findOne({ shopId: normalizedShopId })
-      .select(SHOP_FEATURE_FIELDS)
+    const shop = await ShopsData.findOne({ shopId: resolved.normalizedShopId })
+      .select(SHOP_MODULE_FEATURE_FIELDS)
       .lean();
 
     if (!shop) {
@@ -236,11 +247,65 @@ const getShopFeatures = async (req, res) => {
     return res.status(200).json({
       success: true,
       shopId: shop.shopId,
-      message: 'Shop features loaded',
-      features: mapShopFeaturesResponse(shop),
+      message: 'Shop module features loaded',
+      features: mapOnboardingFeaturesResponse(shop),
     });
   } catch (error) {
-    console.log('error in getShopFeatures', error);
+    console.log('error in getShopModuleFeatures', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getShopUsersFeatures = async (req, res) => {
+  try {
+    const resolved = resolveShopFeaturesGetRequest(req);
+    if (resolved.error) {
+      return res.status(resolved.error.status).json(resolved.error.body);
+    }
+
+    const shop = await ShopsData.findOne({ shopId: resolved.normalizedShopId })
+      .select(SHOP_USERS_FEATURE_FIELDS)
+      .lean();
+
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      shopId: shop.shopId,
+      message: 'Shop user settings loaded',
+      features: mapShopUsersFeaturesResponse(shop),
+    });
+  } catch (error) {
+    console.log('error in getShopUsersFeatures', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getShopSmsFeatures = async (req, res) => {
+  try {
+    const resolved = resolveShopFeaturesGetRequest(req);
+    if (resolved.error) {
+      return res.status(resolved.error.status).json(resolved.error.body);
+    }
+
+    const shop = await ShopsData.findOne({ shopId: resolved.normalizedShopId })
+      .select(SHOP_SMS_FEATURE_FIELDS)
+      .lean();
+
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      shopId: shop.shopId,
+      message: 'Shop SMS settings loaded',
+      features: mapShopSmsFeaturesResponse(shop),
+    });
+  } catch (error) {
+    console.log('error in getShopSmsFeatures', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -309,18 +374,14 @@ function resolveSmsPackageUpdates({ smsPackageType, sendReceiptSms, shop }) {
   return { updates, selectedPackage };
 }
 
-async function parseShopFeaturesInput(body) {
+async function parseShopModuleFeaturesInput(body) {
   const {
     shopId,
-    sendReceiptSms,
-    smsPackageType,
     kpi,
     analyticsModule,
     customerManualOrder,
     costModule,
     marketingModule,
-    isAdditionalUsersAdded,
-    numAdditionalUsers,
   } = body;
 
   if (!shopId?.trim()) {
@@ -336,28 +397,6 @@ async function parseShopFeaturesInput(body) {
   const shop = await ShopsData.findOne({ shopId: normalizedShopId });
   if (!shop) {
     return { error: { status: 404, body: { success: false, message: 'Shop not found' } } };
-  }
-
-  const sendReceiptSmsParsed = requireBooleanField(sendReceiptSms, 'sendReceiptSms');
-  if (sendReceiptSmsParsed.error) {
-    return { error: { status: 400, body: { success: false, message: sendReceiptSmsParsed.error } } };
-  }
-
-  if (sendReceiptSmsParsed.value) {
-    const senderId = shop.senderId?.trim();
-    if (!senderId) {
-      return {
-        error: {
-          status: 400,
-          body: {
-            success: false,
-            message:
-              'Cannot activate receipt SMS. Please request to register your shop name as an SMS sender ID first.',
-            code: 'SENDER_ID_NOT_REGISTERED',
-          },
-        },
-      };
-    }
   }
 
   const kpiParsed = requireBooleanField(kpi, 'kpi');
@@ -390,6 +429,36 @@ async function parseShopFeaturesInput(body) {
     return {
       error: { status: 400, body: { success: false, message: marketingModuleParsed.error } },
     };
+  }
+
+  return {
+    normalizedShopId,
+    featureUpdates: {
+      kpi: kpiParsed.value,
+      analyticsModule: analyticsModuleParsed.value,
+      customerManualOrder: customerManualOrderParsed.value,
+      costModule: costModuleParsed.value,
+      marketingModule: marketingModuleParsed.value,
+    },
+  };
+}
+
+async function parseShopUsersFeaturesInput(body) {
+  const { shopId, isAdditionalUsersAdded, numAdditionalUsers } = body;
+
+  if (!shopId?.trim()) {
+    return { error: { status: 400, body: { success: false, message: 'Shop id is required' } } };
+  }
+
+  const normalizedShopId = normalizeShopId(shopId);
+
+  if (!isValidShopIdFormat(normalizedShopId)) {
+    return { error: { status: 400, body: { success: false, message: 'Invalid shop id format' } } };
+  }
+
+  const shop = await ShopsData.findOne({ shopId: normalizedShopId });
+  if (!shop) {
+    return { error: { status: 404, body: { success: false, message: 'Shop not found' } } };
   }
 
   const isAdditionalUsersAddedParsed = requireBooleanField(
@@ -431,10 +500,57 @@ async function parseShopFeaturesInput(body) {
     numAdditionalUsersValue = parsedCount;
   }
 
-  const updatedMaxUsers = resolveMaxUsers(
-    isAdditionalUsersAddedParsed.value,
-    numAdditionalUsersValue ?? 0,
-  );
+  const featureUpdates = {
+    isAdditionalUsersAdded: isAdditionalUsersAddedParsed.value,
+    numAdditionalUsers: numAdditionalUsersValue,
+    maxUsers: resolveMaxUsers(isAdditionalUsersAddedParsed.value, numAdditionalUsersValue ?? 0),
+  };
+
+  return {
+    normalizedShopId,
+    featureUpdates,
+  };
+}
+
+async function parseShopSmsFeaturesInput(body) {
+  const { shopId, sendReceiptSms, smsPackageType } = body;
+
+  if (!shopId?.trim()) {
+    return { error: { status: 400, body: { success: false, message: 'Shop id is required' } } };
+  }
+
+  const normalizedShopId = normalizeShopId(shopId);
+
+  if (!isValidShopIdFormat(normalizedShopId)) {
+    return { error: { status: 400, body: { success: false, message: 'Invalid shop id format' } } };
+  }
+
+  const shop = await ShopsData.findOne({ shopId: normalizedShopId });
+  if (!shop) {
+    return { error: { status: 404, body: { success: false, message: 'Shop not found' } } };
+  }
+
+  const sendReceiptSmsParsed = requireBooleanField(sendReceiptSms, 'sendReceiptSms');
+  if (sendReceiptSmsParsed.error) {
+    return { error: { status: 400, body: { success: false, message: sendReceiptSmsParsed.error } } };
+  }
+
+  if (sendReceiptSmsParsed.value) {
+    const senderId = shop.senderId?.trim();
+    if (!senderId) {
+      return {
+        error: {
+          status: 400,
+          body: {
+            success: false,
+            message:
+              'Cannot activate receipt SMS. Please request to register your shop name as an SMS sender ID first.',
+            code: 'SENDER_ID_NOT_REGISTERED',
+          },
+        },
+      };
+    }
+  }
 
   const smsPackageResult = resolveSmsPackageUpdates({
     smsPackageType,
@@ -450,25 +566,15 @@ async function parseShopFeaturesInput(body) {
     featureUpdates: {
       sendReceiptSms: sendReceiptSmsParsed.value,
       ...smsPackageResult.updates,
-      kpi: kpiParsed.value,
-      analyticsModule: analyticsModuleParsed.value,
-      customerManualOrder: customerManualOrderParsed.value,
-      costModule: costModuleParsed.value,
-      marketingModule: marketingModuleParsed.value,
-      isAdditionalUsersAdded: isAdditionalUsersAddedParsed.value,
-      numAdditionalUsers: numAdditionalUsersValue,
-      maxUsers: updatedMaxUsers,
     },
   };
 }
 
-function mapOnboardingFeaturesResponse(shop) {
+function mapShopUsersFeaturesResponse(shop) {
   return {
-    kpi: shop.kpi,
-    analyticsModule: shop.analyticsModule,
-    customerManualOrder: shop.customerManualOrder,
-    costModule: shop.costModule,
-    marketingModule: shop.marketingModule,
+    isAdditionalUsersAdded: shop.isAdditionalUsersAdded,
+    numAdditionalUsers: shop.numAdditionalUsers,
+    maxUsers: shop.maxUsers,
   };
 }
 
@@ -555,6 +661,16 @@ async function parseOnboardingShopFeaturesInput(body) {
   };
 }
 
+function mapOnboardingFeaturesResponse(shop) {
+  return {
+    kpi: shop.kpi,
+    analyticsModule: shop.analyticsModule,
+    customerManualOrder: shop.customerManualOrder,
+    costModule: shop.costModule,
+    marketingModule: shop.marketingModule,
+  };
+}
+
 const onboardingShopFeatures = async (req, res) => {
   try {
     const parsed = await parseOnboardingShopFeaturesInput(req.body);
@@ -583,10 +699,10 @@ const onboardingShopFeatures = async (req, res) => {
   }
 };
 
-const updatedShopFeatures = async (req, res) => {
+const updateShopModuleFeatures = async (req, res) => {
   try {
     const shopId = req.body.shopId ?? req.user?.shopId;
-    const parsed = await parseShopFeaturesInput({ ...req.body, shopId });
+    const parsed = await parseShopModuleFeaturesInput({ ...req.body, shopId });
     if (parsed.error) {
       return res.status(parsed.error.status).json(parsed.error.body);
     }
@@ -595,21 +711,6 @@ const updatedShopFeatures = async (req, res) => {
 
     if (req.user?.shopId && req.user.shopId !== normalizedShopId) {
       return res.status(403).json({ success: false, message: 'Not authorized for this shop' });
-    }
-
-    if (featureUpdates.isAdditionalUsersAdded) {
-      const additionalCount = Number(featureUpdates.numAdditionalUsers);
-      if (!Number.isInteger(additionalCount) || additionalCount < 1) {
-        return res.status(400).json({
-          success: false,
-          message: 'numAdditionalUsers must be a number greater than 0 when isAdditionalUsersAdded is true',
-        });
-      }
-      featureUpdates.numAdditionalUsers = additionalCount;
-      featureUpdates.maxUsers = DEFAULT_MAX_USERS + additionalCount;
-    } else {
-      featureUpdates.numAdditionalUsers = null;
-      featureUpdates.maxUsers = DEFAULT_MAX_USERS;
     }
 
     const updated = await ShopsData.findOneAndUpdate(
@@ -621,14 +722,75 @@ const updatedShopFeatures = async (req, res) => {
     res.status(200).json({
       success: true,
       shopId: updated.shopId,
-      message: 'Shop features updated',
-      features: {
-        ...mapShopFeaturesResponse(updated),
-        maxUsers: updated.maxUsers,
-      },
+      message: 'Shop module features updated',
+      features: mapOnboardingFeaturesResponse(updated),
     });
   } catch (error) {
-    console.log('error in updatedShopFeatures', error);
+    console.log('error in updateShopModuleFeatures', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const updateShopUsersFeatures = async (req, res) => {
+  try {
+    const shopId = req.body.shopId ?? req.user?.shopId;
+    const parsed = await parseShopUsersFeaturesInput({ ...req.body, shopId });
+    if (parsed.error) {
+      return res.status(parsed.error.status).json(parsed.error.body);
+    }
+
+    const { normalizedShopId, featureUpdates } = parsed;
+
+    if (req.user?.shopId && req.user.shopId !== normalizedShopId) {
+      return res.status(403).json({ success: false, message: 'Not authorized for this shop' });
+    }
+
+    const updated = await ShopsData.findOneAndUpdate(
+      { shopId: normalizedShopId },
+      { $set: featureUpdates },
+      { returnDocument: 'after', runValidators: true },
+    ).lean();
+
+    res.status(200).json({
+      success: true,
+      shopId: updated.shopId,
+      message: 'Shop user settings updated',
+      features: mapShopUsersFeaturesResponse(updated),
+    });
+  } catch (error) {
+    console.log('error in updateShopUsersFeatures', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const updateShopSmsFeatures = async (req, res) => {
+  try {
+    const shopId = req.body.shopId ?? req.user?.shopId;
+    const parsed = await parseShopSmsFeaturesInput({ ...req.body, shopId });
+    if (parsed.error) {
+      return res.status(parsed.error.status).json(parsed.error.body);
+    }
+
+    const { normalizedShopId, featureUpdates } = parsed;
+
+    if (req.user?.shopId && req.user.shopId !== normalizedShopId) {
+      return res.status(403).json({ success: false, message: 'Not authorized for this shop' });
+    }
+
+    const updated = await ShopsData.findOneAndUpdate(
+      { shopId: normalizedShopId },
+      { $set: featureUpdates },
+      { returnDocument: 'after', runValidators: true },
+    ).lean();
+
+    res.status(200).json({
+      success: true,
+      shopId: updated.shopId,
+      message: 'Shop SMS settings updated',
+      features: mapShopSmsFeaturesResponse(updated),
+    });
+  } catch (error) {
+    console.log('error in updateShopSmsFeatures', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -641,71 +803,6 @@ function normalizeSubscriptionType(value) {
   return normalized;
 }
 
-const setSmsPackage = async (req, res) => {
-  try {
-    const shopId = req.body.shopId ?? req.user?.shopId;
-    const { smsPackageType } = req.body;
-
-    if (!shopId?.trim()) {
-      return res.status(400).json({ success: false, message: 'Shop id is required' });
-    }
-
-    const normalizedShopId = normalizeShopId(shopId);
-
-    if (!isValidShopIdFormat(normalizedShopId)) {
-      return res.status(400).json({ success: false, message: 'Invalid shop id format' });
-    }
-
-    if (req.user?.shopId && req.user.shopId !== normalizedShopId) {
-      return res.status(403).json({ success: false, message: 'Not authorized for this shop' });
-    }
-
-    if (smsPackageType === undefined || smsPackageType === null || smsPackageType === '') {
-      return res.status(400).json({ success: false, message: 'smsPackageType is required' });
-    }
-
-    const normalizedPackageType = normalizeSmsPackageType(smsPackageType);
-    if (!normalizedPackageType) {
-      return res.status(400).json({
-        success: false,
-        message: `smsPackageType must be one of: ${ShopsData.SMS_PACKAGE_TYPES.join(', ')}`,
-        code: 'INVALID_SMS_PACKAGE',
-      });
-    }
-
-    const shop = await ShopsData.findOne({ shopId: normalizedShopId });
-    if (!shop) {
-      return res.status(404).json({ success: false, message: 'Shop not found' });
-    }
-
-    const selectedPackage = findSmsPackage(normalizedPackageType);
-    const updates = {
-      smsPackageType: selectedPackage.type,
-      smsMonthlyAllowance: selectedPackage.messageCount,
-      smsPackageAmount: selectedPackage.fee,
-    };
-
-    if (shop.smsPackageType !== selectedPackage.type) {
-      updates.smsUsedInPeriod = 0;
-    }
-
-    const updated = await ShopsData.findOneAndUpdate(
-      { shopId: normalizedShopId },
-      { $set: updates },
-      { returnDocument: 'after', runValidators: true },
-    ).lean();
-
-    res.status(200).json({
-      success: true,
-      shopId: updated.shopId,
-      message: 'SMS package saved',
-      smsPackage: mapSmsPackageResponse(updated),
-    });
-  } catch (error) {
-    console.log('error in setSmsPackage', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
 
 const setSubscription = async (req, res) => {
   try {
@@ -810,11 +907,14 @@ const removeOnboardingData = async (req, res) => {
 
 module.exports = {
   createShopOnboarding,
-  getShopFeatures,
+  getShopModuleFeatures,
+  getShopUsersFeatures,
+  getShopSmsFeatures,
   getSmsPackages,
   onboardingShopFeatures,
-  updatedShopFeatures,
-  setSmsPackage,
+  updateShopModuleFeatures,
+  updateShopUsersFeatures,
+  updateShopSmsFeatures,
   setSubscription,
   removeOnboardingData,
 };

@@ -131,39 +131,43 @@ const shopsDataSchema = new mongoose.Schema(
       default: 'startOnboarding',
     },
     //module related
-    sendReceiptSms: {
-      type: Boolean,
-      default: false,
-    },
     senderId: {
       type: String,
       default: null,
       trim: true,
     },
+
+    //sms related
     smsPackageType: {
       type: String,
       enum: SMS_PACKAGE_TYPES,
       default: null,
-    },
-    smsMonthlyAllowance: {
-      type: Number,
-      default: null,
-      min: 0,
     },
     smsUsedInPeriod: {
       type: Number,
       default: 0,
       min: 0,
     },
+    smsFeatureStatus: {
+      type: String,
+      enum: ['inactive', 'active', 'pending', 'due', 'disabled'],
+      default: 'disabled',
+    },
     smsPackageAmount: {
       type: Number,
       default: null,
       min: 0,
     },
+    smsStartDate: {
+      type: Date,
+      default: null,
+    },
     smsNextRenewalDate: {
       type: Date,
       default: null,
     },
+
+    //module related
     kpi: {
       type: Boolean,
       default: false,

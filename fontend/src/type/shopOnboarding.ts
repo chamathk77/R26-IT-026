@@ -32,6 +32,29 @@ export interface OnboardingShopFeaturesPayload {
   marketingModule: boolean;
 }
 
+export interface GetShopModuleFeaturesResponse {
+  success: boolean;
+  shopId: string;
+  message: string;
+  features: OnboardingShopFeaturesPayload;
+}
+
+export interface UpdateShopModuleFeaturesRequest {
+  shopId: string;
+  kpi: boolean;
+  analyticsModule: boolean;
+  customerManualOrder: boolean;
+  costModule: boolean;
+  marketingModule: boolean;
+}
+
+export interface UpdateShopModuleFeaturesResponse {
+  success: boolean;
+  shopId: string;
+  message: string;
+  features: OnboardingShopFeaturesPayload;
+}
+
 export interface UpdateShopFeaturesRequest {
   shopId: string;
   sendReceiptSms: boolean;

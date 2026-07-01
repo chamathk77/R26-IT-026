@@ -5,73 +5,14 @@ export const FEATURE_ACCENTS: Record<
   string,
   { iconBg: string; iconColor: string; activeBorder: string }
 > = {
-  sendReceiptSms: { iconBg: '#dbeafe', iconColor: '#1d4ed8', activeBorder: '#3b82f6' },
   kpi: { iconBg: '#fef3c7', iconColor: '#b45309', activeBorder: '#f59e0b' },
   analyticsModule: { iconBg: '#ccfbf1', iconColor: '#0f766e', activeBorder: '#14b8a6' },
   customerManualOrder: { iconBg: '#ede9fe', iconColor: '#6d28d9', activeBorder: '#8b5cf6' },
   costModule: { iconBg: '#fce7f3', iconColor: '#db2777', activeBorder: '#ec4899' },
   marketingModule: { iconBg: '#ffedd5', iconColor: '#c2410c', activeBorder: '#f97316' },
-  additionalUsers: { iconBg: '#e0e7ff', iconColor: '#4338ca', activeBorder: '#6366f1' },
 };
 
 export const manageFeaturesStyles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  stateCard: {
-    width: '100%',
-    maxWidth: 340,
-    borderRadius: 24,
-    borderWidth: 1,
-    paddingVertical: 32,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    gap: 10,
-  },
-  stateIconRing: {
-    width: 72,
-    height: 72,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  stateTitle: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 18,
-    textAlign: 'center',
-  },
-  stateDesc: {
-    fontFamily: fonts.PoppinsRegular,
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 21,
-    marginBottom: 8,
-  },
-  primaryAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    minHeight: 50,
-    paddingHorizontal: 24,
-    borderRadius: 14,
-    width: '100%',
-    marginTop: 8,
-  },
-  primaryActionText: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 15,
-  },
-  scrollWithFooter: {
-    paddingBottom: 140,
-  },
-  scrollAfterBillingAddons: {
-    paddingBottom: 64,
-  },
   heroCard: {
     borderRadius: 24,
     padding: 20,
@@ -114,21 +55,30 @@ export const manageFeaturesStyles = StyleSheet.create({
     lineHeight: 19,
     marginTop: 4,
   },
-  heroBadges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 14,
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    gap: 12,
   },
-  heroBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  loadingText: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 14,
+    textAlign: 'center',
   },
-  heroBadgeText: {
+  retryButton: {
+    minHeight: 48,
+    minWidth: 140,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    marginTop: 8,
+  },
+  retryButtonText: {
     fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 11,
-    letterSpacing: 0.2,
+    fontSize: 15,
   },
   sectionLabel: {
     fontFamily: fonts.PoppinsSemiBold,
@@ -138,7 +88,7 @@ export const manageFeaturesStyles = StyleSheet.create({
     marginBottom: 10,
     marginLeft: 4,
   },
-  featureCard: {
+  moduleCard: {
     borderRadius: 20,
     borderWidth: 1.5,
     padding: 16,
@@ -152,134 +102,67 @@ export const manageFeaturesStyles = StyleSheet.create({
     bottom: 0,
     width: 4,
   },
-  featureTopRow: {
+  moduleTopRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
     marginBottom: 14,
   },
-  iconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
+  moduleIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  featureText: {
+  moduleText: {
     flex: 1,
-    paddingRight: 4,
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 4,
-  },
-  featureTitle: {
+  moduleTitle: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 15,
     lineHeight: 20,
-    flexShrink: 1,
+    marginBottom: 4,
   },
-  statusPill: {
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  statusPillText: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 10,
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
-  featureDesc: {
+  moduleDesc: {
     fontFamily: fonts.PoppinsRegular,
     fontSize: 13,
     lineHeight: 19,
   },
-  billingChip: {
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginTop: 8,
-  },
-  billingChipText: {
-    fontFamily: fonts.PoppinsMedium,
-    fontSize: 11,
-  },
-  segmentTrack: {
+  radioRow: {
     flexDirection: 'row',
-    borderRadius: 14,
-    padding: 4,
-    gap: 4,
+    gap: 10,
   },
-  segmentOption: {
+  radioOption: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    borderRadius: 11,
-    paddingVertical: 11,
-    paddingHorizontal: 8,
-  },
-  segmentLabel: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 13,
-  },
-  expandedSection: {
-    marginTop: 14,
-    paddingTop: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  inputLabel: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 11,
-    letterSpacing: 0.6,
-    marginBottom: 8,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    gap: 8,
     borderRadius: 14,
-    paddingHorizontal: 14,
-    minHeight: 52,
-    gap: 10,
+    borderWidth: 1.5,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
   },
-  input: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    fontFamily: fonts.PoppinsRegular,
-    fontSize: 16,
+  radioOuter: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  inputContent: {
-    fontFamily: fonts.PoppinsRegular,
-    fontSize: 16,
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
-  usersHint: {
-    fontFamily: fonts.PoppinsRegular,
-    fontSize: 12,
-    marginTop: 10,
-    lineHeight: 18,
-  },
-  summaryCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 14,
-    marginTop: 4,
-    marginBottom: 48,
-  },
-  summaryTitle: {
+  radioLabel: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 13,
-    marginBottom: 6,
   },
-  summaryLine: {
-    fontFamily: fonts.PoppinsRegular,
-    fontSize: 12,
-    lineHeight: 18,
+  scrollWithFooter: {
+    paddingBottom: 140,
   },
   footer: {
     position: 'absolute',

@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import type { TextInput } from "react-native";
 import {
   ActivityIndicator,
@@ -507,15 +508,31 @@ export default function OnboardOwnerScreen({ navigation }: Props) {
                   }}
                 />
               </View>
-              <Text
+              <View
                 style={[
-                  styles.fieldHint,
-                  { color: paperTheme.colors.onSurfaceVariant },
+                  styles.smsNoticeBox,
+                  {
+                    backgroundColor: paperTheme.colors.primaryContainer,
+                    borderColor: paperTheme.colors.primary,
+                  },
                 ]}
               >
-                We will send a one-time password (OTP) to this number by SMS to
-                verify your account.
-              </Text>
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={18}
+                  color={paperTheme.colors.primary}
+                  style={styles.smsNoticeIcon}
+                />
+                <Text
+                  style={[
+                    styles.smsNoticeText,
+                    { color: paperTheme.colors.onSurface },
+                  ]}
+                >
+                  OTP verification and future SMS alerts will be sent to this
+                  mobile number.
+                </Text>
+              </View>
             </View>
           </KeyboardAwareScrollView>
 
@@ -605,11 +622,24 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     paddingVertical: 10,
   },
-  fieldHint: {
-    fontFamily: fonts.InterRegular,
+  smsNoticeBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 12,
+  },
+  smsNoticeIcon: {
+    marginTop: 1,
+    marginRight: 8,
+  },
+  smsNoticeText: {
+    flex: 1,
+    fontFamily: fonts.PoppinsSemiBold,
     fontSize: 12,
-    lineHeight: 17,
-    marginTop: 10,
+    lineHeight: 18,
   },
   inputText: {
     paddingVertical: 0,

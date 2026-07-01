@@ -2,8 +2,10 @@ import { createSlice } from '@reduxjs/toolkit';
 import {
   createShopOnboarding_Service,
   fetchShopFeatures_Service,
+  fetchShopModuleFeatures_Service,
   onboardingShopFeatures_Service,
   updatedShopFeatures_Service,
+  updateShopModuleFeatures_Service,
   sendOtpOnboarding_Service,
   verifyOtpOnboarding_Service,
   signupOnboarding_Service,
@@ -13,7 +15,9 @@ import {
 import {
   CreateShopOnboardingResponse,
   GetShopFeaturesResponse,
+  GetShopModuleFeaturesResponse,
   UpdateShopFeaturesResponse,
+  UpdateShopModuleFeaturesResponse,
   SendOtpOnboardingResponse,
   VerifyOtpOnboardingResponse,
   SignupOnboardingResponse,
@@ -43,6 +47,18 @@ interface ShopOnboardingState {
     error: string | null;
     success: boolean;
     data: GetShopFeaturesResponse | null;
+  };
+  shopModuleFeatures: {
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+    data: GetShopModuleFeaturesResponse | null;
+  };
+  updateModuleFeatures: {
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+    data: UpdateShopModuleFeaturesResponse | null;
   };
   sendOtp: {
     loading: boolean;
@@ -95,6 +111,18 @@ const initialState: ShopOnboardingState = {
     onboardStep: null,
   },
   shopFeatures: {
+    loading: false,
+    error: null,
+    success: false,
+    data: null,
+  },
+  shopModuleFeatures: {
+    loading: false,
+    error: null,
+    success: false,
+    data: null,
+  },
+  updateModuleFeatures: {
     loading: false,
     error: null,
     success: false,
@@ -240,6 +268,48 @@ export const ShopOnboardingSlice = createSlice({
         action.error.message ||
         'Could not load shop features';
       state.shopFeatures.data = null;
+    });
+
+    builder.addCase(fetchShopModuleFeatures_Service.pending, (state) => {
+      state.shopModuleFeatures.loading = true;
+      state.shopModuleFeatures.error = null;
+      state.shopModuleFeatures.success = false;
+    });
+    builder.addCase(fetchShopModuleFeatures_Service.fulfilled, (state, action) => {
+      state.shopModuleFeatures.loading = false;
+      state.shopModuleFeatures.success = true;
+      state.shopModuleFeatures.error = null;
+      state.shopModuleFeatures.data = action.payload;
+    });
+    builder.addCase(fetchShopModuleFeatures_Service.rejected, (state, action) => {
+      state.shopModuleFeatures.loading = false;
+      state.shopModuleFeatures.success = false;
+      state.shopModuleFeatures.error =
+        (action.payload as string) ||
+        action.error.message ||
+        'Could not load shop module features';
+      state.shopModuleFeatures.data = null;
+    });
+
+    builder.addCase(updateShopModuleFeatures_Service.pending, (state) => {
+      state.updateModuleFeatures.loading = true;
+      state.updateModuleFeatures.error = null;
+      state.updateModuleFeatures.success = false;
+    });
+    builder.addCase(updateShopModuleFeatures_Service.fulfilled, (state, action) => {
+      state.updateModuleFeatures.loading = false;
+      state.updateModuleFeatures.success = true;
+      state.updateModuleFeatures.error = null;
+      state.updateModuleFeatures.data = action.payload;
+    });
+    builder.addCase(updateShopModuleFeatures_Service.rejected, (state, action) => {
+      state.updateModuleFeatures.loading = false;
+      state.updateModuleFeatures.success = false;
+      state.updateModuleFeatures.error =
+        (action.payload as string) ||
+        action.error.message ||
+        'Shop module features update failed';
+      state.updateModuleFeatures.data = null;
     });
 
     builder.addCase(sendOtpOnboarding_Service.pending, (state) => {

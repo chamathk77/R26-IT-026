@@ -2,11 +2,14 @@ const express = require('express');
 const { protect } = require('../middleware/authMiddleware');
 const {
   createShopOnboarding,
-  getShopFeatures,
+  getShopModuleFeatures,
+  getShopUsersFeatures,
+  getShopSmsFeatures,
   getSmsPackages,
   onboardingShopFeatures,
-  updatedShopFeatures,
-  setSmsPackage,
+  updateShopModuleFeatures,
+  updateShopUsersFeatures,
+  updateShopSmsFeatures,
   setSubscription,
   removeOnboardingData,
 } = require('../controllers/shopsDataController');
@@ -16,12 +19,21 @@ const router = express.Router();
 
 router.post('/onboarding', createShopOnboarding);
 router.post('/remove-onboarding', removeOnboardingData);
-router.get('/features', protect, getShopFeatures);
-router.get('/sms-packages', getSmsPackages);
 router.post('/features/onboarding', onboardingShopFeatures);
-router.put('/features', protect, updatedShopFeatures);
-router.post('/sms-package', protect, setSmsPackage);
-router.post('/subscription', setSubscription);
+
+
+router.put('/features/modules', protect, updateShopModuleFeatures);
+router.put('/features/users', protect, updateShopUsersFeatures);
+router.put('/features/sms', protect, updateShopSmsFeatures);
+router.get('/sms-packages', protect, getSmsPackages);
+
+router.get('/features/modules', protect, getShopModuleFeatures);
+router.get('/features/users', protect, getShopUsersFeatures);
+router.get('/features/sms', protect, getShopSmsFeatures);
+
+router.post('/subscription',protect, setSubscription);
+
+//trial related
 router.post('/start-trial', protect, startTrail);
 router.post('/skip-trial', protect, skipTrail);
 router.post('/finish-trial', protect, finishTrail);

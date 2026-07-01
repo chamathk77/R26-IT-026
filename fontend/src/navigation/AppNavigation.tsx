@@ -10,6 +10,7 @@ import SelectSubscriptionScreen from '../screens/loginScreens/onboarding/screens
 import CreatePasswordScreen from '../screens/loginScreens/onboarding/screens/CreatePasswordScreen';
 import OtpValidationScreen from '../screens/loginScreens/onboarding/screens/OtpValidationScreen';
 import LoginScreen from '../screens/loginScreens/LoginScreen';
+import TrialDetailScreen from '../screens/loginScreens/trial/TrialDetailScreen';
 import SignUpScreen from '../screens/loginScreens/SignUpScreen';
 import MainBottomTabNavigator from './MainBottomTabNavigator';
 
@@ -24,6 +25,7 @@ import ProfileDetailsScreen from '../screens/settings/account/ProfileDetailsScre
 import ShopDetailsScreen from '../screens/settings/account/ShopDetailsScreen';
 import ManageAccountScreen from '../screens/settings/account/ManageAccountScreen';
 import ManageFeaturesScreen from '../screens/settings/account/manageFeatures/ManageFeaturesScreen';
+import ManageGeneralFeaturesScreen from '../screens/settings/account/manageFeatures/ManageGeneralFeaturesScreen';
 import ManageUserFormScreen from '../screens/settings/account/ManageUserFormScreen';
 import ThemePreferenceScreen from '../screens/settings/preferences/ThemePreferenceScreen';
 import SubscriptionPaymentsScreen from '../screens/settings/payments/SubscriptionPaymentsScreen';
@@ -56,6 +58,7 @@ export default function AppNavigator() {
         <Stack.Screen name="CreatePasswordScreen" component={CreatePasswordScreen} />
         <Stack.Screen name="OtpValidationScreen" component={OtpValidationScreen} />
         <Stack.Screen name="LoginScreen" component={LoginScreen} />
+        <Stack.Screen name="TrialDetailScreen" component={TrialDetailScreen} />
         <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
         <Stack.Screen name="PosMain" component={MainBottomTabNavigator} />
         <Stack.Screen name="ManageCatogory" component={ManageCatogoryScreen} />
@@ -75,6 +78,7 @@ export default function AppNavigator() {
         <Stack.Screen name="ShopDetails" component={ShopDetailsScreen} />
         <Stack.Screen name="ManageAccount" component={ManageAccountScreen} />
         <Stack.Screen name="ManageFeatures" component={ManageFeaturesScreen} />
+        <Stack.Screen name="ManageGeneralFeatures" component={ManageGeneralFeaturesScreen} />
         <Stack.Screen name="ManageUserForm" component={ManageUserFormScreen} />
         <Stack.Screen name="ThemePreference" component={ThemePreferenceScreen} />
         <Stack.Screen name="SubscriptionPayments" component={SubscriptionPaymentsScreen} />

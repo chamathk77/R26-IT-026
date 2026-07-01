@@ -7,9 +7,12 @@ import {
   CreateShopOnboardingRequest,
   CreateShopOnboardingResponse,
   GetShopFeaturesResponse,
+  GetShopModuleFeaturesResponse,
   OnboardingShopFeaturesRequest,
   UpdateShopFeaturesRequest,
   UpdateShopFeaturesResponse,
+  UpdateShopModuleFeaturesRequest,
+  UpdateShopModuleFeaturesResponse,
   SendOtpOnboardingRequest,
   SendOtpOnboardingResponse,
   VerifyOtpOnboardingRequest,
@@ -76,6 +79,65 @@ export const fetchShopFeatures_Service = createAsyncThunk(
       const apiError: ApiErrorResponse = {
         error: "Error",
         message: "Could not load shop features",
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const fetchShopModuleFeatures_Service = createAsyncThunk(
+  "shopOnboarding/fetchModuleFeatures",
+  async (shopId: string | undefined, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const query = shopId?.trim()
+        ? `?shopId=${encodeURIComponent(shopId.trim())}`
+        : "";
+      const response = await apiClient.get<GetShopModuleFeaturesResponse>(
+        `/api/shops/features/modules${query}`,
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: "Error",
+        message: "Could not load shop module features",
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const updateShopModuleFeatures_Service = createAsyncThunk(
+  "shopOnboarding/updateModuleFeatures",
+  async (payload: UpdateShopModuleFeaturesRequest, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.put<UpdateShopModuleFeaturesResponse>(
+        "/api/shops/features/modules",
+        payload,
+      );
+
+      if (isHttpSuccess(response.status)) {
+        console.log("Updated shop module features response:", response.data);
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: "Error",
+        message: "Shop module features update failed",
         status: response.status,
         timestamp: new Date().toISOString(),
       };
