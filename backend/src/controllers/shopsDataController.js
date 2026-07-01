@@ -1185,17 +1185,24 @@ const removeOnboardingData = async (req, res) => {
 };
 
 module.exports = {
+  /** Onboarding */
   createShopOnboarding,
+  removeOnboardingData,
+  onboardingShopFeatures,
+
+  /** Features */
+  updateShopModuleFeatures,
+  updateShopUsersFeatures,
+  updateShopSmsFeatures,
+
+  /** Get features */
   getShopModuleFeatures,
   getShopUsersFeatures,
   getShopSmsFeatures,
   getSmsPackages,
   getSubscriptionPlans,
-  onboardingShopFeatures,
-  updateShopModuleFeatures,
-  updateShopUsersFeatures,
-  updateShopSmsFeatures,
+
+  /** Subscription */
   setSubscription,
-  removeOnboardingData,
   
 };

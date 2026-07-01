@@ -85,7 +85,6 @@ const ONBOARD_STEPS = [
 
 const shopsDataSchema = new mongoose.Schema(
   {
-
     //shop related
     shopId: {
       type: String,

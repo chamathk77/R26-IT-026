@@ -11,6 +11,8 @@ const { sendSms } = require('../services/smsService');
 
 const { PAYMENT_MONTH_CODES } = Payments;
 
+const MULTI_MONTH_SUBSCRIPTION_TYPES = ['3months', '6months', '1year'];
+
 /** One letter per month for receipt numbers (e.g. J26000001 = June 2026, seq 000001). */
 const MONTH_RECEIPT_LETTER = {
   january: 'A',
@@ -150,6 +152,288 @@ async function verifyShopAccess(req, shopId) {
 
   return { user, shop };
 }
+
+function resolveLoggedInShopId(req) {
+  const shopId = normalizeShopId(req.user?.shopId || '');
+  if (!shopId) {
+    return {
+      error: {
+        status: 400,
+        body: { success: false, message: 'Shop id is not associated with this account' },
+      },
+    };
+  }
+
+  if (!isValidShopIdFormat(shopId)) {
+    return {
+      error: {
+        status: 400,
+        body: { success: false, message: 'Invalid shop id on user account' },
+      },
+    };
+  }
+
+  return { shopId };
+}
+
+/** Up-front payment record for the authenticated user's shop only. */
+const getUpFrontPaymentByLoggedInShop = async (req, res) => {
+  try {
+    const resolved = resolveLoggedInShopId(req);
+    if (resolved.error) {
+      return res.status(resolved.error.status).json(resolved.error.body);
+    }
+
+    const { shopId } = resolved;
+    const access = await verifyShopAccess(req, shopId);
+    if (access.error) {
+      return res.status(access.error.status).json(access.error.body);
+    }
+
+    const filter = {
+      shopId,
+      paymentType: 'upFront',
+    };
+
+    if (req.query.status) {
+      const status = String(req.query.status).trim();
+      if (!Payments.PAYMENT_STATUS.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: `status must be one of: ${Payments.PAYMENT_STATUS.join(', ')}`,
+        });
+      }
+      filter.status = status;
+    }
+
+    const payment = await Payments.findOne(filter)
+      .sort({ submittedDate: -1, createdAt: -1 })
+      .lean();
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: 'No up-front payment found for this shop',
+        shopId,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      shopId,
+      payment: formatPayment(payment),
+    });
+  } catch (error) {
+    console.log('error in getUpFrontPaymentByLoggedInShop', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+async function findInitialSubscriptionPaymentRecord(shopId, shop) {
+  const isInitialSubscriptionPhase =
+    shop.status === 'subscriptionPaymentPending' || shop.subscriptionStartDate == null;
+
+  if (!isInitialSubscriptionPhase) {
+    return null;
+  }
+
+  const receiptRef = shop.subscriptionReceiptNo ? String(shop.subscriptionReceiptNo).trim() : '';
+
+  if (receiptRef && isValidObjectId(receiptRef)) {
+    const linkedPayment = await Payments.findOne({
+      _id: receiptRef,
+      shopId,
+      paymentType: 'subscription',
+    }).lean();
+
+    if (linkedPayment) {
+      return linkedPayment;
+    }
+  }
+
+  return Payments.findOne({
+    shopId,
+    paymentType: 'subscription',
+    subscriptionType: { $in: MULTI_MONTH_SUBSCRIPTION_TYPES },
+    status: { $in: ['notPaid', 'pending', 'rejected'] },
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+}
+
+/** Initial multi-month subscription payment for the authenticated user's shop. */
+const getInitialSubscriptionPayment = async (req, res) => {
+  try {
+    const resolved = resolveLoggedInShopId(req);
+    if (resolved.error) {
+      return res.status(resolved.error.status).json(resolved.error.body);
+    }
+
+    const { shopId } = resolved;
+    const access = await verifyShopAccess(req, shopId);
+    if (access.error) {
+      return res.status(access.error.status).json(access.error.body);
+    }
+
+    const { shop } = access;
+    let payment = await findInitialSubscriptionPaymentRecord(shopId, shop);
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: 'No initial subscription payment found for this shop',
+        shopId,
+        shopStatus: shop.status ?? null,
+      });
+    }
+
+    if (req.query.status) {
+      const status = String(req.query.status).trim();
+      if (!Payments.PAYMENT_STATUS.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: `status must be one of: ${Payments.PAYMENT_STATUS.join(', ')}`,
+        });
+      }
+      if (payment.status !== status) {
+        return res.status(404).json({
+          success: false,
+          message: `No initial subscription payment found with status "${status}"`,
+          shopId,
+          shopStatus: shop.status ?? null,
+        });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      shopId,
+      shopStatus: shop.status ?? null,
+      subscriptionType: shop.subscriptionType ?? null,
+      payment: formatPayment(payment),
+    });
+  } catch (error) {
+    console.log('error in getInitialSubscriptionPayment', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/** Undo multi-month plan selection: remove initial subscription invoice and reset shop. */
+const reverseSubscriptionSelection = async (req, res) => {
+  try {
+    const resolved = resolveLoggedInShopId(req);
+    if (resolved.error) {
+      return res.status(resolved.error.status).json(resolved.error.body);
+    }
+
+    const { shopId } = resolved;
+    const access = await verifyShopAccess(req, shopId);
+    if (access.error) {
+      return res.status(access.error.status).json(access.error.body);
+    }
+
+    const { shop } = access;
+
+    if (shop.status !== 'subscriptionPaymentPending') {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Subscription selection can only be reversed while subscription payment is pending',
+        shopId,
+        shopStatus: shop.status ?? null,
+      });
+    }
+
+    if (shop.subscriptionStartDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Subscription has already started and cannot be reversed',
+        shopId,
+        shopStatus: shop.status ?? null,
+      });
+    }
+
+    const subscriptionPayments = await Payments.find({
+      shopId,
+      paymentType: 'subscription',
+      subscriptionType: { $in: MULTI_MONTH_SUBSCRIPTION_TYPES },
+      status: { $in: ['notPaid', 'pending', 'rejected'] },
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (subscriptionPayments.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No initial subscription payment found to reverse',
+        shopId,
+        shopStatus: shop.status ?? null,
+      });
+    }
+
+    if (subscriptionPayments.length > 1) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Multiple initial subscription payments found. Please contact support to resolve this.',
+        shopId,
+        count: subscriptionPayments.length,
+      });
+    }
+
+    const payment = subscriptionPayments[0];
+
+    const updatedShop = await ShopsData.findOneAndUpdate(
+      { shopId, status: 'subscriptionPaymentPending' },
+      {
+        $set: {
+          status: 'initialPaymentApproved',
+          subscriptionReceiptNo: null,
+        },
+        $unset: { subscriptionType: '' },
+      },
+      { returnDocument: 'after', runValidators: true },
+    ).lean();
+
+    if (!updatedShop) {
+      return res.status(409).json({
+        success: false,
+        message: 'Shop subscription state changed. Please refresh and try again.',
+        shopId,
+      });
+    }
+
+    await Payments.deleteOne({ _id: payment._id });
+
+    if (
+      payment.receiptImagePath &&
+      payment.receiptImagePath !== 'pending-upload'
+    ) {
+      unlinkReceiptImageIfLocal(payment.receiptImagePath);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Subscription selection reversed. You can choose a plan again.',
+      shopId: updatedShop.shopId,
+      shop: {
+        shopId: updatedShop.shopId,
+        status: updatedShop.status,
+        subscriptionType: updatedShop.subscriptionType ?? null,
+        subscriptionReceiptNo: updatedShop.subscriptionReceiptNo ?? null,
+      },
+      removedPayment: {
+        _id: payment._id,
+        receiptNumber: payment.receiptNumber,
+        subscriptionType: payment.subscriptionType,
+        status: payment.status,
+      },
+    });
+  } catch (error) {
+    console.log('error in reverseSubscriptionSelection', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 
 // get payments by shop
@@ -477,4 +761,7 @@ module.exports = {
   paymentSubmit,
   getPaymentsByShop,
   getRecentPaymentByShop,
+  getUpFrontPaymentByLoggedInShop,
+  getInitialSubscriptionPayment,
+  reverseSubscriptionSelection,
 };

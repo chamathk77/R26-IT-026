@@ -11,6 +11,10 @@ import CreatePasswordScreen from '../screens/loginScreens/onboarding/screens/Cre
 import OtpValidationScreen from '../screens/loginScreens/onboarding/screens/OtpValidationScreen';
 import LoginScreen from '../screens/loginScreens/LoginScreen';
 import TrialDetailScreen from '../screens/loginScreens/trial/TrialDetailScreen';
+import PayUpfrontScreen from '../screens/loginScreens/payment/upFrontPayment/PayUpfrontScreen';
+import PayUpfrontBankTransferScreen from '../screens/loginScreens/payment/upFrontPayment/PayUpfrontBankTransferScreen';
+import PayInitialSubscriptionScreen from '../screens/loginScreens/payment/initialSubscriptionPayment/PayInitialSubscriptionScreen';
+import PayInitialSubscriptionBankTransferScreen from '../screens/loginScreens/payment/initialSubscriptionPayment/PayInitialSubscriptionBankTransferScreen';
 import SignUpScreen from '../screens/loginScreens/SignUpScreen';
 import MainBottomTabNavigator from './MainBottomTabNavigator';
 
@@ -59,6 +63,19 @@ export default function AppNavigator() {
         <Stack.Screen name="CreatePasswordScreen" component={CreatePasswordScreen} />
         <Stack.Screen name="OtpValidationScreen" component={OtpValidationScreen} />
         <Stack.Screen name="LoginScreen" component={LoginScreen} />
+        <Stack.Screen name="PayUpfrontScreen" component={PayUpfrontScreen} />
+        <Stack.Screen
+          name="PayUpfrontBankTransferScreen"
+          component={PayUpfrontBankTransferScreen}
+        />
+        <Stack.Screen
+          name="PayInitialSubscriptionScreen"
+          component={PayInitialSubscriptionScreen}
+        />
+        <Stack.Screen
+          name="PayInitialSubscriptionBankTransferScreen"
+          component={PayInitialSubscriptionBankTransferScreen}
+        />
         <Stack.Screen name="TrialDetailScreen" component={TrialDetailScreen} />
         <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
         <Stack.Screen name="PosMain" component={MainBottomTabNavigator} />

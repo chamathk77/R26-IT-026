@@ -36,6 +36,38 @@ export interface GetPaymentsByShopResponse {
   payments: PaymentRecord[];
 }
 
+export interface GetUpFrontPaymentResponse {
+  success: boolean;
+  shopId: string;
+  payment: PaymentRecord;
+}
+
+export interface GetInitialSubscriptionPaymentResponse {
+  success: boolean;
+  shopId: string;
+  shopStatus: string | null;
+  subscriptionType: PaymentSubscriptionType | null;
+  payment: PaymentRecord;
+}
+
+export interface ReverseSubscriptionSelectionResponse {
+  success: boolean;
+  message: string;
+  shopId: string;
+  shop: {
+    shopId: string;
+    status: string | null;
+    subscriptionType: PaymentSubscriptionType | null;
+    subscriptionReceiptNo: string | null;
+  };
+  removedPayment?: {
+    _id: string;
+    receiptNumber: string;
+    subscriptionType: PaymentSubscriptionType;
+    status: PaymentStatus;
+  };
+}
+
 export interface SubmitPaymentReceiptResponse {
   success: boolean;
   message: string;

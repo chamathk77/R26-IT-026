@@ -5,7 +5,10 @@ import { ApiErrorResponse } from '../type/common';
 import { toApiErrorResponse } from '../utils/apiErrorAlert';
 import {
   GetPaymentsByShopResponse,
+  GetUpFrontPaymentResponse,
+  GetInitialSubscriptionPaymentResponse,
   PaymentSubmitRequest,
+  ReverseSubscriptionSelectionResponse,
   SubmitPaymentReceiptResponse,
 } from '../type/payment';
 
@@ -38,6 +41,91 @@ function buildReceiptFormData(imageUri: string, shopId?: string): FormData {
 
   return formData;
 }
+
+export const fetchUpFrontPayment_Service = createAsyncThunk(
+  'payment/fetchUpFront',
+  async (_void: void, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.get<GetUpFrontPaymentResponse>('/api/payments/upfront');
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: 'Could not load up-front payment',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      const apiError = toApiErrorResponse(error);
+      console.log('error in fetchUpFrontPayment_Service', apiError);
+      return rejectWithValue(apiError);
+    }
+  },
+);
+
+export const fetchInitialSubscriptionPayment_Service = createAsyncThunk(
+  'payment/fetchInitialSubscription',
+  async (_void: void, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.get<GetInitialSubscriptionPaymentResponse>(
+        '/api/payments/initial-subscription',
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: 'Could not load initial subscription payment',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      const apiError = toApiErrorResponse(error);
+      console.log('error in fetchInitialSubscriptionPayment_Service', apiError);
+      return rejectWithValue(apiError);
+    }
+  },
+);
+
+export const reverseSubscriptionSelection_Service = createAsyncThunk(
+  'payment/reverseSubscriptionSelection',
+  async (_void: void, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.post<ReverseSubscriptionSelectionResponse>(
+        '/api/payments/reverse-subscription-selection',
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: 'Could not reverse subscription selection',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      const apiError = toApiErrorResponse(error);
+      console.log('error in reverseSubscriptionSelection_Service', apiError);
+      return rejectWithValue(apiError);
+    }
+  },
+);
 
 export const fetchPaymentsByShop_Service = createAsyncThunk(
   'payment/fetchByShop',

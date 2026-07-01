@@ -23,6 +23,10 @@ export type RootStackParamList = {
     otpTimerSeconds?: number;
   };
   LoginScreen: undefined;
+  PayUpfrontScreen: undefined;
+  PayUpfrontBankTransferScreen: { payment: PaymentRecord };
+  PayInitialSubscriptionScreen: undefined;
+  PayInitialSubscriptionBankTransferScreen: { payment: PaymentRecord };
   TrialDetailScreen: {
     shopId?: string;
   };

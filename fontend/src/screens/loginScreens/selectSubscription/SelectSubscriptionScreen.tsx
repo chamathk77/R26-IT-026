@@ -25,17 +25,16 @@ import {
   setSubscription_Service,
 } from '../../../services/ShopOnboardingService';
 import { AppDispatch, RootState } from '../../../store/store';
-import { patchLoginShopData } from '../../../store/reducers/AuthReducer';
+import { patchLoginShopData, clearLoginSession } from '../../../store/reducers/AuthReducer';
+import { clearSavedToken } from '../../../utils/secureStorage';
 import {
   getApiErrorMessage,
   handleSessionExpiredApiError,
   parseApiError,
 } from '../../../utils/apiErrorAlert';
 import type {
-  SetSubscriptionPaymentSummary,
   SubscriptionPlan,
 } from '../../../type/shopOnboarding';
-import type { PaymentRecord, PaymentStatus, PaymentSubscriptionType } from '../../../type/payment';
 import { formatSubscriptionRs } from '../onboarding/screens/onboardingConstants';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SelectSubscriptionScreen'>;
@@ -63,26 +62,11 @@ function formatValidityLabel(includedDays: number): string {
   return `Valid for ${includedDays} days`;
 }
 
-function mapPaymentSummaryToRecord(payment: SetSubscriptionPaymentSummary): PaymentRecord {
-  const now = new Date().toISOString();
-  return {
-    _id: payment._id,
-    shopId: payment.shopId,
-    receiptNumber: payment.receiptNumber,
-    receiptImagePath: 'pending-upload',
-    submittedDate: null,
-    paymentMonth: null,
-    paymentAmount: payment.paymentAmount,
-    paymentType: 'subscription',
-    subscriptionType: payment.subscriptionType as PaymentSubscriptionType,
-    exactPaymentDay: payment.exactPaymentDay,
-    expiryDate: payment.expiryDate,
-    status: payment.status as PaymentStatus,
-    reason: null,
-    description: payment.description,
-    createdAt: now,
-    updatedAt: now,
-  };
+function getPlanPaymentNote(planType: SubscriptionType): string {
+  if (planType === '1month') {
+    return 'Subscription invoice will be due after 30 days at the end of your billing cycle.';
+  }
+  return 'Initial subscription payment is required to continue activation.';
 }
 
 export default function SelectSubscriptionScreen({ navigation, route }: Props) {
@@ -145,34 +129,8 @@ export default function SelectSubscriptionScreen({ navigation, route }: Props) {
     }, [loadPlans]),
   );
 
-  const onContinue = async () => {
-    if (setSubscriptionLoading) {
-      return;
-    }
-
-    if (!selectedType) {
-      show_Alert(
-        'error',
-        'Validation',
-        'Please select a subscription plan to continue.',
-        1,
-        false,
-        'OK',
-        () => {},
-      );
-      return;
-    }
-
-    if (!shopId) {
-      show_Alert(
-        'error',
-        'Error',
-        'Shop not found. Please log in again.',
-        1,
-        false,
-        'OK',
-        () => {},
-      );
+  const submitSubscription = useCallback(async () => {
+    if (!selectedType || !shopId || setSubscriptionLoading) {
       return;
     }
 
@@ -195,20 +153,31 @@ export default function SelectSubscriptionScreen({ navigation, route }: Props) {
       );
 
       if (response.status === 'active') {
-        navigation.reset({ index: 0, routes: [{ name: 'PosMain' }] });
+        setTimeout(() => {
+          show_Alert(
+            'success',
+            'Activation completed',
+            'Activation completed. Please log in to continue using Smart Cost.',
+            1,
+            false,
+            'Login',
+            async () => {
+              await clearSavedToken();
+              dispatch(clearLoginSession());
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'LoginScreen' }],
+              });
+            },
+          );
+        }, 150);
         return;
       }
 
-      if (response.status === 'subscriptionPaymentPending' && response.payment) {
+      if (response.status === 'subscriptionPaymentPending') {
         navigation.reset({
-          index: 1,
-          routes: [
-            { name: 'PosMain' },
-            {
-              name: 'PayNow',
-              params: { payment: mapPaymentSummaryToRecord(response.payment) },
-            },
-          ],
+          index: 0,
+          routes: [{ name: 'PayInitialSubscriptionScreen' }],
         });
         return;
       }
@@ -241,6 +210,67 @@ export default function SelectSubscriptionScreen({ navigation, route }: Props) {
         () => {},
       );
     }
+  }, [
+    dispatch,
+    navigation,
+    selectedType,
+    setSubscriptionLoading,
+    shopId,
+    show_Alert,
+  ]);
+
+  const onContinue = () => {
+    if (setSubscriptionLoading) {
+      return;
+    }
+
+    if (!selectedType) {
+      show_Alert(
+        'error',
+        'Validation',
+        'Please select a subscription plan to continue.',
+        1,
+        false,
+        'OK',
+        () => {},
+      );
+      return;
+    }
+
+    if (!shopId) {
+      show_Alert(
+        'error',
+        'Error',
+        'Shop not found. Please log in again.',
+        1,
+        false,
+        'OK',
+        () => {},
+      );
+      return;
+    }
+
+    const selectedPlan = plans.find((plan) => plan.type === selectedType);
+    const planLabel = PLAN_LABELS[selectedType] ?? selectedType;
+    const planFee = selectedPlan ? formatSubscriptionRs(selectedPlan.fee) : '';
+
+    show_Alert(
+      'pending',
+      'Confirm subscription',
+      planFee
+        ? `Are you sure you want to continue with the ${planLabel} (${planFee})?`
+        : `Are you sure you want to continue with the ${planLabel}?`,
+      2,
+      false,
+      'Continue',
+      () => {
+        setTimeout(() => {
+          void submitSubscription();
+        }, 350);
+      },
+      'Cancel',
+      () => {},
+    );
   };
 
   const showLoader = plansLoading && !hasLoadedPlans;
@@ -417,6 +447,22 @@ export default function SelectSubscriptionScreen({ navigation, route }: Props) {
                     >
                       {formatValidityLabel(plan.includedDays)}
                     </Text>
+
+                    <Text
+                      style={[
+                        styles.planPaymentNote,
+                        {
+                          color:
+                            planType === '1month'
+                              ? paperTheme.colors.onSurfaceVariant
+                              : resolvedTheme === 'dark'
+                                ? '#fbbf24'
+                                : '#b45309',
+                        },
+                      ]}
+                    >
+                      {getPlanPaymentNote(planType)}
+                    </Text>
                   </TouchableOpacity>
                 );
               })}
@@ -438,7 +484,7 @@ export default function SelectSubscriptionScreen({ navigation, route }: Props) {
                     { backgroundColor: paperTheme.colors.primary },
                     setSubscriptionLoading && styles.continueButtonDisabled,
                   ]}
-                  onPress={() => void onContinue()}
+                  onPress={onContinue}
                   activeOpacity={0.9}
                   disabled={setSubscriptionLoading}
                 >
@@ -599,6 +645,12 @@ const styles = StyleSheet.create({
     fontFamily: fonts.InterRegular,
     fontSize: 13,
     lineHeight: 18,
+  },
+  planPaymentNote: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 10,
   },
   footer: {
     position: 'absolute',
