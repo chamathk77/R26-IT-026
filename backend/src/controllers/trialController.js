@@ -352,34 +352,62 @@ const skipTrail = async (req, res) => {
         .json({ success: false, message: "Shop not found" });
     }
 
-    if (shop.status !== "trialExpired" || !shop.isTrailCompleted) {
-      const now = new Date();
+    if (shop.status === "active") {
+      return res.status(400).json({
+        success: false,
+        message: "This shop already has an active subscription.",
+        shopId: shop.shopId,
+        status: shop.status,
+      });
+    }
+
+    const now = new Date();
+    let upFrontInvoice = null;
+    const alreadySkipped =
+      shop.status === "trialExpired" && shop.isTrailCompleted === true;
+
+    if (!alreadySkipped) {
       shop.isTrailStared = true;
       shop.isTrailCompleted = true;
-      shop.status = "trialExpired";
-      if (!shop.trailStartDate) {
-        shop.trailStartDate = now;
-      }
+      shop.trailStartDate = now;
       shop.trailEndDate = now;
+      shop.status = "trialExpired";
+
+      const payments = await createTrialPayments(shop);
+      upFrontInvoice = payments.upFrontPayment;
+
       await shop.save();
+    } else {
+      const payments = await createTrialPayments(shop);
+      upFrontInvoice = payments.upFrontPayment;
     }
 
     await clearUserToken(req.user.id);
     await User.findByIdAndUpdate(req.user.id, { isFirsttimeLogin: false });
 
+    const hasUnpaidUpFront = upFrontInvoice?.status === "notPaid";
+    const skipMessage = hasUnpaidUpFront
+      ? "Trial skipped. Please pay the one-time upfront fee to activate your subscription."
+      : "Trial skipped successfully";
+
     res.status(200).json({
       success: true,
-      message: "Trial skipped successfully",
+      message: skipMessage,
       shopId: shop.shopId,
       status: shop.status,
       isTrailStared: shop.isTrailStared,
       isTrailCompleted: shop.isTrailCompleted,
+      isOneTimePaymentGenerated: shop.isOneTimePaymentGenerated,
       trailStartDate: shop.trailStartDate,
       trailEndDate: shop.trailEndDate,
       trialExpired: true,
       sessionEnded: true,
+      upFrontPayment: upFrontInvoice,
     });
   } catch (error) {
+    if (error.code === "ONE_TIME_AMOUNT_NOT_SET") {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     console.log("error in skipTrail", error);
     res.status(500).json({ success: false, message: error.message });
   }

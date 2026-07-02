@@ -18,19 +18,23 @@ import { useTheme } from '../../../../context/ThemeContext';
 import CommonHeader from '../../../../components/CommonHeader/CommonHeader';
 import { AppDispatch, RootState } from '../../../../store/store';
 import { fetchUpFrontPayment_Service } from '../../../../services/PaymentService';
-import { PaymentRecord, PaymentStatus } from '../../../../type/payment';
+import { PaymentRecord } from '../../../../type/payment';
 import { useCommonAlert } from '../../../../hooks/useCommonAlert';
 import { handleSessionExpiredApiError } from '../../../../utils/apiErrorAlert';
 import CommonAlert from '../../../../components/CommonAlert/CommonAlert';
 import { cardShadow } from '../../../settings/shared/settingsDetailStyles';
 import {
-  SettingsBadge,
   SettingsDetailRow,
   SettingsEmptyState,
   SettingsSection,
 } from '../../../settings/shared/SettingsDetailComponents';
 import { formatPaymentAmount } from '../../../../utils/paymentBreakdown';
 import { payUpfrontStyles as styles } from './payUpfrontStyles';
+import {
+  getUpFrontHeroCardStyle,
+  UpFrontPaymentStatusSection,
+} from './UpFrontPaymentStatusSection';
+import { getUpFrontStatusMeta } from './upFrontPaymentStatus';
 import { clearLoginSession } from '../../../../store/reducers/AuthReducer';
 import { clearUpFrontPayment } from '../../../../store/reducers/PaymentReducer';
 import { clearSavedToken } from '../../../../utils/secureStorage';
@@ -51,21 +55,7 @@ function formatDateTime(isoDate: string | null | undefined): string {
   });
 }
 
-function getStatusMeta(status: PaymentStatus) {
-  switch (status) {
-    case 'approve':
-      return { label: 'Approved', tone: 'success' as const };
-    case 'pending':
-      return { label: 'Pending', tone: 'warning' as const };
-    case 'rejected':
-      return { label: 'Rejected', tone: 'neutral' as const };
-    case 'notPaid':
-    default:
-      return { label: 'Not paid', tone: 'neutral' as const };
-  }
-}
-
-function shouldShowPayNow(status: PaymentStatus): boolean {
+function shouldShowPayNow(status: PaymentRecord['status']): boolean {
   return status === 'rejected' || status === 'notPaid';
 }
 
@@ -78,17 +68,15 @@ function PaymentDetailCard({
   paperTheme: ReturnType<typeof useTheme>['paperTheme'];
   resolvedTheme: ReturnType<typeof useTheme>['resolvedTheme'];
 }) {
-  const statusMeta = getStatusMeta(payment.status);
+  const statusMeta = getUpFrontStatusMeta(payment.status);
+  const heroHighlightStyle = getUpFrontHeroCardStyle(payment, resolvedTheme);
 
   return (
     <>
       <View
         style={[
           styles.heroCard,
-          {
-            backgroundColor: paperTheme.colors.surface,
-            borderColor: paperTheme.colors.outlineVariant,
-          },
+          heroHighlightStyle,
           cardShadow(resolvedTheme),
         ]}
       >
@@ -111,14 +99,20 @@ function PaymentDetailCard({
         <Text style={[styles.heroAmount, { color: paperTheme.colors.primary }]}>
           {formatPaymentAmount(payment.paymentAmount)}
         </Text>
-        <SettingsBadge label={statusMeta.label} tone={statusMeta.tone} paperTheme={paperTheme} />
+
+        <UpFrontPaymentStatusSection
+          payment={payment}
+          paperTheme={paperTheme}
+          resolvedTheme={resolvedTheme}
+        />
+
         <Text
           style={[styles.heroHint, { color: paperTheme.colors.onSurfaceVariant }]}
         >
           {payment.status === 'pending'
             ? 'Your receipt was submitted and is awaiting admin approval.'
             : payment.status === 'rejected'
-              ? 'Your payment was rejected. Please upload a new receipt and resubmit.'
+              ? 'Please review the rejection reason above, then upload a new receipt and resubmit.'
               : payment.status === 'approve'
                 ? 'Your up-front payment has been approved.'
                 : 'Complete your one-time up-front payment to continue using Smart Cost.'}
@@ -144,14 +138,6 @@ function PaymentDetailCard({
           value={payment.description?.trim() || '—'}
           paperTheme={paperTheme}
         />
-        {payment.reason ? (
-          <SettingsDetailRow
-            icon="alert-circle-outline"
-            label="Rejection reason"
-            value={payment.reason}
-            paperTheme={paperTheme}
-          />
-        ) : null}
         <SettingsDetailRow
           icon="time-outline"
           label="Submitted at"

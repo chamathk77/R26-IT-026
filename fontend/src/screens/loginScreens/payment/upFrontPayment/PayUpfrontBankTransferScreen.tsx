@@ -20,35 +20,23 @@ import {
   fetchUpFrontPayment_Service,
   paymentSubmit_Service,
 } from '../../../../services/PaymentService';
-import { PaymentStatus } from '../../../../type/payment';
 import { setLoginSession } from '../../../../store/reducers/AuthReducer';
 import { useCommonAlert } from '../../../../hooks/useCommonAlert';
 import { handleSessionExpiredApiError } from '../../../../utils/apiErrorAlert';
 import CommonAlert from '../../../../components/CommonAlert/CommonAlert';
 import { cardShadow } from '../../../settings/shared/settingsDetailStyles';
-import { SettingsBadge } from '../../../settings/shared/SettingsDetailComponents';
 import { formatPaymentAmount } from '../../../../utils/paymentBreakdown';
 import { payUpfrontStyles as styles } from './payUpfrontStyles';
+import {
+  getUpFrontHeroCardStyle,
+  UpFrontPaymentStatusSection,
+} from './UpFrontPaymentStatusSection';
 import {
   pickReceiptFromGallery,
   takeReceiptPhoto,
 } from './paymentReceiptUpload';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PayUpfrontBankTransferScreen'>;
-
-function getStatusMeta(status: PaymentStatus) {
-  switch (status) {
-    case 'approve':
-      return { label: 'Approved', tone: 'success' as const };
-    case 'pending':
-      return { label: 'Pending', tone: 'warning' as const };
-    case 'rejected':
-      return { label: 'Rejected', tone: 'neutral' as const };
-    case 'notPaid':
-    default:
-      return { label: 'Not paid', tone: 'neutral' as const };
-  }
-}
 
 export default function PayUpfrontBankTransferScreen({ navigation, route }: Props) {
   const { payment } = route.params;
@@ -62,8 +50,8 @@ export default function PayUpfrontBankTransferScreen({ navigation, route }: Prop
   const shopData = useSelector((state: RootState) => state.AuthReducer.Login.shopData);
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
 
-  const statusMeta = getStatusMeta(payment.status);
   const isResubmit = payment.status === 'rejected';
+  const heroHighlightStyle = getUpFrontHeroCardStyle(payment, resolvedTheme);
 
   const pickFromGallery = useCallback(async () => {
     const uri = await pickReceiptFromGallery(show_Alert);
@@ -181,10 +169,7 @@ export default function PayUpfrontBankTransferScreen({ navigation, route }: Prop
           <View
             style={[
               styles.heroCard,
-              {
-                backgroundColor: paperTheme.colors.surface,
-                borderColor: paperTheme.colors.outlineVariant,
-              },
+              heroHighlightStyle,
               cardShadow(resolvedTheme),
             ]}
           >
@@ -207,7 +192,13 @@ export default function PayUpfrontBankTransferScreen({ navigation, route }: Prop
             <Text style={[styles.heroAmount, { color: paperTheme.colors.primary }]}>
               {formatPaymentAmount(payment.paymentAmount)}
             </Text>
-            <SettingsBadge label={statusMeta.label} tone={statusMeta.tone} paperTheme={paperTheme} />
+
+            <UpFrontPaymentStatusSection
+              payment={payment}
+              paperTheme={paperTheme}
+              resolvedTheme={resolvedTheme}
+            />
+
             <Text
               style={[styles.heroHint, { color: paperTheme.colors.onSurfaceVariant }]}
             >

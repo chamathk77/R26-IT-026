@@ -21,7 +21,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "../../navigation/RootStackParamsList";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { login_Service } from "../../services/AuthService";
-import { startTrial_Service } from "../../services/TrialService";
+import { startTrial_Service, skipTrial_Service } from "../../services/TrialService";
 import { reverseSubscriptionSelection_Service } from "../../services/PaymentService";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState, store } from "../../store/store";
@@ -94,6 +94,9 @@ export default function LoginScreen({ navigation }: Props) {
   );
   const trialLoading = useSelector(
     (state: RootState) => state.TrialReducer.startTrial.loading,
+  );
+  const skipTrialLoading = useSelector(
+    (state: RootState) => state.TrialReducer.skipTrial.loading,
   );
 
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
@@ -251,6 +254,58 @@ export default function LoginScreen({ navigation }: Props) {
     [dispatch, navigation, show_Alert, trialLoading],
   );
 
+  const SkipTrial = useCallback(
+    async (shopId: string) => {
+      if (skipTrialLoading) {
+        return;
+      }
+
+      try {
+        const response = await dispatch(
+          skipTrial_Service({ shopId: String(shopId) }),
+        ).unwrap();
+        devLog("Skip Trial response:", response);
+
+        await clearSavedToken();
+        dispatch(clearLoginSession());
+
+        setTimeout(() => {
+          show_Alert(
+            "success",
+            "Trial skipped",
+            response.message ||
+              "Your trial has been skipped successfully. Please log in again to pay your upfront fee and activate your account.",
+            1,
+            false,
+            "Log in again",
+            () => {
+              navigation.reset({
+                index: 0,
+                routes: [{ name: "LoginScreen" }],
+              });
+            },
+          );
+        }, 150);
+      } catch (error: unknown) {
+        const parsed = parseApiError(error);
+        console.log("error in Skip Trial", parsed);
+
+        setTimeout(() => {
+          show_Alert(
+            "error",
+            "Could not skip trial",
+            getApiErrorMessage(error, "Could not skip trial. Please try again."),
+            1,
+            false,
+            "OK",
+            () => {},
+          );
+        }, 150);
+      }
+    },
+    [dispatch, navigation, show_Alert, skipTrialLoading],
+  );
+
   const onLogin = async () => {
     if (loginLoading) {
       return;
@@ -332,10 +387,7 @@ export default function LoginScreen({ navigation }: Props) {
                     false,
                     "Skip trial",
                     () => {
-                      navigation.reset({
-                        index: 0,
-                        routes: [{ name: "PayUpfrontScreen" }],
-                      });
+                      void SkipTrial(pendingShopId);
                     },
                     "Cancel",
                     () => {},
