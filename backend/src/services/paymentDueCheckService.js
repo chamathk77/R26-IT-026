@@ -4,6 +4,7 @@ const DueDaysCronReport = require('../models/dueDaysCronReport');
 const SUBSCRIPTION_DUE_STATUS = 'due';
 const SUBSCRIPTION_OVERDUE_STATUS = 'paymentPending';
 const OVERDUE_DAYS_THRESHOLD = 14;
+const COUNTABLE_DUE_STATUSES = [SUBSCRIPTION_DUE_STATUS, SUBSCRIPTION_OVERDUE_STATUS];
 
 function processShopDueDays(shop) {
   const updates = {};
@@ -12,24 +13,33 @@ function processShopDueDays(shop) {
     subscription: null,
   };
 
-  if (shop.status !== SUBSCRIPTION_DUE_STATUS) {
+  if (!COUNTABLE_DUE_STATUSES.includes(shop.status)) {
     return { updates, result };
   }
 
   const previousDueDays = Number(shop.subscriptionDueDays ?? 0);
-  const statusChanged = previousDueDays > OVERDUE_DAYS_THRESHOLD;
+  const newDueDays = previousDueDays + 1;
+
+  // Escalate to paymentPending once due days pass the threshold, but only while
+  // the shop is still in the `due` state. Shops already in paymentPending keep
+  // incrementing without changing status.
+  const statusChanged =
+    shop.status === SUBSCRIPTION_DUE_STATUS && previousDueDays > OVERDUE_DAYS_THRESHOLD;
 
   if (statusChanged) {
     updates.status = SUBSCRIPTION_OVERDUE_STATUS;
   }
 
-  updates.subscriptionDueDays = previousDueDays + 1;
+  updates.subscriptionDueDays = newDueDays;
+
+  const newStatus = statusChanged ? SUBSCRIPTION_OVERDUE_STATUS : shop.status;
 
   result.subscription = {
     previousDueDays,
-    newDueDays: previousDueDays + 1,
+    newDueDays,
     statusChanged,
-    newStatus: statusChanged ? SUBSCRIPTION_OVERDUE_STATUS : SUBSCRIPTION_DUE_STATUS,
+    previousStatus: shop.status,
+    newStatus,
   };
 
   return { updates, result };
@@ -109,7 +119,7 @@ async function runDailyDueDaysCheck(meta = {}) {
   };
 
   try {
-    const shops = await ShopsData.find({ status: SUBSCRIPTION_DUE_STATUS })
+    const shops = await ShopsData.find({ status: { $in: COUNTABLE_DUE_STATUSES } })
       .select('shopId status subscriptionDueDays')
       .lean();
 

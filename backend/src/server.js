@@ -2,15 +2,11 @@ require('dotenv').config();
 const app = require('./app');
 const config = require('./config');
 const { connectDatabase } = require('./config/database');
-const { startBillingCron } = require('./jobs/billingCron');
-const { startTrialCron } = require('./jobs/trialCron');
-const { startDueDaysCron } = require('./jobs/dueDaysCron');
+const { startDailyCron } = require('./jobs/dailyCron');
 
 async function start() {
   await connectDatabase();
-  startTrialCron();
-  startBillingCron();
-  startDueDaysCron();
+  startDailyCron();
   app.listen(config.port, () => {
     console.log(`Server listening on port ${config.port} (${config.nodeEnv})`);
   });

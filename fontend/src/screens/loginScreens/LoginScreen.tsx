@@ -22,17 +22,14 @@ import { RootStackParamList } from "../../navigation/RootStackParamsList";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { login_Service } from "../../services/AuthService";
 import { startTrial_Service, skipTrial_Service } from "../../services/TrialService";
-import { reverseSubscriptionSelection_Service } from "../../services/PaymentService";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState, store } from "../../store/store";
 import { devLog } from "../../utils/devLog";
 import { clearSavedToken, saveToken } from "../../utils/secureStorage";
 import {
   clearLoginSession,
-  patchLoginShopData,
   setLoginSession,
 } from "../../store/reducers/AuthReducer";
-import { clearInitialSubscriptionPayment } from "../../store/reducers/PaymentReducer";
 import { useCommonAlert } from "../../hooks/useCommonAlert";
 import { getApiErrorMessage, parseApiError } from "../../utils/apiErrorAlert";
 import CommonAlert from "../../components/CommonAlert/CommonAlert";
@@ -420,42 +417,10 @@ export default function LoginScreen({ navigation }: Props) {
         }
 
         if (response.shop?.status === "subscriptionPaymentPending") {
-          const pendingShopId =
-            response.shop.shopId ?? response.user?.shopId ?? "";
-
-          try {
-            const reverseResponse = await dispatch(
-              reverseSubscriptionSelection_Service(),
-            ).unwrap();
-
-            dispatch(
-              patchLoginShopData({
-                status: reverseResponse.shop.status ?? "initialPaymentApproved",
-                subscriptionType: reverseResponse.shop.subscriptionType ?? null,
-              }),
-            );
-            dispatch(clearInitialSubscriptionPayment());
-
-            navigation.navigate("SelectSubscriptionScreen", {
-              shopId: reverseResponse.shopId || pendingShopId,
-            });
-          } catch (reverseError: unknown) {
-            const parsed = parseApiError(reverseError);
-            console.log("error reversing subscription selection on login", parsed);
-
-            show_Alert(
-              "error",
-              "Could not reset subscription",
-              getApiErrorMessage(
-                reverseError,
-                "Could not reset your subscription selection. Please try again.",
-              ),
-              1,
-              false,
-              "OK",
-              () => {},
-            );
-          }
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "PayInitialSubscriptionScreen" }],
+          });
           return;
         }
 

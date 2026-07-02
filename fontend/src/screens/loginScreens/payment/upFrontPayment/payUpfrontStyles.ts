@@ -100,6 +100,25 @@ export const payUpfrontStyles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
   },
+  changePlanRow: {
+    paddingHorizontal: 20,
+    marginBottom: 14,
+    alignItems: 'flex-start',
+  },
+  changePlanButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  changePlanButtonText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 13,
+    letterSpacing: 0.2,
+  },
   refreshRow: {
     flexDirection: 'row',
     alignItems: 'center',

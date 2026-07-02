@@ -17,27 +17,35 @@ import { RootStackParamList } from '../../../../navigation/RootStackParamsList';
 import { useTheme } from '../../../../context/ThemeContext';
 import CommonHeader from '../../../../components/CommonHeader/CommonHeader';
 import { AppDispatch, RootState } from '../../../../store/store';
-import { fetchInitialSubscriptionPayment_Service } from '../../../../services/PaymentService';
+import {
+  fetchInitialSubscriptionPayment_Service,
+  reverseSubscriptionSelection_Service,
+} from '../../../../services/PaymentService';
 import {
   PaymentRecord,
-  PaymentStatus,
   PaymentSubscriptionType,
 } from '../../../../type/payment';
 import { useCommonAlert } from '../../../../hooks/useCommonAlert';
-import { handleSessionExpiredApiError } from '../../../../utils/apiErrorAlert';
+import {
+  getApiErrorMessage,
+  handleSessionExpiredApiError,
+} from '../../../../utils/apiErrorAlert';
 import CommonAlert from '../../../../components/CommonAlert/CommonAlert';
 import { cardShadow } from '../../../settings/shared/settingsDetailStyles';
 import {
-  SettingsBadge,
   SettingsDetailRow,
   SettingsEmptyState,
   SettingsSection,
 } from '../../../settings/shared/SettingsDetailComponents';
 import { formatPaymentAmount } from '../../../../utils/paymentBreakdown';
 import { payUpfrontStyles as styles } from '../upFrontPayment/payUpfrontStyles';
-import { clearLoginSession } from '../../../../store/reducers/AuthReducer';
+import {
+  getUpFrontHeroCardStyle,
+  UpFrontPaymentStatusSection,
+} from '../upFrontPayment/UpFrontPaymentStatusSection';
+import { getUpFrontStatusMeta } from '../upFrontPayment/upFrontPaymentStatus';
+import { patchLoginShopData } from '../../../../store/reducers/AuthReducer';
 import { clearInitialSubscriptionPayment } from '../../../../store/reducers/PaymentReducer';
-import { clearSavedToken } from '../../../../utils/secureStorage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PayInitialSubscriptionScreen'>;
 
@@ -67,21 +75,7 @@ function formatPlanLabel(type: string | null | undefined): string {
   return PLAN_LABELS[type as PaymentSubscriptionType] ?? type;
 }
 
-function getStatusMeta(status: PaymentStatus) {
-  switch (status) {
-    case 'approve':
-      return { label: 'Approved', tone: 'success' as const };
-    case 'pending':
-      return { label: 'Pending', tone: 'warning' as const };
-    case 'rejected':
-      return { label: 'Rejected', tone: 'neutral' as const };
-    case 'notPaid':
-    default:
-      return { label: 'Not paid', tone: 'neutral' as const };
-  }
-}
-
-function shouldShowPayNow(status: PaymentStatus): boolean {
+function shouldShowPayNow(status: PaymentRecord['status']): boolean {
   return status === 'rejected' || status === 'notPaid';
 }
 
@@ -96,18 +90,16 @@ function PaymentDetailCard({
   paperTheme: ReturnType<typeof useTheme>['paperTheme'];
   resolvedTheme: ReturnType<typeof useTheme>['resolvedTheme'];
 }) {
-  const statusMeta = getStatusMeta(payment.status);
+  const statusMeta = getUpFrontStatusMeta(payment.status);
   const planLabel = formatPlanLabel(payment.subscriptionType ?? subscriptionType);
+  const heroHighlightStyle = getUpFrontHeroCardStyle(payment, resolvedTheme);
 
   return (
     <>
       <View
         style={[
           styles.heroCard,
-          {
-            backgroundColor: paperTheme.colors.surface,
-            borderColor: paperTheme.colors.outlineVariant,
-          },
+          heroHighlightStyle,
           cardShadow(resolvedTheme),
         ]}
       >
@@ -130,14 +122,20 @@ function PaymentDetailCard({
         <Text style={[styles.heroAmount, { color: paperTheme.colors.primary }]}>
           {formatPaymentAmount(payment.paymentAmount)}
         </Text>
-        <SettingsBadge label={statusMeta.label} tone={statusMeta.tone} paperTheme={paperTheme} />
+
+        <UpFrontPaymentStatusSection
+          payment={payment}
+          paperTheme={paperTheme}
+          resolvedTheme={resolvedTheme}
+        />
+
         <Text
           style={[styles.heroHint, { color: paperTheme.colors.onSurfaceVariant }]}
         >
           {payment.status === 'pending'
             ? 'Your receipt was submitted and is awaiting admin approval.'
             : payment.status === 'rejected'
-              ? 'Your payment was rejected. Please upload a new receipt and resubmit.'
+              ? 'Please review the rejection reason above, then upload a new receipt and resubmit.'
               : 'Pay your initial subscription invoice to activate your plan.'}
         </Text>
       </View>
@@ -167,14 +165,6 @@ function PaymentDetailCard({
           value={payment.description?.trim() || '—'}
           paperTheme={paperTheme}
         />
-        {payment.reason ? (
-          <SettingsDetailRow
-            icon="alert-circle-outline"
-            label="Rejection reason"
-            value={payment.reason}
-            paperTheme={paperTheme}
-          />
-        ) : null}
         <SettingsDetailRow
           icon="calendar-outline"
           label="Valid until"
@@ -204,6 +194,14 @@ export default function PayInitialSubscriptionScreen({ navigation }: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
   const [refreshing, setRefreshing] = useState(false);
+  const [changingPlan, setChangingPlan] = useState(false);
+
+  const shopId = useSelector(
+    (state: RootState) =>
+      state.AuthReducer.Login.shopData?.shopId ||
+      state.AuthReducer.Login.userData?.shopId ||
+      '',
+  );
 
   const loading = useSelector(
     (state: RootState) => state.PaymentReducer.initialSubscriptionPayment.loading,
@@ -279,27 +277,74 @@ export default function PayInitialSubscriptionScreen({ navigation }: Props) {
     [navigation, show_Alert, showPayOnlineComingSoonAlert],
   );
 
-  const confirmLogout = useCallback(() => {
+  const reverseSubscriptionAndSelectPlan = useCallback(async () => {
+    if (changingPlan) {
+      return;
+    }
+
+    setChangingPlan(true);
+    try {
+      const reverseResponse = await dispatch(
+        reverseSubscriptionSelection_Service(),
+      ).unwrap();
+
+      dispatch(
+        patchLoginShopData({
+          status: reverseResponse.shop.status ?? 'initialPaymentApproved',
+          subscriptionType: reverseResponse.shop.subscriptionType ?? null,
+        }),
+      );
+      dispatch(clearInitialSubscriptionPayment());
+
+      navigation.reset({
+        index: 0,
+        routes: [
+          {
+            name: 'SelectSubscriptionScreen',
+            params: { shopId: reverseResponse.shopId || shopId },
+          },
+        ],
+      });
+    } catch (reverseError: unknown) {
+      const handled = await handleSessionExpiredApiError(reverseError, show_Alert);
+      if (handled) {
+        return;
+      }
+
+      show_Alert(
+        'error',
+        'Could not change plan',
+        getApiErrorMessage(
+          reverseError,
+          'Could not reset your subscription selection. Please try again.',
+        ),
+        1,
+        false,
+        'OK',
+        () => {},
+      );
+    } finally {
+      setChangingPlan(false);
+    }
+  }, [changingPlan, dispatch, navigation, shopId, show_Alert]);
+
+  const confirmChangeSubscriptionPlan = useCallback(() => {
     show_Alert(
       'pending',
-      'Log out',
-      'Do you want to log out?',
+      'Change subscription plan?',
+      'This will cancel your current subscription invoice so you can choose a different plan.',
       2,
       false,
-      'Log out',
-      async () => {
-        await clearSavedToken();
-        dispatch(clearLoginSession());
-        dispatch(clearInitialSubscriptionPayment());
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'LoginScreen' }],
-        });
+      'Change plan',
+      () => {
+        setTimeout(() => {
+          void reverseSubscriptionAndSelectPlan();
+        }, 350);
       },
       'Cancel',
       () => {},
     );
-  }, [dispatch, navigation, show_Alert]);
+  }, [reverseSubscriptionAndSelectPlan, show_Alert]);
 
   const showInitialLoad = loading && !payment && !refreshing;
 
@@ -317,8 +362,45 @@ export default function PayInitialSubscriptionScreen({ navigation }: Props) {
           title="Subscription payment"
           titleColor={paperTheme.colors.onBackground}
           iconColor={paperTheme.colors.onBackground}
-          onPressLeftBtn={confirmLogout}
         />
+
+        <View style={styles.changePlanRow}>
+          <TouchableOpacity
+            style={[
+              styles.changePlanButton,
+              cardShadow(resolvedTheme),
+              {
+                borderColor:
+                  resolvedTheme === 'dark'
+                    ? 'rgba(147, 197, 253, 0.35)'
+                    : 'rgba(59, 130, 246, 0.22)',
+                backgroundColor:
+                  resolvedTheme === 'dark' ? 'rgba(30, 58, 95, 0.55)' : '#eff6ff',
+                opacity: changingPlan ? 0.7 : 1,
+              },
+            ]}
+            onPress={confirmChangeSubscriptionPlan}
+            disabled={changingPlan}
+            activeOpacity={0.85}
+          >
+            {changingPlan ? (
+              <ActivityIndicator size="small" color={paperTheme.colors.primary} />
+            ) : (
+              <>
+                <Ionicons
+                  name="swap-horizontal-outline"
+                  size={16}
+                  color={paperTheme.colors.primary}
+                />
+                <Text
+                  style={[styles.changePlanButtonText, { color: paperTheme.colors.primary }]}
+                >
+                  Change subscription plan
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
 
         {showInitialLoad ? (
           <View style={styles.centered}>
@@ -435,9 +517,18 @@ export default function PayInitialSubscriptionScreen({ navigation }: Props) {
           </ScrollView>
         )}
 
-        {loading && payment ? (
+        {loading && payment && !changingPlan ? (
           <View style={styles.loadingOverlay}>
             <ActivityIndicator size="large" color={paperTheme.colors.primary} />
+          </View>
+        ) : null}
+
+        {changingPlan ? (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={paperTheme.colors.primary} />
+            <Text style={[styles.loadingText, { color: paperTheme.colors.onPrimary }]}>
+              Updating subscription...
+            </Text>
           </View>
         ) : null}
 

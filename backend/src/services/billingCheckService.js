@@ -100,24 +100,26 @@ async function sendSubscriptionInvoiceSms(shop, { receiptNumber, paymentAmount }
 
 async function processShopForBilling(shop, today) {
   const shopId = shop.shopId;
-
+/** Subscription payment */
   if (!shop.nextPaymentDate) {
     return { action: 'skipped', reason: 'no_next_payment_date' };
   }
 
+  /** Subscription payment */
   if (!isNextPaymentDatePassed(shop.nextPaymentDate, today)) {
     return { action: 'skipped', reason: 'next_payment_date_not_due' };
   }
 
+  /** Subscription payment */
   if (!BILLABLE_SHOP_STATUSES.includes(shop.status)) {
     return { action: 'skipped', reason: 'shop_not_active', status: shop.status };
   }
-
+  /** Subscription payment */
   const subscriptionType = shop.subscriptionType;
   if (!subscriptionType || !ShopsData.SUBSCRIPTION_TYPES.includes(subscriptionType)) {
     return { action: 'skipped', reason: 'invalid_subscription_type' };
   }
-
+  /** Subscription payment */
   const billingDay = startOfDay(shop.nextPaymentDate);
   const existingInvoice = await findExistingBillingInvoice(shopId, billingDay);
   if (existingInvoice) {
@@ -128,6 +130,7 @@ async function processShopForBilling(shop, today) {
     };
   }
 
+  /** Subscription payment */
   const baseFee = ShopsData.getSubscriptionFee(subscriptionType);
   if (baseFee == null || baseFee <= 0) {
     return { action: 'error', reason: 'subscription_fee_not_configured', subscriptionType };
