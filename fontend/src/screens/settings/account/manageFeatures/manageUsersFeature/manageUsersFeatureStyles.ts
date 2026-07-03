@@ -122,4 +122,63 @@ export const manageUsersFeatureStyles = StyleSheet.create({
     marginTop: 10,
     lineHeight: 18,
   },
+  billingTopCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 16,
+  },
+  billingTopIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  billingTopBody: {
+    flex: 1,
+  },
+  billingTopLabel: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  billingTopValue: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 15,
+  },
+  pendingCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 20,
+  },
+  pendingCardTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  pendingCardDesc: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  cancelScheduleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  cancelScheduleButtonText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
+  },
 });

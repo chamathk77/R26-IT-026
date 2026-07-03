@@ -16,24 +16,24 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import { Portal } from 'react-native-paper';
-import { RootStackParamList } from '../../../navigation/RootStackParamsList';
-import { fonts } from '../../../constants/fonts';
-import { useTheme } from '../../../context/ThemeContext';
-import { AppDispatch, RootState } from '../../../store/store';
-import CommonHeader from '../../../components/CommonHeader/CommonHeader';
-import CommonAlert from '../../../components/CommonAlert/CommonAlert';
-import { useCommonAlert } from '../../../hooks/useCommonAlert';
+import { RootStackParamList } from '../../../../navigation/RootStackParamsList';
+import { fonts } from '../../../../constants/fonts';
+import { useTheme } from '../../../../context/ThemeContext';
+import { AppDispatch, RootState } from '../../../../store/store';
+import CommonHeader from '../../../../components/CommonHeader/CommonHeader';
+import CommonAlert from '../../../../components/CommonAlert/CommonAlert';
+import { useCommonAlert } from '../../../../hooks/useCommonAlert';
 import {
   deleteShopUser_Service,
   fetchShopUsers_Service,
-} from '../../../services/ManageUsersService';
-import { ShopUser } from '../../../type/manageUser';
+} from '../../../../services/ManageUsersService';
+import { ShopUser } from '../../../../type/manageUser';
 import {
   getApiErrorMessage,
   handleSessionExpiredApiError,
-} from '../../../utils/apiErrorAlert';
-import { cardShadow } from '../shared/settingsDetailStyles';
-import { SettingsBadge, SettingsEmptyState } from '../shared/SettingsDetailComponents';
+} from '../../../../utils/apiErrorAlert';
+import { cardShadow } from '../../shared/settingsDetailStyles';
+import { SettingsBadge, SettingsEmptyState } from '../../shared/SettingsDetailComponents';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageAccount'>;
 

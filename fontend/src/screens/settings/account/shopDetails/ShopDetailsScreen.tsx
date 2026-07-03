@@ -3,11 +3,11 @@ import { ScrollView, StatusBar, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSelector } from 'react-redux';
-import { RootStackParamList } from '../../../navigation/RootStackParamsList';
-import { useTheme } from '../../../context/ThemeContext';
-import { RootState } from '../../../store/store';
-import CommonHeader from '../../../components/CommonHeader/CommonHeader';
-import { settingsDetailStyles as styles, cardShadow } from '../shared/settingsDetailStyles';
+import { RootStackParamList } from '../../../../navigation/RootStackParamsList';
+import { useTheme } from '../../../../context/ThemeContext';
+import { RootState } from '../../../../store/store';
+import CommonHeader from '../../../../components/CommonHeader/CommonHeader';
+import { settingsDetailStyles as styles, cardShadow } from '../../shared/settingsDetailStyles';
 import {
   SettingsBadge,
   SettingsDetailRow,
@@ -15,7 +15,7 @@ import {
   SettingsHeroCard,
   SettingsModuleGrid,
   SettingsSection,
-} from '../shared/SettingsDetailComponents';
+} from '../../shared/SettingsDetailComponents';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ShopDetails'>;
 

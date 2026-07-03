@@ -10,6 +10,8 @@ const {
   onboardingShopFeatures,
   updateShopModuleFeatures,
   updateShopUsersFeatures,
+  scheduleShopUsersFeaturesReduction,
+  cancelShopUsersFeaturesReductionSchedule,
   updateShopSmsFeatures,
   setSubscription,
   removeOnboardingData,
@@ -25,6 +27,8 @@ router.post('/features/onboarding', onboardingShopFeatures);
 
 router.put('/features/modules', protect, updateShopModuleFeatures);
 router.put('/features/users', protect, updateShopUsersFeatures);
+router.put('/features/users/schedule-reduction', protect, scheduleShopUsersFeaturesReduction);
+router.delete('/features/users/schedule-reduction', protect, cancelShopUsersFeaturesReductionSchedule);
 router.put('/features/sms', protect, updateShopSmsFeatures);
 router.get('/sms-packages', protect, getSmsPackages);
 router.get('/subscription-plans', protect, getSubscriptionPlans);

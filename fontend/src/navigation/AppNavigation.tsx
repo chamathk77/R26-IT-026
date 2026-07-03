@@ -25,13 +25,13 @@ import AddCostExpenseScreen from '../screens/cost/dashboard/tabs/dashboard/addEx
 import CostExpenseDetailScreen from '../screens/cost/dashboard/tabs/history/expenseDetail/CostExpenseDetailScreen';
 
 import SettingsScreen from '../screens/settings/hub/SettingsScreen';
-import ProfileDetailsScreen from '../screens/settings/account/ProfileDetailsScreen';
-import ShopDetailsScreen from '../screens/settings/account/ShopDetailsScreen';
-import ManageAccountScreen from '../screens/settings/account/ManageAccountScreen';
+import ProfileDetailsScreen from '../screens/settings/account/profileDetails/ProfileDetailsScreen';
+import ShopDetailsScreen from '../screens/settings/account/shopDetails/ShopDetailsScreen';
+import ManageAccountScreen from '../screens/settings/account/manageAccount/ManageAccountScreen';
 import ManageFeaturesScreen from '../screens/settings/account/manageFeatures/ManageFeaturesScreen';
 import ManageGeneralFeaturesScreen from '../screens/settings/account/manageFeatures/manageGeneralFeatures/ManageGeneralFeaturesScreen';
 import ManageAddUsersScreen from '../screens/settings/account/manageFeatures/manageUsersFeature/ManageAddUsersScreen';
-import ManageUserFormScreen from '../screens/settings/account/ManageUserFormScreen';
+import ManageUserFormScreen from '../screens/settings/account/manageUserForm/ManageUserFormScreen';
 import ThemePreferenceScreen from '../screens/settings/preferences/ThemePreferenceScreen';
 import SubscriptionPaymentsScreen from '../screens/settings/payments/SubscriptionPaymentsScreen';
 import AnalyticsScreen from '../screens/analytics/AnalyticsScreen';

@@ -22,7 +22,9 @@ import CommonHeader from '../../../../../components/CommonHeader/CommonHeader';
 import CommonAlert from '../../../../../components/CommonAlert/CommonAlert';
 import { useCommonAlert } from '../../../../../hooks/useCommonAlert';
 import {
+  cancelShopUsersFeaturesReductionSchedule_Service,
   fetchShopUsersFeatures_Service,
+  scheduleShopUsersFeaturesReduction_Service,
   updateShopUsersFeatures_Service,
 } from '../../../../../services/ShopOnboardingService';
 import {
@@ -30,15 +32,30 @@ import {
   DEFAULT_MAX_USERS,
   formatLkr,
 } from '../../../../../type/onboarding';
-import type { ShopUsersFeaturesPayload } from '../../../../../type/shopOnboarding';
+import type {
+  AdditionalUsersPendingChange,
+  ShopUsersFeaturesPayload,
+} from '../../../../../type/shopOnboarding';
 import {
   getApiErrorMessage,
   handleSessionExpiredApiError,
+  parseApiError,
 } from '../../../../../utils/apiErrorAlert';
 import { cardShadow, settingsDetailStyles as sharedStyles } from '../../../shared/settingsDetailStyles';
 import { manageUsersFeatureStyles as styles } from './manageUsersFeatureStyles';
+import { devLog } from '../../../../../utils/devLog';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageAddUsers'>;
+
+const ADDITIONAL_USERS_REDUCTION_REQUIRES_SCHEDULE =
+  'ADDITIONAL_USERS_REDUCTION_REQUIRES_SCHEDULE';
+
+function isReductionScheduleRequiredError(error: unknown): boolean {
+  const parsed = parseApiError(error);
+  return (
+    parsed.status === 409 && parsed.code === ADDITIONAL_USERS_REDUCTION_REQUIRES_SCHEDULE
+  );
+}
 
 type UsersFormState = {
   isAdditionalUsersAdded: boolean;
@@ -49,8 +66,42 @@ function buildSnapshot(form: UsersFormState): string {
   return JSON.stringify(form);
 }
 
+function buildUsersUpdateSuccessMessage(features: ShopUsersFeaturesPayload): string {
+  const { isAdditionalUsersAdded, numAdditionalUsers, maxUsers } = features;
+
+  if (isAdditionalUsersAdded && numAdditionalUsers != null && numAdditionalUsers > 0) {
+    const monthlyCharge = numAdditionalUsers * ADDITIONAL_USER_MONTHLY_PRICE_LKR;
+    const userWord = numAdditionalUsers === 1 ? 'user' : 'users';
+    return `Your account now supports ${maxUsers} users. The charge for ${numAdditionalUsers} additional ${userWord} (${formatLkr(monthlyCharge)}/month) will be added to your next subscription payment.`;
+  }
+
+  return `Your account now supports ${maxUsers} users. No additional user charges will be added to your next subscription payment.`;
+}
+
 function toAdditionalUserCount(text: string): string {
   return text.replace(/\D/g, '').slice(0, 4);
+}
+
+function formatBillingDate(value: string | null | undefined): string {
+  if (!value) return 'Not set';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return 'Not set';
+  return parsed.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatPendingAdditionalUsersLabel(pending: AdditionalUsersPendingChange): string {
+  if (
+    pending.isAdditionalUsersAdded &&
+    pending.numAdditionalUsers != null &&
+    pending.numAdditionalUsers > 0
+  ) {
+    return `${pending.numAdditionalUsers} additional user(s)`;
+  }
+  return 'No additional users';
 }
 
 function BooleanRadioToggle({
@@ -175,10 +226,20 @@ export default function ManageAddUsersScreen({ navigation }: Props) {
   const { loading: updateLoading } = useSelector(
     (state: RootState) => state.shopOnboarding.updateUsersFeatures,
   );
+  const { loading: scheduleLoading } = useSelector(
+    (state: RootState) => state.shopOnboarding.scheduleUsersFeaturesReduction,
+  );
+  const { loading: cancelScheduleLoading } = useSelector(
+    (state: RootState) => state.shopOnboarding.cancelUsersFeaturesReductionSchedule,
+  );
 
   const [form, setForm] = useState<UsersFormState | null>(null);
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [loadedMaxUsers, setLoadedMaxUsers] = useState<number | null>(null);
+  const [nextPaymentDate, setNextPaymentDate] = useState<string | null>(null);
+  const [pendingChange, setPendingChange] = useState<AdditionalUsersPendingChange | null>(
+    null,
+  );
 
   const parsedAdditionalUsers = useMemo(() => {
     if (!form) return 0;
@@ -209,8 +270,12 @@ export default function ManageAddUsersScreen({ navigation }: Props) {
   }, [form]);
 
   const hasChanges = Boolean(form) && currentSnapshot !== savedSnapshot;
-  const isSubmitting = updateLoading;
+  const isSubmitting = updateLoading || scheduleLoading || cancelScheduleLoading;
   const showLoader = fetchLoading && !form;
+  const formattedNextPaymentDate = useMemo(
+    () => formatBillingDate(nextPaymentDate),
+    [nextPaymentDate],
+  );
 
   const applyLoadedUsers = useCallback((features: ShopUsersFeaturesPayload) => {
     const loadedForm: UsersFormState = {
@@ -220,6 +285,8 @@ export default function ManageAddUsersScreen({ navigation }: Props) {
     };
     setForm(loadedForm);
     setLoadedMaxUsers(features.maxUsers);
+    setNextPaymentDate(features.nextPaymentDate ?? null);
+    setPendingChange(features.additionalUsersPendingChange ?? null);
     setSavedSnapshot(buildSnapshot(loadedForm));
   }, []);
 
@@ -282,6 +349,174 @@ export default function ManageAddUsersScreen({ navigation }: Props) {
     );
   };
 
+  const buildUsersUpdatePayload = useCallback(() => {
+    if (!form || !shopId) {
+      return null;
+    }
+
+    return {
+      shopId: String(shopId),
+      isAdditionalUsersAdded: form.isAdditionalUsersAdded,
+      numAdditionalUsers: form.isAdditionalUsersAdded ? parsedAdditionalUsers : null,
+    };
+  }, [form, parsedAdditionalUsers, shopId]);
+
+  const onScheduleReduction = useCallback(async () => {
+    const payload = buildUsersUpdatePayload();
+    if (!payload || scheduleLoading) {
+      return;
+    }
+
+    try {
+      const response = await dispatch(
+        scheduleShopUsersFeaturesReduction_Service(payload),
+      ).unwrap();
+
+      applyLoadedUsers(response.features);
+
+      show_Alert(
+        'success',
+        'Scheduled',
+        response.message,
+        1,
+        false,
+        'OK',
+        () => {
+          navigation.goBack();
+        },
+      );
+    } catch (error: unknown) {
+      devLog('error in onScheduleReduction', error);
+      const handled = await handleSessionExpiredApiError(error, show_Alert);
+      if (handled) return;
+
+      show_Alert(
+        'error',
+        'Schedule failed',
+        getApiErrorMessage(error, 'Could not schedule this reduction. Please try again.'),
+        2,
+        false,
+        'Try again',
+        () => {
+          void onScheduleReduction();
+        },
+        'Cancel',
+        () => {},
+      );
+    }
+  }, [
+    applyLoadedUsers,
+    buildUsersUpdatePayload,
+    dispatch,
+    navigation,
+    scheduleLoading,
+    show_Alert,
+  ]);
+
+  const showScheduleReductionConfirmAlert = useCallback(() => {
+    setTimeout(() => {
+    show_Alert(
+      'pending',
+      'Schedule for next bill?',
+      'This change will apply from your next billing cycle after your subscription payment is approved. Your current user capacity will stay the same until then.',
+      2,
+      false,
+      'Schedule',
+      () => {
+        void onScheduleReduction();
+      },
+      'Cancel',
+      () => {},
+    );
+    }, 300);
+  }, [onScheduleReduction, show_Alert]);
+
+  const showScheduleRequiredAlert = useCallback(
+    (message: string) => {
+      show_Alert(
+        'pending',
+        'Cannot reduce now',
+        message,
+        2,
+        false,
+        'Schedule',
+        () => {
+          showScheduleReductionConfirmAlert();
+        },
+        'Cancel',
+        () => {},
+      );
+    },
+    [show_Alert, showScheduleReductionConfirmAlert],
+  );
+
+  const onCancelScheduledReduction = useCallback(async () => {
+    if (!shopId || cancelScheduleLoading) {
+      return;
+    }
+
+    try {
+      const response = await dispatch(
+        cancelShopUsersFeaturesReductionSchedule_Service({ shopId: String(shopId) }),
+      ).unwrap();
+
+      applyLoadedUsers(response.features);
+
+      show_Alert(
+        'success',
+        'Schedule cancelled',
+        response.message,
+        1,
+        false,
+        'OK',
+        () => {
+          navigation.goBack();
+        },
+      );
+    } catch (error: unknown) {
+      devLog('error in onCancelScheduledReduction', error);
+      const handled = await handleSessionExpiredApiError(error, show_Alert);
+      if (handled) return;
+
+      show_Alert(
+        'error',
+        'Cancel failed',
+        getApiErrorMessage(error, 'Could not cancel the scheduled reduction. Please try again.'),
+        2,
+        false,
+        'Try again',
+        () => {
+          void onCancelScheduledReduction();
+        },
+        'Cancel',
+        () => {},
+      );
+    }
+  }, [
+    applyLoadedUsers,
+    cancelScheduleLoading,
+    dispatch,
+    navigation,
+    shopId,
+    show_Alert,
+  ]);
+
+  const showCancelScheduleConfirmAlert = useCallback(() => {
+    show_Alert(
+      'pending',
+      'Cancel scheduled reduction?',
+      'This will remove the scheduled change for your next billing cycle. Your current user capacity will stay the same.',
+      2,
+      false,
+      'Delete',
+      () => {
+        void onCancelScheduledReduction();
+      },
+      'Cancel',
+      () => {},
+    );
+  }, [onCancelScheduledReduction, show_Alert]);
+
   const onUpdate = async () => {
     if (!form || !shopId || isSubmitting || !hasChanges) {
       return;
@@ -315,10 +550,35 @@ export default function ManageAddUsersScreen({ navigation }: Props) {
         }),
       );
 
-      navigation.goBack();
+      setSavedSnapshot(buildSnapshot(form));
+      setLoadedMaxUsers(response.features.maxUsers);
+
+      show_Alert(
+        'success',
+        'Settings saved',
+        buildUsersUpdateSuccessMessage(response.features),
+        1,
+        false,
+        'OK',
+        () => {
+          navigation.goBack();
+        },
+      );
+      
     } catch (error: unknown) {
+      devLog('error in onUpdate', error);
       const handled = await handleSessionExpiredApiError(error, show_Alert);
       if (handled) return;
+
+      if (isReductionScheduleRequiredError(error)) {
+        showScheduleRequiredAlert(
+          getApiErrorMessage(
+            error,
+            'You can schedule this change for your next billing cycle instead.',
+          ),
+        );
+        return;
+      }
 
       show_Alert(
         'error',
@@ -396,6 +656,99 @@ export default function ManageAddUsersScreen({ navigation }: Props) {
               ]}
               showsVerticalScrollIndicator={false}
             >
+              <View
+                style={[
+                  styles.billingTopCard,
+                  {
+                    backgroundColor: paperTheme.colors.surface,
+                    borderColor: paperTheme.colors.outlineVariant,
+                  },
+                  cardShadow(resolvedTheme),
+                ]}
+              >
+                <View style={[styles.billingTopIcon, { backgroundColor: '#fef3c7' }]}>
+                  <Ionicons name="calendar-outline" size={20} color="#d97706" />
+                </View>
+                <View style={styles.billingTopBody}>
+                  <Text
+                    style={[styles.billingTopLabel, { color: paperTheme.colors.onSurfaceVariant }]}
+                  >
+                    Next payment date
+                  </Text>
+                  <Text style={[styles.billingTopValue, { color: paperTheme.colors.onSurface }]}>
+                    {formattedNextPaymentDate}
+                  </Text>
+                </View>
+              </View>
+
+              {pendingChange ? (
+                <View
+                  style={[
+                    styles.pendingCard,
+                    {
+                      backgroundColor: paperTheme.colors.surface,
+                      borderColor: '#f59e0b',
+                    },
+                    cardShadow(resolvedTheme),
+                  ]}
+                >
+                  <Text style={[styles.pendingCardTitle, { color: paperTheme.colors.onSurface }]}>
+                    Scheduled reduction
+                  </Text>
+                  <Text
+                    style={[styles.pendingCardDesc, { color: paperTheme.colors.onSurfaceVariant }]}
+                  >
+                    From your next billing cycle after payment is approved, your plan will change to{' '}
+                    {formatPendingAdditionalUsersLabel(pendingChange)}. Requested on{' '}
+                    {formatBillingDate(pendingChange.requestedAt)}.
+                  </Text>
+                  <SummaryRow
+                    label="Scheduled capacity"
+                    value={`${
+                      pendingChange.isAdditionalUsersAdded &&
+                      pendingChange.numAdditionalUsers != null &&
+                      pendingChange.numAdditionalUsers > 0
+                        ? DEFAULT_MAX_USERS + pendingChange.numAdditionalUsers
+                        : DEFAULT_MAX_USERS
+                    } users`}
+                    paperTheme={paperTheme}
+                    emphasize
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.cancelScheduleButton,
+                      {
+                        borderColor: paperTheme.colors.error,
+                        opacity: cancelScheduleLoading ? 0.7 : 1,
+                      },
+                    ]}
+                    onPress={showCancelScheduleConfirmAlert}
+                    activeOpacity={0.85}
+                    disabled={cancelScheduleLoading || isSubmitting}
+                  >
+                    {cancelScheduleLoading ? (
+                      <ActivityIndicator color={paperTheme.colors.error} />
+                    ) : (
+                      <>
+                        <Ionicons
+                          name="trash-outline"
+                          size={18}
+                          color={paperTheme.colors.error}
+                        />
+                        <Text
+                          style={[
+                            styles.cancelScheduleButtonText,
+                            { color: paperTheme.colors.error },
+                          ]}
+                        >
+                          Cancel schedule
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
               <View
                 style={[
                   styles.usersHeroCard,

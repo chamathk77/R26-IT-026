@@ -8,6 +8,8 @@ import {
   updatedShopFeatures_Service,
   updateShopModuleFeatures_Service,
   updateShopUsersFeatures_Service,
+  scheduleShopUsersFeaturesReduction_Service,
+  cancelShopUsersFeaturesReductionSchedule_Service,
   sendOtpOnboarding_Service,
   verifyOtpOnboarding_Service,
   signupOnboarding_Service,
@@ -23,6 +25,8 @@ import {
   UpdateShopModuleFeaturesResponse,
   GetShopUsersFeaturesResponse,
   UpdateShopUsersFeaturesResponse,
+  ScheduleShopUsersFeaturesReductionResponse,
+  CancelShopUsersFeaturesReductionScheduleResponse,
   SendOtpOnboardingResponse,
   VerifyOtpOnboardingResponse,
   SignupOnboardingResponse,
@@ -77,6 +81,18 @@ interface ShopOnboardingState {
     error: string | null;
     success: boolean;
     data: UpdateShopUsersFeaturesResponse | null;
+  };
+  scheduleUsersFeaturesReduction: {
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+    data: ScheduleShopUsersFeaturesReductionResponse | null;
+  };
+  cancelUsersFeaturesReductionSchedule: {
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+    data: CancelShopUsersFeaturesReductionScheduleResponse | null;
   };
   sendOtp: {
     loading: boolean;
@@ -159,6 +175,18 @@ const initialState: ShopOnboardingState = {
     data: null,
   },
   updateUsersFeatures: {
+    loading: false,
+    error: null,
+    success: false,
+    data: null,
+  },
+  scheduleUsersFeaturesReduction: {
+    loading: false,
+    error: null,
+    success: false,
+    data: null,
+  },
+  cancelUsersFeaturesReductionSchedule: {
     loading: false,
     error: null,
     success: false,
@@ -394,6 +422,48 @@ export const ShopOnboardingSlice = createSlice({
         action.error.message ||
         'Shop user settings update failed';
       state.updateUsersFeatures.data = null;
+    });
+
+    builder.addCase(scheduleShopUsersFeaturesReduction_Service.pending, (state) => {
+      state.scheduleUsersFeaturesReduction.loading = true;
+      state.scheduleUsersFeaturesReduction.error = null;
+      state.scheduleUsersFeaturesReduction.success = false;
+    });
+    builder.addCase(scheduleShopUsersFeaturesReduction_Service.fulfilled, (state, action) => {
+      state.scheduleUsersFeaturesReduction.loading = false;
+      state.scheduleUsersFeaturesReduction.success = true;
+      state.scheduleUsersFeaturesReduction.error = null;
+      state.scheduleUsersFeaturesReduction.data = action.payload;
+    });
+    builder.addCase(scheduleShopUsersFeaturesReduction_Service.rejected, (state, action) => {
+      state.scheduleUsersFeaturesReduction.loading = false;
+      state.scheduleUsersFeaturesReduction.success = false;
+      state.scheduleUsersFeaturesReduction.error =
+        (action.payload as string) ||
+        action.error.message ||
+        'Scheduling additional user reduction failed';
+      state.scheduleUsersFeaturesReduction.data = null;
+    });
+
+    builder.addCase(cancelShopUsersFeaturesReductionSchedule_Service.pending, (state) => {
+      state.cancelUsersFeaturesReductionSchedule.loading = true;
+      state.cancelUsersFeaturesReductionSchedule.error = null;
+      state.cancelUsersFeaturesReductionSchedule.success = false;
+    });
+    builder.addCase(cancelShopUsersFeaturesReductionSchedule_Service.fulfilled, (state, action) => {
+      state.cancelUsersFeaturesReductionSchedule.loading = false;
+      state.cancelUsersFeaturesReductionSchedule.success = true;
+      state.cancelUsersFeaturesReductionSchedule.error = null;
+      state.cancelUsersFeaturesReductionSchedule.data = action.payload;
+    });
+    builder.addCase(cancelShopUsersFeaturesReductionSchedule_Service.rejected, (state, action) => {
+      state.cancelUsersFeaturesReductionSchedule.loading = false;
+      state.cancelUsersFeaturesReductionSchedule.success = false;
+      state.cancelUsersFeaturesReductionSchedule.error =
+        (action.payload as string) ||
+        action.error.message ||
+        'Cancelling scheduled reduction failed';
+      state.cancelUsersFeaturesReductionSchedule.data = null;
     });
 
     builder.addCase(sendOtpOnboarding_Service.pending, (state) => {
