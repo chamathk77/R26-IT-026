@@ -274,6 +274,16 @@ function buildAdditionalUsersReductionScheduleBody(shop, featureUpdates, schedul
   };
 }
 
+function buildPendingAdditionalUsersChangeError(shop) {
+  return {
+    success: false,
+    code: 'ADDITIONAL_USERS_PENDING_CHANGE_EXISTS',
+    message:
+      'Please cancel your pending user capacity change before making a new update.',
+    additionalUsersPendingChange: shop.additionalUsersPendingChange ?? null,
+  };
+}
+
 function shopMobileUserFilter(shopId) {
   return {
     shopId,
@@ -991,6 +1001,10 @@ const updateShopUsersFeatures = async (req, res) => {
     const isIncrease = proposedMaxUsers > shop.maxUsers;
     const isReduction = proposedMaxUsers < shop.maxUsers;
 
+    if ((isIncrease || isReduction) && shop.additionalUsersPendingChange) {
+      return res.status(409).json(buildPendingAdditionalUsersChangeError(shop));
+    }
+
     const capacityCheck = await validateUserCapacityAgainstExistingUsers(
       normalizedShopId,
       proposedMaxUsers,
@@ -1051,6 +1065,10 @@ const scheduleShopUsersFeaturesReduction = async (req, res) => {
 
     if (!shop) {
       return res.status(404).json({ success: false, message: 'Shop not found' });
+    }
+
+    if (shop.additionalUsersPendingChange) {
+      return res.status(409).json(buildPendingAdditionalUsersChangeError(shop));
     }
 
     const proposedMaxUsers = featureUpdates.maxUsers;

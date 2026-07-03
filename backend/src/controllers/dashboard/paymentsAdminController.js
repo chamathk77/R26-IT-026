@@ -33,6 +33,8 @@ const SUBSCRIPTION_RENEWAL_STATUSES = [
   "diactiveByAdmin",
 ];
 
+const DEFAULT_MAX_USERS = 3;
+
 function startOfDay(date = new Date()) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -202,6 +204,35 @@ function validateSubscriptionRejectScenario(shop, paymentId) {
   return {};
 }
 
+function applyPendingAdditionalUsersChange(shop) {
+  const pending = shop.additionalUsersPendingChange;
+  if (!pending) {
+    return false;
+  }
+
+  if (pending.isAdditionalUsersAdded === false) {
+    shop.isAdditionalUsersAdded = false;
+    shop.numAdditionalUsers = null;
+    shop.maxUsers = DEFAULT_MAX_USERS;
+  } else if (pending.isAdditionalUsersAdded === true) {
+    const count = Number.parseInt(String(pending.numAdditionalUsers ?? ""), 10);
+    if (!Number.isFinite(count) || count < 1) {
+      const err = new Error(
+        "Scheduled additional users count is invalid on pending change",
+      );
+      err.code = "SUBSCRIPTION_APPROVE_PENDING_USERS";
+      throw err;
+    }
+    shop.isAdditionalUsersAdded = true;
+    shop.numAdditionalUsers = count;
+    shop.maxUsers = DEFAULT_MAX_USERS + count;
+  }
+
+  shop.additionalUsersPendingChange = null;
+  shop.markModified("additionalUsersPendingChange");
+  return true;
+}
+
 async function applyShopUpdatesOnSubscriptionApprove(shop, payment, scenario) {
   const subscriptionType = shop.subscriptionType;
   const durationDays = SUBSCRIPTION_DURATION_DAYS[subscriptionType];
@@ -230,6 +261,75 @@ async function applyShopUpdatesOnSubscriptionApprove(shop, payment, scenario) {
     default:
       throw new Error("Unhandled subscription approval scenario");
   }
+
+  applyPendingAdditionalUsersChange(shop);
+
+  await shop.save();
+}
+
+function validateResetAndApproveSubscriptionScenario(shop, paymentId) {
+  if (!matchesSubscriptionReceiptNo(shop, paymentId)) {
+    return {
+      error: "Payment id does not match shop subscription receipt reference",
+    };
+  }
+
+  const subscriptionType = shop.subscriptionType;
+  if (!subscriptionType || !SUBSCRIPTION_TYPES.includes(subscriptionType)) {
+    return {
+      error:
+        "Shop subscription type must be set before approving subscription payment",
+      subscriptionType: subscriptionType ?? null,
+    };
+  }
+
+  const shopStatus = shop.status;
+  const resetApproveStatuses = ["paymentPending", "diactiveByAdmin"];
+
+  if (!resetApproveStatuses.includes(shopStatus)) {
+    return {
+      error: `Reset subscription approval requires shop status paymentPending or diactiveByAdmin (current: ${shopStatus}). Use regular subscription approval for due shops.`,
+      shopStatus,
+      subscriptionType,
+    };
+  }
+
+  if (subscriptionType === ONE_MONTH_SUBSCRIPTION_TYPE) {
+    return { scenario: "oneMonthResetApprove" };
+  }
+
+  if (MULTI_MONTH_SUBSCRIPTION_TYPES.includes(subscriptionType)) {
+    return { scenario: "multiMonthResetApprove" };
+  }
+
+  return {
+    error: `Unsupported subscription type: ${subscriptionType}`,
+    subscriptionType,
+  };
+}
+
+async function applyShopUpdatesOnResetSubscriptionApprove(shop, payment) {
+  const subscriptionType = shop.subscriptionType;
+  const durationDays = SUBSCRIPTION_DURATION_DAYS[subscriptionType];
+  if (!durationDays) {
+    const err = new Error(
+      `Subscription duration is not configured for plan ${subscriptionType}`,
+    );
+    err.code = "SUBSCRIPTION_RESET_APPROVE_SCENARIO";
+    throw err;
+  }
+
+  const paymentDoneDate = payment.submittedDate
+    ? new Date(payment.submittedDate)
+    : new Date();
+  const cycleStart = startOfDay();
+
+  shop.nextPaymentDate = startOfDay(addDays(cycleStart, durationDays));
+  shop.currentPaymentDoneDate = paymentDoneDate;
+  shop.status = "active";
+  shop.subscriptionDueDays = 0;
+
+  applyPendingAdditionalUsersChange(shop);
 
   await shop.save();
 }
@@ -755,10 +855,122 @@ const approveSubscriptionPayment = async (req, res) => {
     if (error.code === "SUBSCRIPTION_APPROVE_SCENARIO") {
       return res.status(400).json({ success: false, message: error.message });
     }
+    if (error.code === "SUBSCRIPTION_APPROVE_PENDING_USERS") {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     if (error.name === "ValidationError") {
       return res.status(400).json({ success: false, message: error.message });
     }
     console.log("error in approveSubscriptionPayment", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const resetAndApproveSubscriptionPayment = async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+
+    if (!isValidObjectId(paymentId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid payment id" });
+    }
+
+    const payment = await Payments.findById(paymentId);
+    if (!payment) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Payment not found" });
+    }
+
+    if (payment.paymentType !== "subscription") {
+      return res.status(400).json({
+        success: false,
+        message: "Only subscription payments can be approved with this action",
+        paymentType: payment.paymentType,
+      });
+    }
+
+    if (payment.status !== REVIEWABLE_STATUS) {
+      return res.status(400).json({
+        success: false,
+        message: `Only payments with status "${REVIEWABLE_STATUS}" can be approved`,
+        currentStatus: payment.status,
+      });
+    }
+
+    const shop = await ShopsData.findOne({ shopId: payment.shopId });
+    if (!shop) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Shop not found for this payment" });
+    }
+
+    const scenarioCheck = validateResetAndApproveSubscriptionScenario(
+      shop,
+      paymentId,
+    );
+    if (scenarioCheck.error) {
+      return res.status(400).json({
+        success: false,
+        message: scenarioCheck.error,
+        ...(scenarioCheck.shopStatus && {
+          shopStatus: scenarioCheck.shopStatus,
+        }),
+        ...(scenarioCheck.subscriptionType && {
+          subscriptionType: scenarioCheck.subscriptionType,
+        }),
+      });
+    }
+
+    payment.status = "approve";
+    payment.reason = null;
+    if (!payment.exactPaymentDay) {
+      payment.exactPaymentDay = startOfDay(payment.submittedDate || new Date());
+    }
+
+    await applyShopUpdatesOnResetSubscriptionApprove(shop, payment);
+    await payment.save();
+
+    const approvalSmsResult = await sendSubscriptionPaymentApprovedSms(
+      shop,
+      payment,
+      { isRenewal: true },
+    );
+    if (!approvalSmsResult.sent) {
+      console.log(
+        "reset subscription payment approved SMS not sent",
+        approvalSmsResult.reason,
+      );
+    }
+
+    const subscriptionType = resolveSubscriptionTypeForSms(shop, payment);
+
+    res.status(200).json({
+      success: true,
+      message: formatSubscriptionActionMessage(
+        subscriptionType,
+        "approve",
+        true,
+      ),
+      scenario: scenarioCheck.scenario,
+      billingCycleReset: true,
+      nextPaymentDate: shop.nextPaymentDate,
+      customerSms: approvalSmsResult,
+      payment: formatPaymentRecord(payment.toObject(), req),
+      shop: formatShopSummary(shop.toObject()),
+    });
+  } catch (error) {
+    if (error.code === "SUBSCRIPTION_RESET_APPROVE_SCENARIO") {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    if (error.code === "SUBSCRIPTION_APPROVE_PENDING_USERS") {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    if (error.name === "ValidationError") {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    console.log("error in resetAndApproveSubscriptionPayment", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -1082,6 +1294,7 @@ module.exports = {
 
   /** Subscription payment */
   approveSubscriptionPayment,
+  resetAndApproveSubscriptionPayment,
   rejectSubscriptionPayment,
   /** First multi-month subscription payment */
   approveFirstMultiMonthSubscriptionPayment,

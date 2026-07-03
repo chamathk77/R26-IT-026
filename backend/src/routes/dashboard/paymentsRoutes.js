@@ -5,6 +5,7 @@ const {
   getPaymentDetails,
   approveUpfrontPayment,
   approveSubscriptionPayment,
+  resetAndApproveSubscriptionPayment,
   approveFirstMultiMonthSubscriptionPayment,
   rejectUpfrontPayment,
   rejectSubscriptionPayment,
@@ -22,6 +23,11 @@ router.post(
   approveFirstMultiMonthSubscriptionPayment,
 );
 router.post('/:paymentId/approve-subscription', protectDashboard, approveSubscriptionPayment);
+router.post(
+  '/:paymentId/reset-and-approve-subscription',
+  protectDashboard,
+  resetAndApproveSubscriptionPayment,
+);
 router.post('/:paymentId/reject-upfront', protectDashboard, rejectUpfrontPayment);
 router.post(
   '/:paymentId/reject-first-multi-month-subscription',
