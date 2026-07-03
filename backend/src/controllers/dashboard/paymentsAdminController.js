@@ -27,7 +27,6 @@ const SUBSCRIPTION_DURATION_DAYS = {
   "1year": 360,
 };
 
-const MULTI_MONTH_FIRST_SUBSCRIPTION_STATUSES = ["trial", "paymentPending"];
 const SUBSCRIPTION_RENEWAL_STATUSES = [
   "due",
   "paymentPending",
@@ -38,12 +37,6 @@ function startOfDay(date = new Date()) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
   return d;
-}
-
-function addOneMonth(date) {
-  const d = new Date(date);
-  d.setMonth(d.getMonth() + 1);
-  return startOfDay(d);
 }
 
 function isValidObjectId(id) {
@@ -169,67 +162,44 @@ function validateSubscriptionApproveScenario(shop, paymentId) {
     };
   }
 
+  if (shop.nextPaymentDate == null) {
+    return {
+      error:
+        "Shop next payment date is required for subscription renewal approval",
+    };
+  }
+
   const shopStatus = shop.status;
-  const hasSubscriptionStart = shop.subscriptionStartDate != null;
-  const hasNextPaymentDate = shop.nextPaymentDate != null;
-
-  if (MULTI_MONTH_SUBSCRIPTION_TYPES.includes(subscriptionType)) {
-    if (!hasSubscriptionStart) {
-      if (!MULTI_MONTH_FIRST_SUBSCRIPTION_STATUSES.includes(shopStatus)) {
-        return {
-          error: `First multi-month subscription approval requires shop status trial or paymentPending (current: ${shopStatus})`,
-          shopStatus,
-          subscriptionType,
-        };
-      }
-      if (!shop.trailStartDate) {
-        return {
-          error:
-            "Shop trial start date is required for first multi-month subscription approval",
-        };
-      }
-      return { scenario: "multiMonthFirst" };
-    }
-
-    if (!hasNextPaymentDate) {
-      return {
-        error:
-          "Shop next payment date is required for multi-month subscription renewal approval",
-      };
-    }
-    if (!SUBSCRIPTION_RENEWAL_STATUSES.includes(shopStatus)) {
-      return {
-        error: `Multi-month subscription renewal requires shop status due, paymentPending, or diactiveByAdmin (current: ${shopStatus})`,
-        shopStatus,
-        subscriptionType,
-      };
-    }
-    return { scenario: "multiMonthRenewal" };
+  if (!SUBSCRIPTION_RENEWAL_STATUSES.includes(shopStatus)) {
+    return {
+      error: `Subscription renewal requires shop status due, paymentPending, or diactiveByAdmin (current: ${shopStatus})`,
+      shopStatus,
+      subscriptionType,
+    };
   }
 
   if (subscriptionType === ONE_MONTH_SUBSCRIPTION_TYPE) {
-    if (!hasSubscriptionStart || !hasNextPaymentDate) {
-      return {
-        error:
-          "Monthly subscription renewal requires subscription start date and next payment date",
-        shopStatus,
-        subscriptionType,
-      };
-    }
-    if (!SUBSCRIPTION_RENEWAL_STATUSES.includes(shopStatus)) {
-      return {
-        error: `Monthly subscription renewal requires shop status due, paymentPending, or diactiveByAdmin (current: ${shopStatus})`,
-        shopStatus,
-        subscriptionType,
-      };
-    }
     return { scenario: "oneMonthRenewal" };
+  }
+
+  if (MULTI_MONTH_SUBSCRIPTION_TYPES.includes(subscriptionType)) {
+    return { scenario: "multiMonthRenewal" };
   }
 
   return {
     error: `Unsupported subscription type: ${subscriptionType}`,
     subscriptionType,
   };
+}
+
+function validateSubscriptionRejectScenario(shop, paymentId) {
+  if (!matchesSubscriptionReceiptNo(shop, paymentId)) {
+    return {
+      error: "Payment id does not match shop subscription receipt reference",
+    };
+  }
+
+  return {};
 }
 
 async function applyShopUpdatesOnSubscriptionApprove(shop, payment, scenario) {
@@ -248,31 +218,10 @@ async function applyShopUpdatesOnSubscriptionApprove(shop, payment, scenario) {
     : new Date();
 
   switch (scenario) {
-    case "multiMonthFirst": {
-      const subscriptionStart = startOfDay(shop.trailStartDate);
-      shop.subscriptionStartDate = subscriptionStart;
-      shop.nextPaymentDate = startOfDay(
-        addDays(subscriptionStart, durationDays),
-      );
-      shop.currentPaymentDoneDate = paymentDoneDate;
-      shop.isTrailCompleted = true;
-      shop.status = "active";
-      break;
-    }
-    case "multiMonthRenewal": {
-      shop.nextPaymentDate = startOfDay(
-        addDays(startOfDay(shop.nextPaymentDate), durationDays),
-      );
-      shop.currentPaymentDoneDate = paymentDoneDate;
-      shop.status = "active";
-      break;
-    }
+    case "multiMonthRenewal":
     case "oneMonthRenewal": {
       shop.nextPaymentDate = startOfDay(
-        addDays(
-          startOfDay(shop.nextPaymentDate),
-          SUBSCRIPTION_DURATION_DAYS["1month"],
-        ),
+        addDays(startOfDay(shop.nextPaymentDate), durationDays),
       );
       shop.currentPaymentDoneDate = paymentDoneDate;
       shop.status = "active";
@@ -364,6 +313,108 @@ function formatPaymentTypeSmsLabel(paymentType) {
   return paymentType === "upFront"
     ? "Up-front payment"
     : "Subscription payment";
+}
+
+function formatSubscriptionTypeSmsLabel(subscriptionType) {
+  const labels = {
+    "1month": "monthly subscription",
+    "3months": "3 month subscription",
+    "6months": "6 month subscription",
+    "1year": "1 year subscription",
+  };
+  return labels[subscriptionType] || "subscription";
+}
+
+function resolveSubscriptionTypeForSms(shop, payment) {
+  return shop.subscriptionType || payment.subscriptionType || null;
+}
+
+function formatSubscriptionActionMessage(subscriptionType, action, isRenewal) {
+  const label = formatSubscriptionTypeSmsLabel(subscriptionType);
+  const kind = isRenewal ? "renewal" : "payment";
+  if (action === "approve") {
+    return `Your ${label} ${kind} has been approved`;
+  }
+  return `Your ${label} ${kind} has been rejected`;
+}
+
+function buildSubscriptionPaymentApprovedSms({
+  receiptNumber,
+  subscriptionType,
+  isRenewal,
+}) {
+  const label = formatSubscriptionTypeSmsLabel(subscriptionType);
+  const kind = isRenewal ? "renewal" : "payment";
+  return `Smart Cost: Your ${label} ${kind} has been approved. Receipt: ${receiptNumber}. Thank you for using Smart Cost.`;
+}
+
+function buildSubscriptionPaymentRejectedSms({
+  receiptNumber,
+  subscriptionType,
+  reason,
+  isRenewal,
+}) {
+  const label = formatSubscriptionTypeSmsLabel(subscriptionType);
+  const kind = isRenewal ? "renewal" : "payment";
+  return `Smart Cost: Your ${label} ${kind} (Receipt: ${receiptNumber}) was rejected. Reason: ${reason}. Please resubmit your payment in the app.`;
+}
+
+async function sendSubscriptionPaymentApprovedSms(
+  shop,
+  payment,
+  { isRenewal = false } = {},
+) {
+  const mobile = getShopCustomerMobile(shop);
+  if (!mobile) {
+    return { sent: false, reason: "Shop owner mobile number is not set" };
+  }
+
+  const subscriptionType = resolveSubscriptionTypeForSms(shop, payment);
+
+  try {
+    await sendSms({
+      to: mobile,
+      message: buildSubscriptionPaymentApprovedSms({
+        receiptNumber: payment.receiptNumber,
+        subscriptionType,
+        isRenewal,
+      }),
+    });
+    return { sent: true };
+  } catch (error) {
+    console.log("error in sendSubscriptionPaymentApprovedSms", error.message);
+    return { sent: false, reason: error.message || "SMS send failed" };
+  }
+}
+
+async function sendSubscriptionPaymentRejectedSms(
+  shop,
+  payment,
+  reason,
+  { isRenewal = false } = {},
+) {
+  const mobile = getShopCustomerMobile(shop);
+  if (!mobile) {
+    return { sent: false, reason: "Shop owner mobile number is not set" };
+  }
+
+  const subscriptionType = resolveSubscriptionTypeForSms(shop, payment);
+
+  try {
+    await sendSms({
+      to: mobile,
+      message: buildSubscriptionPaymentRejectedSms({
+        receiptNumber: payment.receiptNumber,
+        subscriptionType,
+        reason,
+        isRenewal,
+      }),
+    });
+    return { sent: true };
+  } catch (error) {
+    console.log("error in sendSubscriptionPaymentRejectedSms", error.message);
+    return { sent: false, reason: error.message || "SMS send failed" };
+  }
 }
 
 function buildUpfrontPaymentApprovedSms({ receiptNumber }) {
@@ -674,7 +725,11 @@ const approveSubscriptionPayment = async (req, res) => {
     );
     await payment.save();
 
-    const approvalSmsResult = await sendPaymentApprovedSms(shop, payment);
+    const approvalSmsResult = await sendSubscriptionPaymentApprovedSms(
+      shop,
+      payment,
+      { isRenewal: true },
+    );
     if (!approvalSmsResult.sent) {
       console.log(
         "subscription payment approved SMS not sent",
@@ -682,16 +737,16 @@ const approveSubscriptionPayment = async (req, res) => {
       );
     }
 
-    let usersLoggedOut = 0;
-    if (scenarioCheck.scenario === "multiMonthFirst") {
-      usersLoggedOut = await clearShopUserTokens(shop.shopId);
-    }
+    const subscriptionType = resolveSubscriptionTypeForSms(shop, payment);
 
     res.status(200).json({
       success: true,
-      message: "Subscription payment approved and shop subscription updated",
+      message: formatSubscriptionActionMessage(
+        subscriptionType,
+        "approve",
+        true,
+      ),
       scenario: scenarioCheck.scenario,
-      usersLoggedOut,
       customerSms: approvalSmsResult,
       payment: formatPaymentRecord(payment.toObject(), req),
       shop: formatShopSummary(shop.toObject()),
@@ -783,7 +838,11 @@ const approveFirstMultiMonthSubscriptionPayment = async (req, res) => {
 
     const usersLoggedOut = await clearShopUserTokens(shop.shopId);
 
-    const approvalSmsResult = await sendPaymentApprovedSms(shop, payment);
+    const approvalSmsResult = await sendSubscriptionPaymentApprovedSms(
+      shop,
+      payment,
+      { isRenewal: false },
+    );
     if (!approvalSmsResult.sent) {
       console.log(
         "first multi-month subscription approved SMS not sent",
@@ -793,8 +852,11 @@ const approveFirstMultiMonthSubscriptionPayment = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message:
-        "First multi-month subscription payment approved and shop activated",
+      message: formatSubscriptionActionMessage(
+        shop.subscriptionType,
+        "approve",
+        false,
+      ),
       subscriptionType: shop.subscriptionType,
       usersLoggedOut,
       customerSms: approvalSmsResult,
@@ -881,10 +943,11 @@ const rejectFirstMultiMonthSubscriptionPayment = async (req, res) => {
     payment.reason = reasonTrimmed;
     await payment.save();
 
-    const rejectionSmsResult = await sendPaymentRejectedSms(
+    const rejectionSmsResult = await sendSubscriptionPaymentRejectedSms(
       shop,
       payment,
       reasonTrimmed,
+      { isRenewal: false },
     );
     if (!rejectionSmsResult.sent) {
       console.log(
@@ -895,7 +958,11 @@ const rejectFirstMultiMonthSubscriptionPayment = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "First multi-month subscription payment rejected",
+      message: formatSubscriptionActionMessage(
+        shop.subscriptionType,
+        "reject",
+        false,
+      ),
       customerSms: rejectionSmsResult,
       payment: formatPaymentRecord(payment.toObject(), req),
       shop: formatShopSummary(shop.toObject()),
@@ -958,11 +1025,11 @@ const rejectSubscriptionPayment = async (req, res) => {
         .json({ success: false, message: "Shop not found for this payment" });
     }
 
-    if (!matchesSubscriptionReceiptNo(shop, paymentId)) {
+    const scenarioCheck = validateSubscriptionRejectScenario(shop, paymentId);
+    if (scenarioCheck.error) {
       return res.status(400).json({
         success: false,
-        message:
-          "Payment id does not match shop subscription receipt reference",
+        message: scenarioCheck.error,
       });
     }
 
@@ -970,10 +1037,11 @@ const rejectSubscriptionPayment = async (req, res) => {
     payment.reason = reasonTrimmed;
     await payment.save();
 
-    const rejectionSmsResult = await sendPaymentRejectedSms(
+    const rejectionSmsResult = await sendSubscriptionPaymentRejectedSms(
       shop,
       payment,
       reasonTrimmed,
+      { isRenewal: true },
     );
     if (!rejectionSmsResult.sent) {
       console.log(
@@ -982,9 +1050,15 @@ const rejectSubscriptionPayment = async (req, res) => {
       );
     }
 
+    const subscriptionType = resolveSubscriptionTypeForSms(shop, payment);
+
     res.status(200).json({
       success: true,
-      message: "Subscription payment rejected",
+      message: formatSubscriptionActionMessage(
+        subscriptionType,
+        "reject",
+        true,
+      ),
       customerSms: rejectionSmsResult,
       payment: formatPaymentRecord(payment.toObject(), req),
       shop: formatShopSummary(shop.toObject()),
