@@ -1,13 +1,13 @@
 const mongoose = require('mongoose');
 
 const SHOP_STATUS = [
-  'disabled', 
-  'trial', 
+  'disabled',
+  'trial',
   'trialExpired',
   'initialPaymentApproved',
   'subscriptionPaymentPending',
-  'active', 
-  'due', 
+  'active',
+  'due',
   'paymentPending',
   'diactiveByAdmin',
 ];
@@ -121,7 +121,7 @@ const shopsDataSchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
-    
+
     shopName: {
       type: String,
       required: true,
@@ -180,41 +180,37 @@ const shopsDataSchema = new mongoose.Schema(
       enum: ONBOARD_STEPS,
       default: 'startOnboarding',
     },
-    //module related
-    senderId: {
-      type: String,
-      default: null,
-      trim: true,
-    },
+    smsfeature: {
 
-    //sms related
-    smsPackageType: {
-      type: String,
-      enum: SMS_PACKAGE_TYPES,
-      default: null,
-    },
-    smsUsedInPeriod: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    smsFeatureStatus: {
-      type: String,
-      enum: ['inactive', 'active', 'pending', 'due', 'disabled'],
-      default: 'disabled',
-    },
-    smsPackageAmount: {
-      type: Number,
-      default: null,
-      min: 0,
-    },
-    smsStartDate: {
-      type: Date,
-      default: null,
-    },
-    smsNextRenewalDate: {
-      type: Date,
-      default: null,
+      senderId: {
+        type: String,
+        default: null,
+        trim: true,
+      },
+
+      smsPackageType: {
+        type: String,
+        enum: SMS_PACKAGE_TYPES,
+        default: null,
+      },
+
+      smsUsedInPeriod: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      smsFeatureStatus: {
+        type: String,
+        enum: ['requested', 'active', 'pending', 'due', 'disabled'],
+        default: 'disabled',
+      },
+
+     smsNextRenewalDate: {
+        type: Date,
+        default: null,
+      },
+
     },
 
     //module related
@@ -296,7 +292,7 @@ const shopsDataSchema = new mongoose.Schema(
       enum: SUBSCRIPTION_TYPES,
       default: null,
     },
-    subscriptionReceiptNo:{
+    subscriptionReceiptNo: {
       type: String,
       default: null,
       trim: true,
@@ -314,7 +310,7 @@ const shopsDataSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    oneTimePaymentReceiptNo:{
+    oneTimePaymentReceiptNo: {
       type: String,
       default: null,
       trim: true,
@@ -343,7 +339,7 @@ const shopsDataSchema = new mongoose.Schema(
       min: 0,
     },
 
- 
+
 
   },
   { timestamps: true },
@@ -397,59 +393,59 @@ module.exports = ShopsData;
 
 // below you can see all parameters for shopsDataSchema
 //isFirstTime
-  // shopId: stringwwh
-  // shopName: string
-  // address: string
-  // shopMobileNumber: string
-  // ownerFirstName: string
-  // ownerLastName: string
-  // ownerMobileNumber: string
-  // email: string
-  // isVerifyEmail: boolean
-  // isVerifyPhoneNumber: boolean
-  // otp: number
-  // otpExpiresAt: date
-  // onboardStep: startOnboarding | shopRegistered | otpVerified | passwordSet | completed
+// shopId: stringwwh
+// shopName: string
+// address: string
+// shopMobileNumber: string
+// ownerFirstName: string
+// ownerLastName: string
+// ownerMobileNumber: string
+// email: string
+// isVerifyEmail: boolean
+// isVerifyPhoneNumber: boolean
+// otp: number
+// otpExpiresAt: date
+// onboardStep: startOnboarding | shopRegistered | otpVerified | passwordSet | completed
 
-  // manageInventory removed — inventory is per product (Product.isInventoryAvailable)
-  // sendReceiptSms: boolean
-  // senderId: string | null
-  // smsPackageType: 500 | 1000 | ... | 4500 (monthly message quota)
-  // smsMonthlyAllowance: number | null
-  // smsUsedInPeriod: number
-  // smsPackageAmount: number | null (monthly fee LKR)
-  // smsNextRenewalDate: date | null
-  // kpi: boolean
-  // analyticsModule: boolean
-  // smsMobileNumber: boolean
-  // customerManualOrder: boolean
-  // costModule: boolean
-  // marketingModule: boolean
-  // webModule: boolean (future — web portal add-on)
-  // webModuleEnabledAt: date | null
+// manageInventory removed — inventory is per product (Product.isInventoryAvailable)
+// sendReceiptSms: boolean
+// senderId: string | null
+// smsPackageType: 500 | 1000 | ... | 4500 (monthly message quota)
+// smsMonthlyAllowance: number | null
+// smsUsedInPeriod: number
+// smsPackageAmount: number | null (monthly fee LKR)
+// smsNextRenewalDate: date | null
+// kpi: boolean
+// analyticsModule: boolean
+// smsMobileNumber: boolean
+// customerManualOrder: boolean
+// costModule: boolean
+// marketingModule: boolean
+// webModule: boolean (future — web portal add-on)
+// webModuleEnabledAt: date | null
 
 
-  // maxUsers: number
-  // isAdditionalUsersAdded: boolean
-  // numAdditionalUsers: number
-  // additionalUsersPendingChange: { isAdditionalUsersAdded, numAdditionalUsers, requestedAt }
+// maxUsers: number
+// isAdditionalUsersAdded: boolean
+// numAdditionalUsers: number
+// additionalUsersPendingChange: { isAdditionalUsersAdded, numAdditionalUsers, requestedAt }
 
-  // status: string
-  // subscriptionStartDate: date
-  // currentPaymentDoneDate: date
-  // nextPaymentDate: date
-  // subsAmount: number
-  // subscriptionType: 1month | 3months | 6months | 1year
-  // subscriptionReceiptNo: subscription payment document id
-  // oneTimePaymentAmount: number | null
-  // isOneTimePaymentDone: boolean
-  // isOneTimePaymentGenerated: boolean
-  // oneTimePaymentReceiptNo: up-front payment document id
-  // subscriptionDueDays: number
-  // isTrailStared: boolean
-  // isTrailCompleted: boolean
-  // trailStartDate: date
-  // trailEndDate: date
+// status: string
+// subscriptionStartDate: date
+// currentPaymentDoneDate: date
+// nextPaymentDate: date
+// subsAmount: number
+// subscriptionType: 1month | 3months | 6months | 1year
+// subscriptionReceiptNo: subscription payment document id
+// oneTimePaymentAmount: number | null
+// isOneTimePaymentDone: boolean
+// isOneTimePaymentGenerated: boolean
+// oneTimePaymentReceiptNo: up-front payment document id
+// subscriptionDueDays: number
+// isTrailStared: boolean
+// isTrailCompleted: boolean
+// trailStartDate: date
+// trailEndDate: date
 
 
 
