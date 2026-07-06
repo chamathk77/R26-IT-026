@@ -1,0 +1,313 @@
+/* Login page animated background */
+
+@keyframes loginGradientShift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes loginOrbFloat1 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(40px, -30px) scale(1.08);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.95);
+  }
+}
+
+@keyframes loginOrbFloat2 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-50px, 40px) scale(1.1);
+  }
+}
+
+@keyframes loginOrbFloat3 {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate(30px, -50px) rotate(8deg);
+  }
+}
+
+@keyframes loginCardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes loginIconPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(21, 101, 192, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(21, 101, 192, 0);
+  }
+}
+
+@keyframes loginShimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.login-page {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-bg-gradient {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(
+    -45deg,
+    #0d1b2a,
+    #1a237e,
+    #0f4c5c,
+    #00695c,
+    #1565c0,
+    #1b263b
+  );
+  background-size: 400% 400%;
+  animation: loginGradientShift 18s ease infinite;
+}
+
+.login-canvas-3d {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.login-canvas-3d canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.login-grid-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at center, black 20%, transparent 75%);
+  pointer-events: none;
+}
+
+.login-content {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  max-width: 960px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 48px;
+}
+
+.login-brand-panel {
+  display: none;
+  flex: 1;
+  color: #fff;
+  animation: loginCardEnter 0.7s ease-out;
+}
+
+@media (min-width: 900px) {
+  .login-brand-panel {
+    display: block;
+  }
+}
+
+.login-brand-title {
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1.15;
+  margin: 0 0 16px;
+  letter-spacing: -0.02em;
+}
+
+.login-brand-subtitle {
+  font-size: 1.05rem;
+  line-height: 1.6;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.78);
+  max-width: 380px;
+}
+
+.login-brand-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 28px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(8px);
+}
+
+.login-brand-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4dd0e1;
+  box-shadow: 0 0 12px #4dd0e1;
+  animation: loginIconPulse 2s ease-in-out infinite;
+}
+
+.login-brand-hint {
+  margin: 20px 0 0;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+}
+
+.login-feature-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
+  max-width: 400px;
+}
+
+.login-feature-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+}
+
+/* 3D scene HTML labels (rendered inside canvas) */
+.scene-feature-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(13, 27, 42, 0.88);
+  border: 1.5px solid;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.scene-feature-label-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.scene-feature-label-sub {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.65);
+  font-weight: 500;
+}
+
+.scene-hub-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  background: rgba(13, 27, 42, 0.9);
+  border: 1px solid rgba(77, 208, 225, 0.45);
+  box-shadow: 0 0 24px rgba(77, 208, 225, 0.25);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.scene-hub-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #4dd0e1;
+  letter-spacing: 0.04em;
+}
+
+.scene-hub-sub {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+}
+
+.login-glass-card {
+  width: 100%;
+  max-width: 420px;
+  animation: loginCardEnter 0.65s ease-out 0.1s both;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.88) !important;
+  border: 1px solid rgba(255, 255, 255, 0.55) !important;
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6) !important;
+}
+
+.login-icon-ring {
+  animation: loginIconPulse 2.5s ease-in-out infinite;
+}
+
+.login-submit-btn {
+  background: linear-gradient(135deg, #1565c0 0%, #00838f 100%) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.login-submit-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(21, 101, 192, 0.35) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-bg-gradient,
+  .login-glass-card,
+  .login-brand-panel,
+  .login-icon-ring,
+  .login-brand-dot {
+    animation: none !important;
+  }
+
+  .login-brand-hint {
+    display: none;
+  }
+}
