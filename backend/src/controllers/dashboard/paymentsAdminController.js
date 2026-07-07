@@ -12,7 +12,7 @@ const {
 } = require("../../services/trialExpirationService");
 const { sendSms } = require("../../services/smsService");
 
-const { PAYMENT_STATUS } = Payments;
+const { PAYMENT_STATUS, PAYMENT_TYPE } = Payments;
 const REVIEWABLE_STATUS = "pending";
 const ADMIN_SETTABLE_STATUSES = ["approve", "rejected"];
 
@@ -33,6 +33,12 @@ const SUBSCRIPTION_RENEWAL_STATUSES = [
   "diactiveByAdmin",
 ];
 
+const PENDING_PAYMENTS_DEFAULT_PAGE = 1;
+const PENDING_PAYMENTS_DEFAULT_LIMIT = 20;
+const PENDING_PAYMENTS_MAX_LIMIT = 20;
+
+const ONBOARDING_PAYMENT_TYPES = ["subscription", "upFront"];
+
 const DEFAULT_MAX_USERS = 3;
 
 function startOfDay(date = new Date()) {
@@ -45,11 +51,128 @@ function isValidObjectId(id) {
   return mongoose.Types.ObjectId.isValid(id);
 }
 
+function parsePositiveInt(value, fallback) {
+  const parsed = Number.parseInt(String(value), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizePaymentTypeFilter(value) {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    return { paymentType: null };
+  }
+
+  const normalized = String(value).trim();
+  if (normalized === "upfront") {
+    return { paymentType: "upFront" };
+  }
+  if (PAYMENT_TYPE.includes(normalized)) {
+    return { paymentType: normalized };
+  }
+
+  return {
+    error: `paymentType must be one of: ${PAYMENT_TYPE.join(", ")}`,
+  };
+}
+
+function normalizeOnboardingPaymentTypeFilter(value) {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    return { paymentType: null };
+  }
+
+  const normalized = String(value).trim();
+  if (normalized === "upfront") {
+    return { paymentType: "upFront" };
+  }
+  if (ONBOARDING_PAYMENT_TYPES.includes(normalized)) {
+    return { paymentType: normalized };
+  }
+
+  return {
+    error: `paymentType must be one of: ${ONBOARDING_PAYMENT_TYPES.join(", ")}`,
+  };
+}
+
+function normalizePaymentStatusFilter(value) {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    return { status: null };
+  }
+
+  const normalized = String(value).trim();
+  if (PAYMENT_STATUS.includes(normalized)) {
+    return { status: normalized };
+  }
+
+  return {
+    error: `status must be one of: ${PAYMENT_STATUS.join(", ")}`,
+  };
+}
+
+function mapOnboardingPaymentListItem(payment, shop, req) {
+  const formatted = formatPaymentRecord(payment, req);
+  return {
+    _id: formatted._id,
+    shopId: formatted.shopId,
+    receiptNumber: formatted.receiptNumber,
+    receiptImagePath: formatted.receiptImagePath,
+    receiptImageUrl: formatted.receiptImageUrl,
+    receiptImageAvailable: formatted.receiptImageAvailable,
+    paymentType: formatted.paymentType,
+    paymentAmount: formatted.paymentAmount,
+    subscriptionType: formatted.subscriptionType ?? null,
+    IsOnboaringPayment: formatted.IsOnboaringPayment ?? true,
+    submittedDate: formatted.submittedDate,
+    paymentMonth: formatted.paymentMonth,
+    exactPaymentDay: formatted.exactPaymentDay,
+    status: formatted.status,
+    reason: formatted.reason,
+    description: formatted.description ?? null,
+    createdAt: formatted.createdAt,
+    updatedAt: formatted.updatedAt,
+    shop: shop
+      ? {
+          shopId: shop.shopId,
+          shopName: shop.shopName,
+          ownerFirstName: shop.ownerFirstName,
+          ownerLastName: shop.ownerLastName,
+          shopMobileNumber: shop.shopMobileNumber,
+          email: shop.email,
+          status: shop.status,
+        }
+      : null,
+  };
+}
+
 const listPendingPayments = async (req, res) => {
   try {
-    const payments = await Payments.find({ status: REVIEWABLE_STATUS })
-      .sort({ submittedDate: -1 })
-      .lean();
+    const typeFilter = normalizePaymentTypeFilter(req.query.paymentType);
+    if (typeFilter.error) {
+      return res.status(400).json({
+        success: false,
+        message: typeFilter.error,
+        allowedPaymentTypes: PAYMENT_TYPE,
+      });
+    }
+
+    const query = { status: REVIEWABLE_STATUS };
+    if (typeFilter.paymentType) {
+      query.paymentType = typeFilter.paymentType;
+    }
+
+    const page = parsePositiveInt(req.query.page, PENDING_PAYMENTS_DEFAULT_PAGE);
+    const limit = Math.min(
+      parsePositiveInt(req.query.limit, PENDING_PAYMENTS_DEFAULT_LIMIT),
+      PENDING_PAYMENTS_MAX_LIMIT,
+    );
+    const skip = (page - 1) * limit;
+
+    const [payments, total] = await Promise.all([
+      Payments.find(query)
+        .sort({ submittedDate: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Payments.countDocuments(query),
+    ]);
 
     const shopIds = [...new Set(payments.map((p) => p.shopId))];
     const shops = await ShopsData.find({ shopId: { $in: shopIds } }).lean();
@@ -57,7 +180,13 @@ const listPendingPayments = async (req, res) => {
 
     res.status(200).json({
       success: true,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit) || 0,
       count: payments.length,
+      paymentType: typeFilter.paymentType,
+      allowedPaymentTypes: PAYMENT_TYPE,
       payments: payments.map((payment) => {
         const shop = shopById.get(payment.shopId);
         const formatted = formatPaymentRecord(payment, req);
@@ -67,6 +196,10 @@ const listPendingPayments = async (req, res) => {
           receiptNumber: formatted.receiptNumber,
           receiptImagePath: formatted.receiptImagePath,
           receiptImageUrl: formatted.receiptImageUrl,
+          receiptImageAvailable: formatted.receiptImageAvailable,
+          paymentType: formatted.paymentType,
+          paymentAmount: formatted.paymentAmount,
+          subscriptionType: formatted.subscriptionType ?? null,
           submittedDate: formatted.submittedDate,
           paymentMonth: formatted.paymentMonth,
           exactPaymentDay: formatted.exactPaymentDay,
@@ -90,6 +223,75 @@ const listPendingPayments = async (req, res) => {
     });
   } catch (error) {
     console.log("error in listPendingPayments", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getOnboardingPayments = async (req, res) => {
+  try {
+    const typeFilter = normalizeOnboardingPaymentTypeFilter(req.query.paymentType);
+    if (typeFilter.error) {
+      return res.status(400).json({
+        success: false,
+        message: typeFilter.error,
+        allowedPaymentTypes: ONBOARDING_PAYMENT_TYPES,
+      });
+    }
+
+    const statusFilter = normalizePaymentStatusFilter(req.query.status);
+    if (statusFilter.error) {
+      return res.status(400).json({
+        success: false,
+        message: statusFilter.error,
+        allowedStatuses: PAYMENT_STATUS,
+      });
+    }
+
+    const query = { IsOnboaringPayment: true };
+    if (typeFilter.paymentType) {
+      query.paymentType = typeFilter.paymentType;
+    }
+    if (statusFilter.status) {
+      query.status = statusFilter.status;
+    }
+
+    const page = parsePositiveInt(req.query.page, PENDING_PAYMENTS_DEFAULT_PAGE);
+    const limit = Math.min(
+      parsePositiveInt(req.query.limit, PENDING_PAYMENTS_DEFAULT_LIMIT),
+      PENDING_PAYMENTS_MAX_LIMIT,
+    );
+    const skip = (page - 1) * limit;
+
+    const [payments, total] = await Promise.all([
+      Payments.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Payments.countDocuments(query),
+    ]);
+
+    const shopIds = [...new Set(payments.map((p) => p.shopId))];
+    const shops = await ShopsData.find({ shopId: { $in: shopIds } }).lean();
+    const shopById = new Map(shops.map((s) => [s.shopId, s]));
+
+    res.status(200).json({
+      success: true,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit) || 0,
+      count: payments.length,
+      paymentType: typeFilter.paymentType,
+      status: statusFilter.status,
+      allowedPaymentTypes: ONBOARDING_PAYMENT_TYPES,
+      allowedStatuses: PAYMENT_STATUS,
+      payments: payments.map((payment) =>
+        mapOnboardingPaymentListItem(payment, shopById.get(payment.shopId), req),
+      ),
+    });
+  } catch (error) {
+    console.log("error in getOnboardingPayments", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -1285,9 +1487,10 @@ const rejectSubscriptionPayment = async (req, res) => {
 };
 
 module.exports = {
-  /** Pending payments */
-  listPendingPayments,
+  /** payments */
+  getOnboardingPayments,
   getPaymentDetails,
+
   /** Upfront payment */
   approveUpfrontPayment,
   rejectUpfrontPayment,
@@ -1296,7 +1499,11 @@ module.exports = {
   approveSubscriptionPayment,
   resetAndApproveSubscriptionPayment,
   rejectSubscriptionPayment,
+
+
   /** First multi-month subscription payment */
   approveFirstMultiMonthSubscriptionPayment,
   rejectFirstMultiMonthSubscriptionPayment,
+
+  
 };

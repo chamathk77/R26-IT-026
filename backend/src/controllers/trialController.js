@@ -144,6 +144,7 @@ async function createUpFrontInvoiceIfNeeded(shop) {
     expiryDate: null,
     status: "notPaid",
     reason: null,
+    IsOnboaringPayment:true,
     description: "this is one time payment for initial setup",
   });
 

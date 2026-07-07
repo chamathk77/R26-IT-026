@@ -1,13 +1,8 @@
 'use client';
 
-import dynamic from 'next/dynamic';
 import LoginForm from '@/components/auth/LoginForm';
+import LoginBackgroundAnimation from '@/components/auth/LoginBackgroundAnimation';
 import './login.css';
-
-const LoginScene3D = dynamic(() => import('@/components/auth/LoginScene3D'), {
-  ssr: false,
-  loading: () => null,
-});
 
 const PLATFORM_MODULES = [
   { label: 'POS', color: '#00e676' },
@@ -22,7 +17,7 @@ export default function LoginPage() {
   return (
     <div className="login-page">
       <div className="login-bg-gradient" aria-hidden />
-      <LoginScene3D />
+      <LoginBackgroundAnimation />
       <div className="login-grid-overlay" aria-hidden />
 
       <div className="login-content">
@@ -41,17 +36,20 @@ export default function LoginPage() {
             for your entire shop operation.
           </p>
           <div className="login-feature-chips">
-            {PLATFORM_MODULES.map((mod) => (
+            {PLATFORM_MODULES.map((mod, index) => (
               <span
                 key={mod.label}
                 className="login-feature-chip"
-                style={{ borderColor: mod.color, color: mod.color }}
+                style={{
+                  borderColor: mod.color,
+                  color: mod.color,
+                  animationDelay: `${index * 0.12}s`,
+                }}
               >
                 {mod.label}
               </span>
             ))}
           </div>
-          <p className="login-brand-hint">Modules orbit the hub — move your cursor to explore</p>
         </aside>
 
         <LoginForm />

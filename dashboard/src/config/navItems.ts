@@ -20,6 +20,6 @@ export const DASHBOARD_NAV_ITEMS: NavItem[] = [
     label: 'Payments',
     href: '/payments',
     icon: PaymentsOutlinedIcon,
-    description: 'Review pending payments',
+    description: 'Onboarding & subscription payments',
   },
 ];

@@ -1,4 +1,5 @@
 const ShopsData = require('../models/shopsData');
+const { isLocalUploadAvailable } = require('./uploadPathHelper');
 
 function buildPublicFileUrl(req, storedPath) {
   if (!storedPath || typeof storedPath !== 'string') {
@@ -23,9 +24,17 @@ function formatShopSummary(shop) {
 
 function formatPaymentRecord(payment, req) {
   const record = typeof payment.toObject === 'function' ? payment.toObject() : { ...payment };
+  const receiptImagePath = record.receiptImagePath;
+  const hasReceiptPath =
+    typeof receiptImagePath === 'string' &&
+    receiptImagePath.trim() !== '' &&
+    receiptImagePath !== 'pending-upload' &&
+    !receiptImagePath.includes('pending-upload');
+
   return {
     ...record,
-    receiptImageUrl: buildPublicFileUrl(req, record.receiptImagePath),
+    receiptImageUrl: buildPublicFileUrl(req, receiptImagePath),
+    receiptImageAvailable: hasReceiptPath ? isLocalUploadAvailable(receiptImagePath) : false,
   };
 }
 

@@ -99,16 +99,126 @@
   animation: loginGradientShift 18s ease infinite;
 }
 
-.login-canvas-3d {
+@keyframes loginParticleDrift {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: translateY(-18px) scale(1.15);
+  }
+}
+
+@keyframes loginLineDraw {
+  0% {
+    stroke-dashoffset: 1200;
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.55;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0.2;
+  }
+}
+
+@keyframes loginChipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-bg-animation {
   position: absolute;
   inset: 0;
   z-index: 1;
+  overflow: hidden;
   pointer-events: none;
 }
 
-.login-canvas-3d canvas {
-  width: 100% !important;
-  height: 100% !important;
+.login-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(48px);
+  will-change: transform;
+}
+
+.login-orb-1 {
+  width: min(42vw, 420px);
+  height: min(42vw, 420px);
+  top: -8%;
+  left: -6%;
+  animation: loginOrbFloat1 22s ease-in-out infinite;
+}
+
+.login-orb-2 {
+  width: min(36vw, 360px);
+  height: min(36vw, 360px);
+  bottom: -10%;
+  right: -4%;
+  animation: loginOrbFloat2 26s ease-in-out infinite;
+}
+
+.login-orb-3 {
+  width: min(28vw, 280px);
+  height: min(28vw, 280px);
+  top: 35%;
+  right: 18%;
+  animation: loginOrbFloat3 20s ease-in-out infinite;
+}
+
+.login-orb-4 {
+  width: min(24vw, 240px);
+  height: min(24vw, 240px);
+  bottom: 22%;
+  left: 12%;
+  animation: loginOrbFloat1 24s ease-in-out infinite reverse;
+}
+
+.login-particles {
+  position: absolute;
+  inset: 0;
+}
+
+.login-particle {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 10px rgba(77, 208, 225, 0.35);
+  animation: loginParticleDrift ease-in-out infinite;
+}
+
+.login-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.7;
+}
+
+.login-line {
+  fill: none;
+  stroke: url(#loginLineGrad);
+  stroke-width: 1.5;
+  stroke-dasharray: 1200;
+  stroke-dashoffset: 1200;
+  animation: loginLineDraw 14s ease-in-out infinite;
+}
+
+.login-line-2 {
+  animation-delay: 2.5s;
+}
+
+.login-line-3 {
+  animation-delay: 5s;
 }
 
 .login-grid-overlay {
@@ -188,13 +298,6 @@
   animation: loginIconPulse 2s ease-in-out infinite;
 }
 
-.login-brand-hint {
-  margin: 20px 0 0;
-  font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.5);
-  font-style: italic;
-}
-
 .login-feature-chips {
   display: flex;
   flex-wrap: wrap;
@@ -213,62 +316,13 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(6px);
   white-space: nowrap;
+  animation: loginChipFadeIn 0.6s ease-out both;
+  transition: transform 0.25s ease, background 0.25s ease;
 }
 
-/* 3D scene HTML labels (rendered inside canvas) */
-.scene-feature-label {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 6px 12px;
-  border-radius: 10px;
-  background: rgba(13, 27, 42, 0.88);
-  border: 1.5px solid;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  user-select: none;
-  white-space: nowrap;
-}
-
-.scene-feature-label-title {
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.scene-feature-label-sub {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.65);
-  font-weight: 500;
-}
-
-.scene-hub-label {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 8px 16px;
-  border-radius: 12px;
-  background: rgba(13, 27, 42, 0.9);
-  border: 1px solid rgba(77, 208, 225, 0.45);
-  box-shadow: 0 0 24px rgba(77, 208, 225, 0.25);
-  user-select: none;
-  white-space: nowrap;
-}
-
-.scene-hub-title {
-  font-size: 15px;
-  font-weight: 800;
-  color: #4dd0e1;
-  letter-spacing: 0.04em;
-}
-
-.scene-hub-sub {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.6);
-  font-weight: 500;
+.login-feature-chip:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .login-glass-card {
@@ -303,11 +357,11 @@
   .login-glass-card,
   .login-brand-panel,
   .login-icon-ring,
-  .login-brand-dot {
+  .login-brand-dot,
+  .login-orb,
+  .login-particle,
+  .login-line,
+  .login-feature-chip {
     animation: none !important;
-  }
-
-  .login-brand-hint {
-    display: none;
   }
 }

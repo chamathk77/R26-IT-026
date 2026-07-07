@@ -606,57 +606,57 @@ function resolveSmsPackageUpdates({ smsPackageType, sendReceiptSms, shop }) {
 }
 
 async function parseShopModuleFeaturesInput(body) {
-  const {
-    shopId,
-    kpi,
-    analyticsModule,
-    customerManualOrder,
-    costModule,
-    marketingModule,
+    const {
+      shopId,
+      kpi,
+      analyticsModule,
+      customerManualOrder,
+      costModule,
+      marketingModule,
   } = body;
 
-  if (!shopId?.trim()) {
+    if (!shopId?.trim()) {
     return { error: { status: 400, body: { success: false, message: 'Shop id is required' } } };
-  }
+    }
 
-  const normalizedShopId = normalizeShopId(shopId);
+    const normalizedShopId = normalizeShopId(shopId);
 
-  if (!isValidShopIdFormat(normalizedShopId)) {
+    if (!isValidShopIdFormat(normalizedShopId)) {
     return { error: { status: 400, body: { success: false, message: 'Invalid shop id format' } } };
-  }
+    }
 
-  const shop = await ShopsData.findOne({ shopId: normalizedShopId });
-  if (!shop) {
+    const shop = await ShopsData.findOne({ shopId: normalizedShopId });
+    if (!shop) {
     return { error: { status: 404, body: { success: false, message: 'Shop not found' } } };
-  }
+    }
 
-  const kpiParsed = requireBooleanField(kpi, 'kpi');
-  if (kpiParsed.error) {
+    const kpiParsed = requireBooleanField(kpi, 'kpi');
+    if (kpiParsed.error) {
     return { error: { status: 400, body: { success: false, message: kpiParsed.error } } };
-  }
+    }
 
-  const analyticsModuleParsed = requireBooleanField(analyticsModule, 'analyticsModule');
-  if (analyticsModuleParsed.error) {
+    const analyticsModuleParsed = requireBooleanField(analyticsModule, 'analyticsModule');
+    if (analyticsModuleParsed.error) {
     return { error: { status: 400, body: { success: false, message: analyticsModuleParsed.error } } };
-  }
+    }
 
-  const customerManualOrderParsed = requireBooleanField(
-    customerManualOrder,
-    'customerManualOrder',
-  );
-  if (customerManualOrderParsed.error) {
+    const customerManualOrderParsed = requireBooleanField(
+      customerManualOrder,
+      'customerManualOrder',
+    );
+    if (customerManualOrderParsed.error) {
     return {
       error: { status: 400, body: { success: false, message: customerManualOrderParsed.error } },
     };
-  }
+    }
 
-  const costModuleParsed = requireBooleanField(costModule, 'costModule');
-  if (costModuleParsed.error) {
+    const costModuleParsed = requireBooleanField(costModule, 'costModule');
+    if (costModuleParsed.error) {
     return { error: { status: 400, body: { success: false, message: costModuleParsed.error } } };
-  }
+    }
 
-  const marketingModuleParsed = requireBooleanField(marketingModule, 'marketingModule');
-  if (marketingModuleParsed.error) {
+    const marketingModuleParsed = requireBooleanField(marketingModule, 'marketingModule');
+    if (marketingModuleParsed.error) {
     return {
       error: { status: 400, body: { success: false, message: marketingModuleParsed.error } },
     };
@@ -690,46 +690,46 @@ async function parseShopUsersFeaturesInput(body) {
   const shop = await ShopsData.findOne({ shopId: normalizedShopId });
   if (!shop) {
     return { error: { status: 404, body: { success: false, message: 'Shop not found' } } };
-  }
+    }
 
-  const isAdditionalUsersAddedParsed = requireBooleanField(
-    isAdditionalUsersAdded,
-    'isAdditionalUsersAdded',
-  );
-  if (isAdditionalUsersAddedParsed.error) {
+    const isAdditionalUsersAddedParsed = requireBooleanField(
+      isAdditionalUsersAdded,
+      'isAdditionalUsersAdded',
+    );
+    if (isAdditionalUsersAddedParsed.error) {
     return {
       error: { status: 400, body: { success: false, message: isAdditionalUsersAddedParsed.error } },
     };
-  }
+    }
 
-  let numAdditionalUsersValue = null;
-  if (isAdditionalUsersAddedParsed.value) {
-    if (numAdditionalUsers === undefined || numAdditionalUsers === null || numAdditionalUsers === '') {
+    let numAdditionalUsersValue = null;
+    if (isAdditionalUsersAddedParsed.value) {
+      if (numAdditionalUsers === undefined || numAdditionalUsers === null || numAdditionalUsers === '') {
       return {
         error: {
           status: 400,
           body: {
-            success: false,
-            message: 'numAdditionalUsers is required when isAdditionalUsersAdded is true',
+          success: false,
+          message: 'numAdditionalUsers is required when isAdditionalUsersAdded is true',
           },
         },
       };
-    }
+      }
 
-    const parsedCount = Number.parseInt(String(numAdditionalUsers), 10);
-    if (Number.isNaN(parsedCount) || parsedCount < 1) {
+      const parsedCount = Number.parseInt(String(numAdditionalUsers), 10);
+      if (Number.isNaN(parsedCount) || parsedCount < 1) {
       return {
         error: {
           status: 400,
           body: {
-            success: false,
-            message: 'numAdditionalUsers must be a number greater than 0',
+          success: false,
+          message: 'numAdditionalUsers must be a number greater than 0',
           },
         },
       };
+      }
+      numAdditionalUsersValue = parsedCount;
     }
-    numAdditionalUsersValue = parsedCount;
-  }
 
   const featureUpdates = {
     isAdditionalUsersAdded: isAdditionalUsersAddedParsed.value,
@@ -785,7 +785,7 @@ async function parseShopSmsFeaturesInput(body) {
 
   const smsPackageResult = resolveSmsPackageUpdates({
     smsPackageType,
-    sendReceiptSms: sendReceiptSmsParsed.value,
+      sendReceiptSms: sendReceiptSmsParsed.value,
     shop,
   });
   if (smsPackageResult.error) {
@@ -869,11 +869,11 @@ async function parseOnboardingShopFeaturesInput(body) {
   }
 
   const featureUpdates = {
-    kpi: kpiParsed.value,
-    analyticsModule: analyticsModuleParsed.value,
-    customerManualOrder: customerManualOrderParsed.value,
-    costModule: costModuleParsed.value,
-    marketingModule: marketingModuleParsed.value,
+      kpi: kpiParsed.value,
+      analyticsModule: analyticsModuleParsed.value,
+      customerManualOrder: customerManualOrderParsed.value,
+      costModule: costModuleParsed.value,
+      marketingModule: marketingModuleParsed.value,
   };
 
   if (!Object.values(featureUpdates).some(Boolean)) {
@@ -1339,7 +1339,7 @@ const setSubscription = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Subscription fee is not configured for the selected plan',
-        subscriptionType: normalizedSubscriptionType,
+      subscriptionType: normalizedSubscriptionType,
       });
     }
 
@@ -1371,6 +1371,7 @@ const setSubscription = async (req, res) => {
       paymentAmount: baseFee,
       additionalPayments: [],
       paymentType: 'subscription',
+      IsOnboaringPayment: true,
       subscriptionType: normalizedSubscriptionType,
       exactPaymentDay: billingDay,
       expiryDate,

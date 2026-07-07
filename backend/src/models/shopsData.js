@@ -182,25 +182,25 @@ const shopsDataSchema = new mongoose.Schema(
     },
     smsfeature: {
 
-      senderId: {
+    senderId: {
         type: String,
         default: null,
         trim: true,
       },
 
-      smsPackageType: {
+    smsPackageType: {
         type: String,
         enum: SMS_PACKAGE_TYPES,
         default: null,
       },
 
-      smsUsedInPeriod: {
+    smsUsedInPeriod: {
         type: Number,
         default: 0,
         min: 0,
       },
 
-      smsFeatureStatus: {
+    smsFeatureStatus: {
         type: String,
         enum: ['requested', 'active', 'pending', 'due', 'disabled'],
         default: 'disabled',
@@ -333,6 +333,7 @@ const shopsDataSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    
     subscriptionDueDays: {
       type: Number,
       default: 0,

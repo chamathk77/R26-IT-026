@@ -82,6 +82,10 @@ const paymentsSchema = new mongoose.Schema(
       default: 'subscription',
       trim: true,
     },
+    IsOnboaringPayment: {
+      type: Boolean,
+      default: false,
+    },
     subscriptionType: {
       type: String,
       default: null,
@@ -190,6 +194,7 @@ module.exports = Payments;
 // paymentAmount
 // additionalPayments: [{ name, amount }]
 // paymentType: subscription, upFront, sms
+// IsOnboaringPayment: boolean
 // subscriptionType: 1month | 3months | 6months | 1year | null
 // exactPaymentDay
 // expiryDate

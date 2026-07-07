@@ -83,7 +83,7 @@ export default function HomePage() {
                 </Typography>
               </Box>
               <Typography variant="body2" color="text.secondary">
-                Review and approve pending shop payment receipts.
+                Review onboarding and subscription payment receipts.
               </Typography>
             </CardContent>
           </Card>
