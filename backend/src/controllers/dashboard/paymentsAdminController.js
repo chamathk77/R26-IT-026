@@ -142,6 +142,45 @@ function mapOnboardingPaymentListItem(payment, shop, req) {
   };
 }
 
+function mapSubscriptionPaymentListItem(payment, shop, req) {
+  const formatted = formatPaymentRecord(payment, req);
+  return {
+    _id: formatted._id,
+    shopId: formatted.shopId,
+    shopStatus: shop?.status ?? null,
+    subscriptionDueDays: shop?.subscriptionDueDays ?? 0,
+    receiptNumber: formatted.receiptNumber,
+    receiptImagePath: formatted.receiptImagePath,
+    receiptImageUrl: formatted.receiptImageUrl,
+    receiptImageAvailable: formatted.receiptImageAvailable,
+    paymentType: formatted.paymentType,
+    paymentAmount: formatted.paymentAmount,
+    subscriptionType: formatted.subscriptionType ?? null,
+    IsOnboaringPayment: formatted.IsOnboaringPayment ?? false,
+    submittedDate: formatted.submittedDate,
+    paymentMonth: formatted.paymentMonth,
+    exactPaymentDay: formatted.exactPaymentDay,
+    expiryDate: formatted.expiryDate ?? null,
+    status: formatted.status,
+    reason: formatted.reason,
+    description: formatted.description ?? null,
+    createdAt: formatted.createdAt,
+    updatedAt: formatted.updatedAt,
+    shop: shop
+      ? {
+          shopId: shop.shopId,
+          shopName: shop.shopName,
+          ownerFirstName: shop.ownerFirstName,
+          ownerLastName: shop.ownerLastName,
+          shopMobileNumber: shop.shopMobileNumber,
+          email: shop.email,
+          status: shop.status,
+          subscriptionDueDays: shop.subscriptionDueDays ?? 0,
+        }
+      : null,
+  };
+}
+
 const listPendingPayments = async (req, res) => {
   try {
     const typeFilter = normalizePaymentTypeFilter(req.query.paymentType);
@@ -292,6 +331,68 @@ const getOnboardingPayments = async (req, res) => {
     });
   } catch (error) {
     console.log("error in getOnboardingPayments", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getSubscriptionPayments = async (req, res) => {
+  try {
+    const statusFilter = normalizePaymentStatusFilter(req.query.status);
+    if (statusFilter.error) {
+      return res.status(400).json({
+        success: false,
+        message: statusFilter.error,
+        allowedStatuses: PAYMENT_STATUS,
+      });
+    }
+
+    const query = {
+      paymentType: "subscription",
+      IsOnboaringPayment: false,
+    };
+    if (statusFilter.status) {
+      query.status = statusFilter.status;
+    }
+
+    const page = parsePositiveInt(req.query.page, PENDING_PAYMENTS_DEFAULT_PAGE);
+    const limit = Math.min(
+      parsePositiveInt(req.query.limit, PENDING_PAYMENTS_DEFAULT_LIMIT),
+      PENDING_PAYMENTS_MAX_LIMIT,
+    );
+    const skip = (page - 1) * limit;
+
+    const [payments, total] = await Promise.all([
+      Payments.find(query)
+        .sort({ submittedDate: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Payments.countDocuments(query),
+    ]);
+
+    const shopIds = [...new Set(payments.map((p) => p.shopId))];
+    const shops = await ShopsData.find({ shopId: { $in: shopIds } })
+      .select(
+        "shopId shopName ownerFirstName ownerLastName shopMobileNumber email status subscriptionDueDays",
+      )
+      .lean();
+    const shopById = new Map(shops.map((s) => [s.shopId, s]));
+
+    res.status(200).json({
+      success: true,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit) || 0,
+      count: payments.length,
+      status: statusFilter.status,
+      allowedStatuses: PAYMENT_STATUS,
+      payments: payments.map((payment) =>
+        mapSubscriptionPaymentListItem(payment, shopById.get(payment.shopId), req),
+      ),
+    });
+  } catch (error) {
+    console.log("error in getSubscriptionPayments", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -1489,6 +1590,7 @@ const rejectSubscriptionPayment = async (req, res) => {
 module.exports = {
   /** payments */
   getOnboardingPayments,
+  getSubscriptionPayments,
   getPaymentDetails,
 
   /** Upfront payment */

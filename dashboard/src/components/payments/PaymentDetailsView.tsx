@@ -322,6 +322,16 @@ export default function PaymentDetailsView({
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <DetailField
+                    label="Subscription due days"
+                    value={
+                      shop?.subscriptionDueDays != null
+                        ? String(shop.subscriptionDueDays)
+                        : undefined
+                    }
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <DetailField
                     label="Next payment date"
                     value={formatDate(shop?.nextPaymentDate as string | undefined)}
                   />

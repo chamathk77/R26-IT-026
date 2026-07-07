@@ -6,6 +6,7 @@ export interface PaymentShopSummary {
   shopMobileNumber: string;
   email: string;
   status: string;
+  subscriptionDueDays?: number;
 }
 
 export interface AdditionalPaymentItem {
@@ -26,6 +27,8 @@ export interface PendingPayment {
   paymentType?: string;
   subscriptionType?: string | null;
   IsOnboaringPayment?: boolean;
+  shopStatus?: string | null;
+  subscriptionDueDays?: number;
   exactPaymentDay?: string | null;
   expiryDate?: string | null;
   status: string;
@@ -71,6 +74,12 @@ export interface FetchOnboardingPaymentsParams {
   status?: PaymentStatusFilter | '';
 }
 
+export interface FetchSubscriptionPaymentsParams {
+  page?: number;
+  limit?: number;
+  status?: PaymentStatusFilter | '';
+}
+
 export interface PendingPaymentsResponse {
   success: boolean;
   page: number;
@@ -93,6 +102,18 @@ export interface OnboardingPaymentsResponse {
   paymentType?: OnboardingPaymentTypeFilter | null;
   status?: PaymentStatusFilter | null;
   allowedPaymentTypes?: OnboardingPaymentTypeFilter[];
+  allowedStatuses?: PaymentStatusFilter[];
+  payments: PendingPayment[];
+}
+
+export interface SubscriptionPaymentsResponse {
+  success: boolean;
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  count: number;
+  status?: PaymentStatusFilter | null;
   allowedStatuses?: PaymentStatusFilter[];
   payments: PendingPayment[];
 }

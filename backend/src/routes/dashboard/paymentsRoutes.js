@@ -1,8 +1,8 @@
 const express = require('express');
 const { protectDashboard } = require('../../middleware/dashboardAuthMiddleware');
 const {
-  listPendingPayments,
   getOnboardingPayments,
+  getSubscriptionPayments,
   getPaymentDetails,
   approveUpfrontPayment,
   approveSubscriptionPayment,
@@ -16,6 +16,7 @@ const {
 const router = express.Router();
 
 router.get('/onboarding', protectDashboard, getOnboardingPayments);
+router.get('/subscription', protectDashboard, getSubscriptionPayments);
 router.get('/:paymentId', protectDashboard, getPaymentDetails);
 router.post('/:paymentId/approve-upfront', protectDashboard, approveUpfrontPayment);
 router.post(

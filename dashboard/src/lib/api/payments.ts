@@ -3,10 +3,12 @@ import { api } from './axios';
 import type {
   FetchOnboardingPaymentsParams,
   FetchPendingPaymentsParams,
+  FetchSubscriptionPaymentsParams,
   OnboardingPaymentsResponse,
   PaymentActionResponse,
   PaymentDetailsResponse,
   PendingPaymentsResponse,
+  SubscriptionPaymentsResponse,
 } from './payments.types';
 
 interface ApiErrorBody {
@@ -48,6 +50,22 @@ export async function fetchOnboardingPayments(
         page: params.page ?? 1,
         limit: params.limit ?? 20,
         ...(params.paymentType ? { paymentType: params.paymentType } : {}),
+        ...(params.status ? { status: params.status } : {}),
+      },
+    },
+  );
+  return response.data;
+}
+
+export async function fetchSubscriptionPayments(
+  params: FetchSubscriptionPaymentsParams = {},
+): Promise<SubscriptionPaymentsResponse> {
+  const response = await api.get<SubscriptionPaymentsResponse>(
+    '/api/dashboard/payments/subscription',
+    {
+      params: {
+        page: params.page ?? 1,
+        limit: params.limit ?? 20,
         ...(params.status ? { status: params.status } : {}),
       },
     },
