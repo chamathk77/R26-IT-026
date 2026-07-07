@@ -100,7 +100,7 @@ export default function ManageFeaturesScreen({ navigation }: Props) {
       icon: 'chatbubble-ellipses-outline',
       iconBg: '#dbeafe',
       iconColor: '#1d4ed8',
-      onPress: () => {},
+      onPress: () => navigation.navigate('ManageSmsFeature'),
     },
     {
       key: 'add-users',

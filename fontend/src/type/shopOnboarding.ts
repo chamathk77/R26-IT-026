@@ -241,3 +241,43 @@ export interface RemoveOnboardingDataResponse {
   removedUsers: number;
   message: string;
 }
+
+export interface SmsPackage {
+  type: string;
+  messageCount: number;
+  fee: number;
+}
+
+export interface GetSmsPackagesResponse {
+  success: boolean;
+  message: string;
+  packages: SmsPackage[];
+}
+
+export interface ShopSmsFeaturesPayload {
+  smsPackageType: string | null;
+  smsUsedInPeriod: number;
+  smsNextRenewalDate: string | null;
+  smsPackageAmount: number | null;
+  smsFeatureStatus: 'requested' | 'active' | 'pending' | 'due' | 'disabled' | string;
+}
+
+export interface GetShopSmsFeaturesResponse {
+  success: boolean;
+  shopId: string;
+  message: string;
+  features: ShopSmsFeaturesPayload;
+}
+
+export interface UpdateShopSmsFeaturesRequest {
+  shopId: string;
+  sendReceiptSms: boolean;
+  smsPackageType?: string | null;
+}
+
+export interface UpdateShopSmsFeaturesResponse {
+  success: boolean;
+  shopId: string;
+  message: string;
+  features: ShopSmsFeaturesPayload;
+}

@@ -30,6 +30,10 @@ import {
   GetSubscriptionPlansResponse,
   RemoveOnboardingDataRequest,
   RemoveOnboardingDataResponse,
+  GetSmsPackagesResponse,
+  GetShopSmsFeaturesResponse,
+  UpdateShopSmsFeaturesRequest,
+  UpdateShopSmsFeaturesResponse,
 } from "../type/shopOnboarding";
 
 function isHttpSuccess(status: number): boolean {
@@ -438,6 +442,89 @@ export const fetchSubscriptionPlans_Service = createAsyncThunk(
       const apiError: ApiErrorResponse = {
         error: "Error",
         message: "Could not load subscription plans",
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const fetchSmsPackages_Service = createAsyncThunk(
+  "shopOnboarding/fetchSmsPackages",
+  async (_void, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.get<GetSmsPackagesResponse>("/api/shops/sms-packages");
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: "Error",
+        message: "Could not load SMS packages",
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const fetchShopSmsFeatures_Service = createAsyncThunk(
+  "shopOnboarding/fetchSmsFeatures",
+  async (shopId: string | undefined, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const query = shopId?.trim()
+        ? `?shopId=${encodeURIComponent(shopId.trim())}`
+        : "";
+      const response = await apiClient.get<GetShopSmsFeaturesResponse>(
+        `/api/shops/features/sms${query}`,
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: "Error",
+        message: "Could not load SMS settings",
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const updateShopSmsFeatures_Service = createAsyncThunk(
+  "shopOnboarding/updateSmsFeatures",
+  async (payload: UpdateShopSmsFeaturesRequest, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.put<UpdateShopSmsFeaturesResponse>(
+        "/api/shops/features/sms",
+        payload,
+      );
+
+      if (isHttpSuccess(response.status)) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: "Error",
+        message: "SMS settings update failed",
         status: response.status,
         timestamp: new Date().toISOString(),
       };

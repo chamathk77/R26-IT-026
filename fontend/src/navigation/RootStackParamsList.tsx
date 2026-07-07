@@ -53,6 +53,7 @@ export type RootStackParamList = {
   ManageAccount: undefined;
   ManageFeatures: undefined;
   ManageGeneralFeatures: undefined;
+  ManageSmsFeature: undefined;
   ManageAddUsers: undefined;
   ManageUserForm: { userId?: string } | undefined;
   ThemePreference: undefined;

@@ -30,6 +30,7 @@ import ShopDetailsScreen from '../screens/settings/account/shopDetails/ShopDetai
 import ManageAccountScreen from '../screens/settings/account/manageAccount/ManageAccountScreen';
 import ManageFeaturesScreen from '../screens/settings/account/manageFeatures/ManageFeaturesScreen';
 import ManageGeneralFeaturesScreen from '../screens/settings/account/manageFeatures/manageGeneralFeatures/ManageGeneralFeaturesScreen';
+import ManageSmsFeatureScreen from '../screens/settings/account/manageFeatures/smsFeature/ManageSmsFeatureScreen';
 import ManageAddUsersScreen from '../screens/settings/account/manageFeatures/manageUsersFeature/ManageAddUsersScreen';
 import ManageUserFormScreen from '../screens/settings/account/manageUserForm/ManageUserFormScreen';
 import ThemePreferenceScreen from '../screens/settings/preferences/ThemePreferenceScreen';
@@ -97,6 +98,7 @@ export default function AppNavigator() {
         <Stack.Screen name="ManageAccount" component={ManageAccountScreen} />
         <Stack.Screen name="ManageFeatures" component={ManageFeaturesScreen} />
         <Stack.Screen name="ManageGeneralFeatures" component={ManageGeneralFeaturesScreen} />
+        <Stack.Screen name="ManageSmsFeature" component={ManageSmsFeatureScreen} />
         <Stack.Screen name="ManageAddUsers" component={ManageAddUsersScreen} />
         <Stack.Screen name="ManageUserForm" component={ManageUserFormScreen} />
         <Stack.Screen name="ThemePreference" component={ThemePreferenceScreen} />

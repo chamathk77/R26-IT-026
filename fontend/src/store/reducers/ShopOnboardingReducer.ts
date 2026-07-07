@@ -15,6 +15,9 @@ import {
   signupOnboarding_Service,
   setSubscription_Service,
   fetchSubscriptionPlans_Service,
+  fetchSmsPackages_Service,
+  fetchShopSmsFeatures_Service,
+  updateShopSmsFeatures_Service,
   removeOnboardingData_Service,
 } from '../../services/ShopOnboardingService';
 import {
@@ -32,6 +35,9 @@ import {
   SignupOnboardingResponse,
   SetSubscriptionResponse,
   GetSubscriptionPlansResponse,
+  GetSmsPackagesResponse,
+  GetShopSmsFeaturesResponse,
+  UpdateShopSmsFeaturesResponse,
   RemoveOnboardingDataResponse,
 } from '../../type/shopOnboarding';
 
@@ -124,6 +130,24 @@ interface ShopOnboardingState {
     error: string | null;
     success: boolean;
     data: GetSubscriptionPlansResponse | null;
+  };
+  smsPackages: {
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+    data: GetSmsPackagesResponse | null;
+  };
+  shopSmsFeatures: {
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+    data: GetShopSmsFeaturesResponse | null;
+  };
+  updateSmsFeatures: {
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+    data: UpdateShopSmsFeaturesResponse | null;
   };
   removeOnboardingData: {
     loading: boolean;
@@ -218,6 +242,24 @@ const initialState: ShopOnboardingState = {
     data: null,
   },
   subscriptionPlans: {
+    loading: false,
+    error: null,
+    success: false,
+    data: null,
+  },
+  smsPackages: {
+    loading: false,
+    error: null,
+    success: false,
+    data: null,
+  },
+  shopSmsFeatures: {
+    loading: false,
+    error: null,
+    success: false,
+    data: null,
+  },
+  updateSmsFeatures: {
     loading: false,
     error: null,
     success: false,
@@ -561,6 +603,63 @@ export const ShopOnboardingSlice = createSlice({
       state.subscriptionPlans.error =
         (action.payload as string) || action.error.message || 'Could not load subscription plans';
       state.subscriptionPlans.data = null;
+    });
+
+    builder.addCase(fetchSmsPackages_Service.pending, (state) => {
+      state.smsPackages.loading = true;
+      state.smsPackages.error = null;
+      state.smsPackages.success = false;
+    });
+    builder.addCase(fetchSmsPackages_Service.fulfilled, (state, action) => {
+      state.smsPackages.loading = false;
+      state.smsPackages.success = true;
+      state.smsPackages.error = null;
+      state.smsPackages.data = action.payload;
+    });
+    builder.addCase(fetchSmsPackages_Service.rejected, (state, action) => {
+      state.smsPackages.loading = false;
+      state.smsPackages.success = false;
+      state.smsPackages.error =
+        (action.payload as string) || action.error.message || 'Could not load SMS packages';
+      state.smsPackages.data = null;
+    });
+
+    builder.addCase(fetchShopSmsFeatures_Service.pending, (state) => {
+      state.shopSmsFeatures.loading = true;
+      state.shopSmsFeatures.error = null;
+      state.shopSmsFeatures.success = false;
+    });
+    builder.addCase(fetchShopSmsFeatures_Service.fulfilled, (state, action) => {
+      state.shopSmsFeatures.loading = false;
+      state.shopSmsFeatures.success = true;
+      state.shopSmsFeatures.error = null;
+      state.shopSmsFeatures.data = action.payload;
+    });
+    builder.addCase(fetchShopSmsFeatures_Service.rejected, (state, action) => {
+      state.shopSmsFeatures.loading = false;
+      state.shopSmsFeatures.success = false;
+      state.shopSmsFeatures.error =
+        (action.payload as string) || action.error.message || 'Could not load SMS settings';
+      state.shopSmsFeatures.data = null;
+    });
+
+    builder.addCase(updateShopSmsFeatures_Service.pending, (state) => {
+      state.updateSmsFeatures.loading = true;
+      state.updateSmsFeatures.error = null;
+      state.updateSmsFeatures.success = false;
+    });
+    builder.addCase(updateShopSmsFeatures_Service.fulfilled, (state, action) => {
+      state.updateSmsFeatures.loading = false;
+      state.updateSmsFeatures.success = true;
+      state.updateSmsFeatures.error = null;
+      state.updateSmsFeatures.data = action.payload;
+    });
+    builder.addCase(updateShopSmsFeatures_Service.rejected, (state, action) => {
+      state.updateSmsFeatures.loading = false;
+      state.updateSmsFeatures.success = false;
+      state.updateSmsFeatures.error =
+        (action.payload as string) || action.error.message || 'SMS settings update failed';
+      state.updateSmsFeatures.data = null;
     });
 
     builder.addCase(removeOnboardingData_Service.pending, (state) => {
