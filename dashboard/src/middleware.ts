@@ -2,7 +2,7 @@ import { DASHBOARD_TOKEN_COOKIE } from '@/lib/auth/constants';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-const PROTECTED_PREFIXES = ['/home', '/payments'];
+const PROTECTED_PREFIXES = ['/home', '/payments', '/shops'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -24,5 +24,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/login', '/home/:path*', '/payments/:path*'],
+  matcher: ['/login', '/home/:path*', '/payments/:path*', '/shops/:path*'],
 };

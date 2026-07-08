@@ -3,6 +3,7 @@
 import { Box, Card, CardContent, Chip, Grid, Typography } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import PaymentsIcon from '@mui/icons-material/Payments';
+import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import Link from 'next/link';
 import { useAuthStore } from '@/lib/auth/authStore';
 import DashboardShell from '@/components/layout/DashboardShell';
@@ -84,6 +85,33 @@ export default function HomePage() {
               </Box>
               <Typography variant="body2" color="text.secondary">
                 Review onboarding and subscription payment receipts.
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card
+            component={Link}
+            href="/shops/onboarding"
+            sx={{
+              textDecoration: 'none',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: 4,
+              },
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <StorefrontOutlinedIcon color="primary" />
+                <Typography variant="h6" color="text.primary">
+                  Shop onboarding
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                View shops that completed onboarding and payment status.
               </Typography>
             </CardContent>
           </Card>
