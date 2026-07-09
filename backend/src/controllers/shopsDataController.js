@@ -168,8 +168,7 @@ const SHOP_MODULE_FEATURE_FIELDS =
 const SHOP_USERS_FEATURE_FIELDS =
   'shopId maxUsers isAdditionalUsersAdded numAdditionalUsers nextPaymentDate';
 
-const SHOP_SMS_FEATURE_FIELDS =
-  'shopId smsPackageType smsUsedInPeriod smsNextRenewalDate smsPackageAmount smsFeatureStatus';
+const SHOP_SMS_FEATURE_FIELDS = 'shopId smsfeature';
 
 const DEFAULT_MAX_USERS = 3;
 
@@ -314,13 +313,47 @@ function mapSmsPackageResponse(shop) {
 }
 
 function mapShopSmsFeaturesResponse(shop) {
+  const smsFeature = shop.smsfeature ?? {};
+
   return {
-    smsPackageType: shop.smsPackageType ?? null,
-    smsUsedInPeriod: shop.smsUsedInPeriod ?? 0,
-    smsNextRenewalDate: shop.smsNextRenewalDate ?? null,
-    smsPackageAmount: shop.smsPackageAmount ?? null,
-    smsFeatureStatus: shop.smsFeatureStatus ?? 'disabled',
+    senderId: smsFeature.senderId ?? null,
+    smsPackageType: smsFeature.smsPackageType ?? null,
+    smsUsedInPeriod: smsFeature.smsUsedInPeriod ?? 0,
+    smsFeatureStatus: smsFeature.smsFeatureStatus ?? 'inactive',
+    smsNextRenewalDate: smsFeature.smsNextRenewalDate ?? null,
   };
+}
+
+const DEFAULT_SMS_PACKAGE_TYPE = '0-500';
+const SMS_RENEWAL_PERIOD_DAYS = 30;
+
+function mapManageSmsFeatureResponse(shop) {
+  return mapShopSmsFeaturesResponse(shop);
+}
+
+function buildManageSmsFeatureUpdates(shop, enabled) {
+  const smsFeature = shop.smsfeature ?? {};
+  const updates = {};
+
+  if (enabled) {
+    const senderId = smsFeature.senderId?.trim() || null;
+    updates['smsfeature.smsFeatureStatus'] = senderId ? 'active' : 'requested';
+
+    if (!smsFeature.smsNextRenewalDate) {
+      updates['smsfeature.smsNextRenewalDate'] = addDays(
+        startOfDay(),
+        SMS_RENEWAL_PERIOD_DAYS,
+      );
+    }
+
+    if (!smsFeature.smsPackageType) {
+      updates['smsfeature.smsPackageType'] = DEFAULT_SMS_PACKAGE_TYPE;
+    }
+  } else {
+    updates['smsfeature.smsFeatureStatus'] = 'inactive';
+  }
+
+  return updates;
 }
 
 function resolveShopFeaturesGetRequest(req) {
@@ -910,6 +943,55 @@ const updateShopUsersFeatures = async (req, res) => {
   }
 };
 
+const manageSmsFeature = async (req, res) => {
+  try {
+    const shopId = normalizeShopId(req.user?.shopId);
+    if (!shopId) {
+      return res.status(400).json({ success: false, message: 'Shop id is required' });
+    }
+
+    if (!isValidShopIdFormat(shopId)) {
+      return res.status(400).json({ success: false, message: 'Invalid shop id format' });
+    }
+
+    const enabledParsed = requireBooleanField(req.body?.enabled, 'enabled');
+    if (enabledParsed.error) {
+      return res.status(400).json({ success: false, message: enabledParsed.error });
+    }
+
+    const roleAccess = await resolveFeatureUpdateRoleAccess(req);
+    if (roleAccess.error) {
+      return res.status(roleAccess.error.status).json(roleAccess.error.body);
+    }
+
+    const shop = await ShopsData.findOne({ shopId }).select('shopId smsfeature').lean();
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found' });
+    }
+
+    const featureUpdates = buildManageSmsFeatureUpdates(shop, enabledParsed.value);
+    const updated = await ShopsData.findOneAndUpdate(
+      { shopId },
+      { $set: featureUpdates },
+      { returnDocument: 'after', runValidators: true },
+    )
+      .select('shopId smsfeature')
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      shopId: updated.shopId,
+      message: enabledParsed.value
+        ? 'SMS feature enabled successfully'
+        : 'SMS feature disabled successfully',
+      features: mapManageSmsFeatureResponse(updated),
+    });
+  } catch (error) {
+    console.log('error in manageSmsFeature', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const updateShopSmsFeatures = async (req, res) => {
   try {
     const shopId = req.body.shopId ?? req.user?.shopId;
@@ -1196,6 +1278,7 @@ module.exports = {
   /** Features */
   updateShopModuleFeatures,
   updateShopUsersFeatures,
+  manageSmsFeature,
   updateShopSmsFeatures,
 
   /** Get features */

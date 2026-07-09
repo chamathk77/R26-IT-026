@@ -250,8 +250,8 @@ const shopsDataSchema = new mongoose.Schema(
 
       smsFeatureStatus: {
         type: String,
-        enum: ["requested", "active", "pending", "due", "disabled"],
-        default: "disabled",
+        enum: ["requested", "active", "pending", "due", "inactive"],
+        default: "inactive",
       },
 
       smsNextRenewalDate: {

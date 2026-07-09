@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { fonts } from '../../../../../constants/fonts';
 import type { SmsPackage } from '../../../../../type/shopOnboarding';
+import { formatSmsPackageLabel } from '../../../../../type/shopOnboarding';
 import { formatLkr } from '../../../../../type/onboarding';
 
 type Props = {
@@ -22,9 +23,7 @@ type Props = {
   loading: boolean;
   packages: SmsPackage[];
   selectedType: string | null;
-  selectionMode: boolean;
   onClose: () => void;
-  onSelect?: (pkg: SmsPackage) => void;
   paperTheme: ReturnType<typeof import('../../../../../context/ThemeContext').useTheme>['paperTheme'];
 };
 
@@ -36,9 +35,7 @@ export default function SmsPackagesModal({
   loading,
   packages,
   selectedType,
-  selectionMode,
   onClose,
-  onSelect,
   paperTheme,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -52,51 +49,37 @@ export default function SmsPackagesModal({
   }, [bottomInset]);
 
   const renderPackageCard = (pkg: SmsPackage) => {
-    const selected = selectedType === pkg.type;
+    const isCurrent = selectedType === pkg.type;
     const cardStyle = [
       styles.packageCard,
       {
-        borderColor: selected ? paperTheme.colors.primary : paperTheme.colors.outlineVariant,
-        backgroundColor: selected
+        borderColor: isCurrent ? paperTheme.colors.primary : paperTheme.colors.outlineVariant,
+        backgroundColor: isCurrent
           ? paperTheme.colors.primaryContainer
           : paperTheme.colors.surfaceVariant,
       },
     ];
-    const cardContent = (
-      <>
+
+    return (
+      <View key={pkg.type} style={cardStyle}>
         <View style={styles.packageTop}>
           <Text style={[styles.packageTitle, { color: paperTheme.colors.onSurface }]}>
-            {pkg.messageCount.toLocaleString('en-LK')} messages
+            {formatSmsPackageLabel(pkg)}
           </Text>
-          {selected ? (
-            <Ionicons name="checkmark-circle" size={22} color={paperTheme.colors.primary} />
+          {isCurrent ? (
+            <View style={[styles.currentBadge, { backgroundColor: paperTheme.colors.primary }]}>
+              <Text style={[styles.currentBadgeText, { color: paperTheme.colors.onPrimary }]}>
+                Current
+              </Text>
+            </View>
           ) : null}
         </View>
         <Text style={[styles.packageFee, { color: paperTheme.colors.primary }]}>
           {formatLkr(pkg.fee)} / month
         </Text>
         <Text style={[styles.packageMeta, { color: paperTheme.colors.onSurfaceVariant }]}>
-          Package code: {pkg.type}
+          Package: {pkg.type}
         </Text>
-      </>
-    );
-
-    if (selectionMode && onSelect) {
-      return (
-        <TouchableOpacity
-          key={pkg.type}
-          style={cardStyle}
-          activeOpacity={0.85}
-          onPress={() => onSelect(pkg)}
-        >
-          {cardContent}
-        </TouchableOpacity>
-      );
-    }
-
-    return (
-      <View key={pkg.type} style={cardStyle}>
-        {cardContent}
       </View>
     );
   };
@@ -119,12 +102,11 @@ export default function SmsPackagesModal({
           <View style={styles.headerRow}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.title, { color: paperTheme.colors.onSurface }]}>
-                SMS packages
+                SMS package prices
               </Text>
               <Text style={[styles.subtitle, { color: paperTheme.colors.onSurfaceVariant }]}>
-                {selectionMode
-                  ? 'Select a monthly SMS package for digital receipt messages.'
-                  : 'Available monthly SMS packages and pricing.'}
+                Monthly SMS tiers based on message volume. Your current package is selected
+                automatically from usage.
               </Text>
             </View>
             <TouchableOpacity onPress={onClose} hitSlop={12}>
@@ -213,10 +195,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 6,
+    gap: 8,
   },
   packageTitle: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 16,
+    flex: 1,
+  },
+  currentBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  currentBadgeText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
   },
   packageFee: {
     fontFamily: fonts.PoppinsSemiBold,

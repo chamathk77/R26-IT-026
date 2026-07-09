@@ -23,45 +23,47 @@ import { useCommonAlert } from '../../../../../hooks/useCommonAlert';
 import {
   fetchShopSmsFeatures_Service,
   fetchSmsPackages_Service,
-  updateShopSmsFeatures_Service,
+  manageSmsFeature_Service,
 } from '../../../../../services/ShopOnboardingService';
 import type { ShopSmsFeaturesPayload, SmsPackage } from '../../../../../type/shopOnboarding';
+import { formatSmsPackageLabel } from '../../../../../type/shopOnboarding';
 import { formatLkr, formatLkrDecimal, SMS_PRICE_PER_MESSAGE_LKR } from '../../../../../type/onboarding';
 import {
   getApiErrorMessage,
   handleSessionExpiredApiError,
 } from '../../../../../utils/apiErrorAlert';
 import { cardShadow, settingsDetailStyles as sharedStyles } from '../../../shared/settingsDetailStyles';
+import { SettingsBadge } from '../../../shared/SettingsDetailComponents';
 import { manageSmsFeatureStyles as styles } from './manageSmsFeatureStyles';
 import SmsPackagesModal from './SmsPackagesModal';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageSmsFeature'>;
 
-type SmsFormState = {
-  sendReceiptSms: boolean;
-  smsPackageType: string | null;
-};
-
 function isSmsFeatureEnabled(status?: string | null): boolean {
-  return Boolean(status && status !== 'disabled');
+  return Boolean(status && status !== 'inactive');
 }
 
-function featuresToForm(features: ShopSmsFeaturesPayload): SmsFormState {
-  return {
-    sendReceiptSms: isSmsFeatureEnabled(features.smsFeatureStatus),
-    smsPackageType: features.smsPackageType,
-  };
-}
-
-function buildSnapshot(form: SmsFormState): string {
-  return JSON.stringify(form);
+function getSmsStatusMeta(status?: string | null) {
+  switch (status) {
+    case 'active':
+      return { label: 'Active', tone: 'success' as const, color: '#15803d' };
+    case 'requested':
+      return { label: 'Requested', tone: 'warning' as const, color: '#b45309' };
+    case 'pending':
+      return { label: 'Pending', tone: 'warning' as const, color: '#b45309' };
+    case 'due':
+      return { label: 'Due', tone: 'neutral' as const, color: '#dc2626' };
+    case 'inactive':
+    default:
+      return { label: 'Inactive', tone: 'neutral' as const, color: '#64748b' };
+  }
 }
 
 function formatBillingDate(value?: string | null): string | null {
   if (!value) return null;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toLocaleDateString(undefined, {
+  return parsed.toLocaleDateString('en-LK', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -74,7 +76,7 @@ function calculateUsageCharge(
   packages: SmsPackage[],
 ): number {
   const selectedPackage = packages.find((pkg) => pkg.type === packageType);
-  const allowance = selectedPackage?.messageCount ?? 0;
+  const allowance = selectedPackage?.maxMessageCount ?? selectedPackage?.messageCount ?? 0;
   const overage = Math.max(0, used - allowance);
   return overage * SMS_PRICE_PER_MESSAGE_LKR;
 }
@@ -82,11 +84,13 @@ function calculateUsageCharge(
 function BooleanRadioToggle({
   value,
   onChange,
+  disabled,
   paperTheme,
   resolvedTheme,
 }: {
   value: boolean;
   onChange: (enabled: boolean) => void;
+  disabled?: boolean;
   paperTheme: ReturnType<typeof useTheme>['paperTheme'];
   resolvedTheme: 'light' | 'dark';
 }) {
@@ -109,11 +113,13 @@ function BooleanRadioToggle({
                   ? paperTheme.colors.surface
                   : paperTheme.colors.surfaceVariant,
                 borderColor: selected ? paperTheme.colors.primary : 'transparent',
+                opacity: disabled ? 0.6 : 1,
               },
               selected && cardShadow(resolvedTheme),
             ]}
             onPress={() => onChange(option.enabled)}
             activeOpacity={0.85}
+            disabled={disabled}
           >
             <View
               style={[
@@ -162,8 +168,8 @@ export default function ManageSmsFeatureScreen({ navigation }: Props) {
   const { loading: fetchLoading } = useSelector(
     (state: RootState) => state.shopOnboarding.shopSmsFeatures,
   );
-  const { loading: updateLoading } = useSelector(
-    (state: RootState) => state.shopOnboarding.updateSmsFeatures,
+  const { loading: manageLoading } = useSelector(
+    (state: RootState) => state.shopOnboarding.manageSmsFeature,
   );
   const packages = useSelector(
     (state: RootState) => state.shopOnboarding.smsPackages.data?.packages ?? [],
@@ -173,32 +179,29 @@ export default function ManageSmsFeatureScreen({ navigation }: Props) {
   );
 
   const [features, setFeatures] = useState<ShopSmsFeaturesPayload | null>(null);
-  const [form, setForm] = useState<SmsFormState | null>(null);
-  const [savedSnapshot, setSavedSnapshot] = useState('');
   const [packagesModalVisible, setPackagesModalVisible] = useState(false);
-  const [packageSelectionMode, setPackageSelectionMode] = useState(false);
 
-  const currentSnapshot = useMemo(() => (form ? buildSnapshot(form) : ''), [form]);
-  const hasChanges = Boolean(form) && currentSnapshot !== savedSnapshot;
-  const isSubmitting = updateLoading;
   const showLoader = fetchLoading && !features;
+  const isSubmitting = manageLoading;
+  const isSmsActive = isSmsFeatureEnabled(features?.smsFeatureStatus);
+  const statusMeta = getSmsStatusMeta(features?.smsFeatureStatus);
 
-  const selectedPackage = useMemo(
-    () => packages.find((pkg) => pkg.type === form?.smsPackageType) ?? null,
-    [form?.smsPackageType, packages],
+  const currentPackage = useMemo(
+    () => packages.find((pkg) => pkg.type === features?.smsPackageType) ?? null,
+    [features?.smsPackageType, packages],
   );
 
   const nextRenewalLabel = formatBillingDate(features?.smsNextRenewalDate);
   const usageCharge = features
-    ? calculateUsageCharge(features.smsUsedInPeriod, form?.smsPackageType ?? null, packages)
+    ? calculateUsageCharge(
+        features.smsUsedInPeriod,
+        features.smsPackageType,
+        packages,
+      )
     : 0;
-  const isSmsActive = Boolean(form?.sendReceiptSms);
 
   const applyLoadedFeatures = useCallback((loaded: ShopSmsFeaturesPayload) => {
-    const nextForm = featuresToForm(loaded);
     setFeatures(loaded);
-    setForm(nextForm);
-    setSavedSnapshot(buildSnapshot(nextForm));
   }, []);
 
   const loadSmsFeatures = useCallback(async () => {
@@ -258,61 +261,23 @@ export default function ManageSmsFeatureScreen({ navigation }: Props) {
     }, [ensurePackagesLoaded, loadSmsFeatures]),
   );
 
-  const openPackagesModal = (selectionMode: boolean) => {
-    setPackageSelectionMode(selectionMode);
-    setPackagesModalVisible(true);
-    void ensurePackagesLoaded();
-  };
-
-  const handlePackageSelect = (pkg: SmsPackage) => {
-    setForm((prev) =>
-      prev
-        ? {
-            ...prev,
-            sendReceiptSms: true,
-            smsPackageType: pkg.type,
-          }
-        : prev,
-    );
-    setPackagesModalVisible(false);
-  };
-
-  const onUpdate = async () => {
-    if (!form || !shopId || isSubmitting || !hasChanges) {
+  const onToggleSmsFeature = async (enabled: boolean) => {
+    if (isSubmitting || !features) {
       return;
     }
 
-    if (form.sendReceiptSms && !form.smsPackageType) {
-      show_Alert(
-        'error',
-        'Package required',
-        'Please select an SMS package before activating receipt SMS.',
-        2,
-        false,
-        'Choose package',
-        () => openPackagesModal(true),
-        'Cancel',
-        () => {},
-      );
+    if (enabled === isSmsActive) {
       return;
     }
 
     try {
-      const response = await dispatch(
-        updateShopSmsFeatures_Service({
-          shopId: String(shopId),
-          sendReceiptSms: form.sendReceiptSms,
-          ...(form.sendReceiptSms ? { smsPackageType: form.smsPackageType } : {}),
-        }),
-      ).unwrap();
-
+      const response = await dispatch(manageSmsFeature_Service({ enabled })).unwrap();
       applyLoadedFeatures(response.features);
       dispatch(
         patchLoginShopData({
-          sendReceiptSms: form.sendReceiptSms,
+          sendReceiptSms: isSmsFeatureEnabled(response.features.smsFeatureStatus),
         }),
       );
-
       show_Alert('success', 'Updated', response.message || 'SMS settings updated successfully.');
     } catch (error: unknown) {
       const handled = await handleSessionExpiredApiError(error, show_Alert);
@@ -326,7 +291,7 @@ export default function ManageSmsFeatureScreen({ navigation }: Props) {
         false,
         'Try again',
         () => {
-          void onUpdate();
+          void onToggleSmsFeature(enabled);
         },
         'Cancel',
         () => {},
@@ -358,7 +323,7 @@ export default function ManageSmsFeatureScreen({ navigation }: Props) {
               Loading SMS settings…
             </Text>
           </View>
-        ) : !features || !form ? (
+        ) : !features ? (
           <View style={styles.centered}>
             <Ionicons name="cloud-offline-outline" size={40} color={paperTheme.colors.onSurfaceVariant} />
             <Text style={[styles.loadingText, { color: paperTheme.colors.onSurface }]}>
@@ -382,205 +347,11 @@ export default function ManageSmsFeatureScreen({ navigation }: Props) {
             </TouchableOpacity>
           </View>
         ) : (
-          <>
-            <ScrollView
-              contentContainerStyle={[sharedStyles.scroll, hasChanges && styles.scrollWithFooter]}
-              showsVerticalScrollIndicator={false}
-            >
-              {nextRenewalLabel ? (
-                <View
-                  style={[
-                    styles.renewalCard,
-                    {
-                      backgroundColor: paperTheme.colors.surface,
-                      borderColor: paperTheme.colors.outlineVariant,
-                    },
-                    cardShadow(resolvedTheme),
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.renewalIconWrap,
-                      { backgroundColor: paperTheme.colors.primaryContainer },
-                    ]}
-                  >
-                    <Ionicons name="calendar-outline" size={22} color={primary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.renewalTitle, { color: paperTheme.colors.onSurfaceVariant }]}>
-                      Next SMS payment date
-                    </Text>
-                    <Text style={[styles.renewalValue, { color: paperTheme.colors.onSurface }]}>
-                      {nextRenewalLabel}
-                    </Text>
-                  </View>
-                </View>
-              ) : null}
-
-              <Text style={[styles.sectionLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-                SMS feature
-              </Text>
-
+          <ScrollView contentContainerStyle={sharedStyles.scroll} showsVerticalScrollIndicator={false}>
+            {nextRenewalLabel ? (
               <View
                 style={[
-                  styles.moduleCard,
-                  {
-                    backgroundColor: paperTheme.colors.surface,
-                    borderColor: isSmsActive ? '#1d4ed8' : paperTheme.colors.outlineVariant,
-                  },
-                  cardShadow(resolvedTheme),
-                ]}
-              >
-                {isSmsActive ? <View style={[styles.accentBar, { backgroundColor: '#1d4ed8' }]} /> : null}
-                <View style={styles.moduleTopRow}>
-                  <View style={[styles.moduleIconWrap, { backgroundColor: '#dbeafe' }]}>
-                    <Ionicons name="chatbubble-ellipses-outline" size={22} color="#1d4ed8" />
-                  </View>
-                  <View style={styles.moduleText}>
-                    <Text style={[styles.moduleTitle, { color: paperTheme.colors.onSurface }]}>
-                      Digital receipt SMS
-                    </Text>
-                    <Text style={[styles.moduleDesc, { color: paperTheme.colors.onSurfaceVariant }]}>
-                      Send receipt links to customers by SMS after checkout.
-                    </Text>
-                  </View>
-                </View>
-
-                <BooleanRadioToggle
-                  value={form.sendReceiptSms}
-                  onChange={(enabled) => {
-                    setForm((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            sendReceiptSms: enabled,
-                            smsPackageType: enabled ? prev.smsPackageType : null,
-                          }
-                        : prev,
-                    );
-                  }}
-                  paperTheme={paperTheme}
-                  resolvedTheme={resolvedTheme}
-                />
-
-                {form.sendReceiptSms ? (
-                  <>
-                    <TouchableOpacity
-                      style={[
-                        styles.packageSelectButton,
-                        {
-                          borderColor: paperTheme.colors.outlineVariant,
-                          backgroundColor: paperTheme.colors.surfaceVariant,
-                        },
-                      ]}
-                      onPress={() => openPackagesModal(true)}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={[styles.packageSelectText, { color: paperTheme.colors.onSurface }]}>
-                        {selectedPackage
-                          ? `${selectedPackage.messageCount.toLocaleString('en-LK')} messages · ${formatLkr(selectedPackage.fee)}/mo`
-                          : 'Select SMS package'}
-                      </Text>
-                      <Ionicons name="chevron-down" size={18} color={paperTheme.colors.onSurfaceVariant} />
-                    </TouchableOpacity>
-                    <Text style={[styles.packageSelectHint, { color: paperTheme.colors.onSurfaceVariant }]}>
-                      Choose the monthly SMS package that matches your shop volume.
-                    </Text>
-                  </>
-                ) : null}
-              </View>
-
-              {isSmsActive ? (
-                <>
-                  <View
-                    style={[
-                      styles.usageCard,
-                      {
-                        backgroundColor: paperTheme.colors.surface,
-                        borderColor: paperTheme.colors.outlineVariant,
-                      },
-                      cardShadow(resolvedTheme),
-                    ]}
-                  >
-                    <Text style={[styles.summaryTitle, { color: paperTheme.colors.onSurface }]}>
-                      Current usage
-                    </Text>
-                    <Text style={[styles.usageMetric, { color: primary }]}>
-                      {(features.smsUsedInPeriod ?? 0).toLocaleString('en-LK')}
-                    </Text>
-                    <Text style={[styles.usageCaption, { color: paperTheme.colors.onSurfaceVariant }]}>
-                      messages used in the current SMS billing period
-                    </Text>
-                  </View>
-
-                  <View
-                    style={[
-                      styles.summaryCard,
-                      {
-                        backgroundColor: paperTheme.colors.surface,
-                        borderColor: paperTheme.colors.outlineVariant,
-                      },
-                      cardShadow(resolvedTheme),
-                    ]}
-                  >
-                    <Text style={[styles.summaryTitle, { color: paperTheme.colors.onSurface }]}>
-                      Billing summary
-                    </Text>
-                    <View style={styles.summaryRow}>
-                      <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-                        Monthly package fee
-                      </Text>
-                      <Text style={[styles.summaryValue, { color: paperTheme.colors.onSurface }]}>
-                        {features.smsPackageAmount != null
-                          ? formatLkr(features.smsPackageAmount)
-                          : selectedPackage
-                            ? formatLkr(selectedPackage.fee)
-                            : '—'}
-                      </Text>
-                    </View>
-                    <View style={styles.summaryRow}>
-                      <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-                        Per-message rate
-                      </Text>
-                      <Text style={[styles.summaryValue, { color: paperTheme.colors.onSurface }]}>
-                        {formatLkrDecimal(SMS_PRICE_PER_MESSAGE_LKR)}
-                      </Text>
-                    </View>
-                    <View style={styles.summaryRow}>
-                      <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-                        Usage charge
-                      </Text>
-                      <Text style={[styles.summaryValueStrong, { color: paperTheme.colors.onSurface }]}>
-                        {formatLkrDecimal(usageCharge, 2)}
-                      </Text>
-                    </View>
-                  </View>
-                </>
-              ) : null}
-
-              <View style={styles.actionRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.secondaryButton,
-                    {
-                      borderColor: paperTheme.colors.outlineVariant,
-                      backgroundColor: paperTheme.colors.surface,
-                    },
-                  ]}
-                  onPress={() => openPackagesModal(false)}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[styles.secondaryButtonText, { color: paperTheme.colors.onSurface }]}>
-                    See SMS packages
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-
-            {hasChanges ? (
-              <View
-                style={[
-                  styles.footer,
+                  styles.renewalCard,
                   {
                     backgroundColor: paperTheme.colors.surface,
                     borderColor: paperTheme.colors.outlineVariant,
@@ -588,35 +359,231 @@ export default function ManageSmsFeatureScreen({ navigation }: Props) {
                   cardShadow(resolvedTheme),
                 ]}
               >
-                <Text style={[styles.footerHint, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  You have unsaved SMS changes
-                </Text>
-                <TouchableOpacity
+                <View
                   style={[
-                    styles.updateButton,
-                    { backgroundColor: primary },
-                    isSubmitting && styles.updateButtonDisabled,
+                    styles.renewalIconWrap,
+                    { backgroundColor: paperTheme.colors.primaryContainer },
                   ]}
-                  onPress={() => {
-                    void onUpdate();
-                  }}
-                  activeOpacity={0.9}
-                  disabled={isSubmitting}
                 >
-                  {isSubmitting ? (
-                    <ActivityIndicator color={paperTheme.colors.onPrimary} />
-                  ) : (
-                    <>
-                      <Ionicons name="save-outline" size={20} color={paperTheme.colors.onPrimary} />
-                      <Text style={[styles.updateButtonText, { color: paperTheme.colors.onPrimary }]}>
-                        Update
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+                  <Ionicons name="calendar-outline" size={22} color={primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.renewalTitle, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    Next SMS renewal
+                  </Text>
+                  <Text style={[styles.renewalValue, { color: paperTheme.colors.onSurface }]}>
+                    {nextRenewalLabel}
+                  </Text>
+                </View>
               </View>
             ) : null}
-          </>
+
+            <View
+              style={[
+                styles.statusCard,
+                {
+                  backgroundColor: paperTheme.colors.surface,
+                  borderColor: paperTheme.colors.outlineVariant,
+                },
+                cardShadow(resolvedTheme),
+              ]}
+            >
+              <View style={styles.statusRow}>
+                <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  SMS status
+                </Text>
+                <SettingsBadge label={statusMeta.label} tone={statusMeta.tone} paperTheme={paperTheme} />
+              </View>
+              {features.senderId ? (
+                <View style={styles.statusRow}>
+                  <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    Sender ID
+                  </Text>
+                  <Text style={[styles.summaryValue, { color: paperTheme.colors.onSurface }]}>
+                    {features.senderId}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={[styles.packageSelectHint, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  Sender ID is not registered yet. Status will stay requested until it is approved.
+                </Text>
+              )}
+            </View>
+
+            <Text style={[styles.sectionLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+              SMS feature
+            </Text>
+
+            <View
+              style={[
+                styles.moduleCard,
+                {
+                  backgroundColor: paperTheme.colors.surface,
+                  borderColor: isSmsActive ? '#1d4ed8' : paperTheme.colors.outlineVariant,
+                },
+                cardShadow(resolvedTheme),
+              ]}
+            >
+              {isSmsActive ? <View style={[styles.accentBar, { backgroundColor: '#1d4ed8' }]} /> : null}
+              <View style={styles.moduleTopRow}>
+                <View style={[styles.moduleIconWrap, { backgroundColor: '#dbeafe' }]}>
+                  <Ionicons name="chatbubble-ellipses-outline" size={22} color="#1d4ed8" />
+                </View>
+                <View style={styles.moduleText}>
+                  <Text style={[styles.moduleTitle, { color: paperTheme.colors.onSurface }]}>
+                    Digital receipt SMS
+                  </Text>
+                  <Text style={[styles.moduleDesc, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    Send receipt links to customers by SMS after checkout.
+                  </Text>
+                </View>
+              </View>
+
+              <BooleanRadioToggle
+                value={isSmsActive}
+                onChange={(enabled) => {
+                  void onToggleSmsFeature(enabled);
+                }}
+                disabled={isSubmitting}
+                paperTheme={paperTheme}
+                resolvedTheme={resolvedTheme}
+              />
+
+              {isSubmitting ? (
+                <View style={styles.toggleLoadingRow}>
+                  <ActivityIndicator size="small" color={primary} />
+                  <Text style={[styles.packageSelectHint, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    Updating SMS settings…
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            {isSmsActive ? (
+              <>
+                <View
+                  style={[
+                    styles.summaryCard,
+                    {
+                      backgroundColor: paperTheme.colors.surface,
+                      borderColor: paperTheme.colors.outlineVariant,
+                    },
+                    cardShadow(resolvedTheme),
+                  ]}
+                >
+                  <Text style={[styles.summaryTitle, { color: paperTheme.colors.onSurface }]}>
+                    Current package
+                  </Text>
+                  <Text style={[styles.currentPackageTitle, { color: paperTheme.colors.onSurface }]}>
+                    {currentPackage
+                      ? formatSmsPackageLabel(currentPackage)
+                      : features.smsPackageType ?? 'Not assigned'}
+                  </Text>
+                  <Text style={[styles.packageSelectHint, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    Assigned automatically based on your SMS usage this billing period.
+                  </Text>
+                  {currentPackage ? (
+                    <View style={[styles.summaryRow, { marginTop: 12 }]}>
+                      <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                        Monthly fee
+                      </Text>
+                      <Text style={[styles.summaryValueStrong, { color: paperTheme.colors.onSurface }]}>
+                        {formatLkr(currentPackage.fee)}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                <View
+                  style={[
+                    styles.usageCard,
+                    {
+                      backgroundColor: paperTheme.colors.surface,
+                      borderColor: paperTheme.colors.outlineVariant,
+                    },
+                    cardShadow(resolvedTheme),
+                  ]}
+                >
+                  <Text style={[styles.summaryTitle, { color: paperTheme.colors.onSurface }]}>
+                    Current usage
+                  </Text>
+                  <Text style={[styles.usageMetric, { color: primary }]}>
+                    {(features.smsUsedInPeriod ?? 0).toLocaleString('en-LK')}
+                  </Text>
+                  <Text style={[styles.usageCaption, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    messages sent in the current SMS billing period
+                  </Text>
+                  {currentPackage ? (
+                    <Text style={[styles.usageCaption, { color: paperTheme.colors.onSurfaceVariant, marginTop: 6 }]}>
+                      Package allowance: up to{' '}
+                      {(currentPackage.maxMessageCount ?? currentPackage.messageCount).toLocaleString('en-LK')}{' '}
+                      messages
+                    </Text>
+                  ) : null}
+                </View>
+
+                <View
+                  style={[
+                    styles.summaryCard,
+                    {
+                      backgroundColor: paperTheme.colors.surface,
+                      borderColor: paperTheme.colors.outlineVariant,
+                    },
+                    cardShadow(resolvedTheme),
+                  ]}
+                >
+                  <Text style={[styles.summaryTitle, { color: paperTheme.colors.onSurface }]}>
+                    Billing summary
+                  </Text>
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                      Monthly package fee
+                    </Text>
+                    <Text style={[styles.summaryValue, { color: paperTheme.colors.onSurface }]}>
+                      {currentPackage ? formatLkr(currentPackage.fee) : '—'}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                      Per-message rate
+                    </Text>
+                    <Text style={[styles.summaryValue, { color: paperTheme.colors.onSurface }]}>
+                      {formatLkrDecimal(SMS_PRICE_PER_MESSAGE_LKR)}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                      Usage charge
+                    </Text>
+                    <Text style={[styles.summaryValueStrong, { color: paperTheme.colors.onSurface }]}>
+                      {formatLkrDecimal(usageCharge, 2)}
+                    </Text>
+                  </View>
+                </View>
+              </>
+            ) : null}
+
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[
+                  styles.secondaryButton,
+                  {
+                    borderColor: paperTheme.colors.outlineVariant,
+                    backgroundColor: paperTheme.colors.surface,
+                  },
+                ]}
+                onPress={() => {
+                  setPackagesModalVisible(true);
+                  void ensurePackagesLoaded();
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.secondaryButtonText, { color: paperTheme.colors.onSurface }]}>
+                  See SMS package prices
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         )}
       </SafeAreaView>
 
@@ -624,10 +591,8 @@ export default function ManageSmsFeatureScreen({ navigation }: Props) {
         visible={packagesModalVisible}
         loading={packagesLoading}
         packages={packages}
-        selectedType={form?.smsPackageType ?? null}
-        selectionMode={packageSelectionMode}
+        selectedType={features?.smsPackageType ?? null}
         onClose={() => setPackagesModalVisible(false)}
-        onSelect={handlePackageSelect}
         paperTheme={paperTheme}
       />
 

@@ -220,8 +220,17 @@ export interface RemoveOnboardingDataResponse {
 
 export interface SmsPackage {
   type: string;
+  minMessageCount?: number;
+  maxMessageCount?: number;
   messageCount: number;
   fee: number;
+}
+
+export function formatSmsPackageLabel(pkg: SmsPackage): string {
+  if (pkg.minMessageCount != null && pkg.maxMessageCount != null) {
+    return `${pkg.minMessageCount.toLocaleString('en-LK')} – ${pkg.maxMessageCount.toLocaleString('en-LK')} messages`;
+  }
+  return `${pkg.messageCount.toLocaleString('en-LK')} messages`;
 }
 
 export interface GetSmsPackagesResponse {
@@ -231,11 +240,22 @@ export interface GetSmsPackagesResponse {
 }
 
 export interface ShopSmsFeaturesPayload {
+  senderId: string | null;
   smsPackageType: string | null;
   smsUsedInPeriod: number;
   smsNextRenewalDate: string | null;
-  smsPackageAmount: number | null;
-  smsFeatureStatus: 'requested' | 'active' | 'pending' | 'due' | 'disabled' | string;
+  smsFeatureStatus: 'requested' | 'active' | 'pending' | 'due' | 'inactive' | string;
+}
+
+export interface ManageSmsFeatureRequest {
+  enabled: boolean;
+}
+
+export interface ManageSmsFeatureResponse {
+  success: boolean;
+  shopId: string;
+  message: string;
+  features: ShopSmsFeaturesPayload;
 }
 
 export interface GetShopSmsFeaturesResponse {

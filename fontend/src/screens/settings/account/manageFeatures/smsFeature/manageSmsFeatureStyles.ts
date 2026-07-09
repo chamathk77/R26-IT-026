@@ -115,4 +115,28 @@ export const manageSmsFeatureStyles = StyleSheet.create({
     fontFamily: fonts.PoppinsRegular,
     fontSize: 13,
   },
+  statusCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 16,
+    gap: 10,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  currentPackageTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  toggleLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
 });
