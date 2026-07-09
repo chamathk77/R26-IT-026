@@ -480,6 +480,12 @@ const createHistory = async (req, res) => {
       if (smsStatus.sent) {
         await History.updateOne({ _id: history._id }, { $set: { isSmsSent: true } });
         history.isSmsSent = true;
+
+        try {
+          await ShopsData.recordShopSmsUsage(shopId);
+        } catch (usageError) {
+          console.log("error in createHistory SMS usage update", usageError.message);
+        }
       }
     } catch (smsError) {
       console.log("error in createHistory receipt SMS", smsError.message);
@@ -787,6 +793,15 @@ const resendBillSms = async (req, res) => {
         success: false,
         message: smsResult.reason || 'Could not send bill SMS',
       });
+    }
+
+    await History.updateOne({ _id: history._id }, { $set: { isSmsSent: true } });
+    history.isSmsSent = true;
+
+    try {
+      await ShopsData.recordShopSmsUsage(shopId);
+    } catch (usageError) {
+      console.log('error in resendBillSms SMS usage update', usageError.message);
     }
 
     const previousMobile = sanitizeMobile(history.customerMobile);
