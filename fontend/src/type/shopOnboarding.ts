@@ -55,17 +55,10 @@ export interface UpdateShopModuleFeaturesResponse {
   features: OnboardingShopFeaturesPayload;
 }
 
-export interface AdditionalUsersPendingChange {
-  isAdditionalUsersAdded: boolean;
-  numAdditionalUsers: number | null;
-  requestedAt: string;
-}
-
 export interface ShopUsersFeaturesPayload {
   isAdditionalUsersAdded: boolean;
   numAdditionalUsers: number | null;
   maxUsers: number;
-  additionalUsersPendingChange?: AdditionalUsersPendingChange | null;
   nextPaymentDate?: string | null;
 }
 
@@ -87,23 +80,6 @@ export interface UpdateShopUsersFeaturesResponse {
   shopId: string;
   message: string;
   features: ShopUsersFeaturesPayload;
-}
-
-export interface ScheduleShopUsersFeaturesReductionResponse
-  extends UpdateShopUsersFeaturesResponse {
-  pendingScheduled: boolean;
-}
-
-export interface CancelShopUsersFeaturesReductionScheduleRequest {
-  shopId: string;
-}
-
-export interface CancelShopUsersFeaturesReductionScheduleResponse {
-  success: boolean;
-  shopId: string;
-  message: string;
-  features: ShopUsersFeaturesPayload;
-  pendingScheduled: boolean;
 }
 
 export interface UpdateShopFeaturesRequest {

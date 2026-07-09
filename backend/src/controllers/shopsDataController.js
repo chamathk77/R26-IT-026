@@ -166,7 +166,7 @@ const SHOP_MODULE_FEATURE_FIELDS =
   'shopId kpi analyticsModule customerManualOrder costModule marketingModule';
 
 const SHOP_USERS_FEATURE_FIELDS =
-  'shopId maxUsers isAdditionalUsersAdded numAdditionalUsers additionalUsersPendingChange status subscriptionType nextPaymentDate';
+  'shopId maxUsers isAdditionalUsersAdded numAdditionalUsers nextPaymentDate';
 
 const SHOP_SMS_FEATURE_FIELDS =
   'shopId smsPackageType smsUsedInPeriod smsNextRenewalDate smsPackageAmount smsFeatureStatus';
@@ -178,110 +178,6 @@ function resolveMaxUsers(isAdditionalUsersAdded, numAdditionalUsers) {
     return DEFAULT_MAX_USERS + numAdditionalUsers;
   }
   return DEFAULT_MAX_USERS;
-}
-
-function startOfDay(date = new Date()) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function getDaysUntilNextPayment(nextPaymentDate) {
-  if (!nextPaymentDate) {
-    return null;
-  }
-
-  const today = startOfDay();
-  const dueDate = startOfDay(nextPaymentDate);
-  const diffMs = dueDate.getTime() - today.getTime();
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-}
-
-function isInsideAdditionalUsersReductionCutoff(shop) {
-  const subscriptionType = shop.subscriptionType;
-  const cutoffDays = ShopsData.ADDITIONAL_USERS_REDUCTION_CUTOFF_DAYS[subscriptionType];
-
-  if (!cutoffDays || !shop.nextPaymentDate) {
-    return false;
-  }
-
-  const daysRemaining = getDaysUntilNextPayment(shop.nextPaymentDate);
-  if (daysRemaining === null || daysRemaining < 0) {
-    return false;
-  }
-
-  return daysRemaining <= cutoffDays;
-}
-
-function shouldScheduleAdditionalUsersReduction(shop) {
-  if (shop.status === 'due' || shop.status === 'paymentPending') {
-    return { required: true, reason: 'SUBSCRIPTION_PAYMENT_PENDING' };
-  }
-
-  if (shop.status === 'active') {
-    if (isInsideAdditionalUsersReductionCutoff(shop)) {
-      const cutoffDays =
-        ShopsData.ADDITIONAL_USERS_REDUCTION_CUTOFF_DAYS[shop.subscriptionType] ?? null;
-      return {
-        required: true,
-        reason: 'CUT_OFF_WINDOW',
-        cutoffDays,
-        daysUntilPayment: getDaysUntilNextPayment(shop.nextPaymentDate),
-      };
-    }
-  }
-
-  return { required: false };
-}
-
-function buildAdditionalUsersReductionScheduleMessage(scheduleCheck, shop) {
-  if (scheduleCheck.reason === 'SUBSCRIPTION_PAYMENT_PENDING') {
-    return (
-      'A subscription payment is already in progress. ' +
-      'You can schedule this reduction for your next billing cycle.'
-    );
-  }
-
-  const cutoffDays = scheduleCheck.cutoffDays ?? 0;
-  const daysUntilPayment = scheduleCheck.daysUntilPayment ?? 0;
-  const dueLabel = shop.nextPaymentDate
-    ? startOfDay(shop.nextPaymentDate).toISOString().slice(0, 10)
-    : 'your next payment date';
-
-  return (
-    `You are within ${cutoffDays} days of your next payment (${dueLabel}, ${daysUntilPayment} day(s) remaining). ` +
-    'Reducing additional users now would affect this bill. ' +
-    'You can schedule this change for your next billing cycle instead.'
-  );
-}
-
-function buildAdditionalUsersReductionScheduleBody(shop, featureUpdates, scheduleCheck) {
-  return {
-    success: false,
-    code: 'ADDITIONAL_USERS_REDUCTION_REQUIRES_SCHEDULE',
-    reason: scheduleCheck.reason,
-    message: buildAdditionalUsersReductionScheduleMessage(scheduleCheck, shop),
-    currentMaxUsers: shop.maxUsers,
-    proposedMaxUsers: featureUpdates.maxUsers,
-    currentNumAdditionalUsers: shop.numAdditionalUsers,
-    proposedNumAdditionalUsers: featureUpdates.numAdditionalUsers,
-    proposedIsAdditionalUsersAdded: featureUpdates.isAdditionalUsersAdded,
-    shopStatus: shop.status,
-    subscriptionType: shop.subscriptionType ?? null,
-    nextPaymentDate: shop.nextPaymentDate ?? null,
-    cutoffDays: scheduleCheck.cutoffDays ?? null,
-    daysUntilPayment: scheduleCheck.daysUntilPayment ?? null,
-  };
-}
-
-function buildPendingAdditionalUsersChangeError(shop) {
-  return {
-    success: false,
-    code: 'ADDITIONAL_USERS_PENDING_CHANGE_EXISTS',
-    message:
-      'Please cancel your pending user capacity change before making a new update.',
-    additionalUsersPendingChange: shop.additionalUsersPendingChange ?? null,
-  };
 }
 
 function shopMobileUserFilter(shopId) {
@@ -806,7 +702,6 @@ function mapShopUsersFeaturesResponse(shop) {
     isAdditionalUsersAdded: shop.isAdditionalUsersAdded,
     numAdditionalUsers: shop.numAdditionalUsers,
     maxUsers: shop.maxUsers,
-    additionalUsersPendingChange: shop.additionalUsersPendingChange ?? null,
     nextPaymentDate: shop.nextPaymentDate ?? null,
   };
 }
@@ -989,42 +884,17 @@ const updateShopUsersFeatures = async (req, res) => {
       return res.status(access.error.status).json(access.error.body);
     }
 
-    const shop = await ShopsData.findOne({ shopId: normalizedShopId })
-      .select(SHOP_USERS_FEATURE_FIELDS)
-      .lean();
-
-    if (!shop) {
-      return res.status(404).json({ success: false, message: 'Shop not found' });
-    }
-
-    const proposedMaxUsers = featureUpdates.maxUsers;
-    const isIncrease = proposedMaxUsers > shop.maxUsers;
-    const isReduction = proposedMaxUsers < shop.maxUsers;
-
-    if ((isIncrease || isReduction) && shop.additionalUsersPendingChange) {
-      return res.status(409).json(buildPendingAdditionalUsersChangeError(shop));
-    }
-
     const capacityCheck = await validateUserCapacityAgainstExistingUsers(
       normalizedShopId,
-      proposedMaxUsers,
+      featureUpdates.maxUsers,
     );
     if (capacityCheck.error) {
       return res.status(capacityCheck.error.status).json(capacityCheck.error.body);
     }
 
-    if (isReduction) {
-      const scheduleCheck = shouldScheduleAdditionalUsersReduction(shop);
-      if (scheduleCheck.required) {
-        return res
-          .status(409)
-          .json(buildAdditionalUsersReductionScheduleBody(shop, featureUpdates, scheduleCheck));
-      }
-    }
-
     const updated = await ShopsData.findOneAndUpdate(
       { shopId: normalizedShopId },
-      { $set: featureUpdates, $unset: { additionalUsersPendingChange: '' } },
+      { $set: featureUpdates },
       { returnDocument: 'after', runValidators: true },
     ).lean();
 
@@ -1036,151 +906,6 @@ const updateShopUsersFeatures = async (req, res) => {
     });
   } catch (error) {
     console.log('error in updateShopUsersFeatures', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-const scheduleShopUsersFeaturesReduction = async (req, res) => {
-  try {
-    const shopId = req.body.shopId ?? req.user?.shopId;
-    const parsed = await parseShopUsersFeaturesInput({ ...req.body, shopId });
-    if (parsed.error) {
-      return res.status(parsed.error.status).json(parsed.error.body);
-    }
-
-    const { normalizedShopId, featureUpdates } = parsed;
-
-    if (req.user?.shopId && req.user.shopId !== normalizedShopId) {
-      return res.status(403).json({ success: false, message: 'Not authorized for this shop' });
-    }
-
-    const access = await resolveFeatureUpdateAccess(req, normalizedShopId);
-    if (access.error) {
-      return res.status(access.error.status).json(access.error.body);
-    }
-
-    const shop = await ShopsData.findOne({ shopId: normalizedShopId })
-      .select(SHOP_USERS_FEATURE_FIELDS)
-      .lean();
-
-    if (!shop) {
-      return res.status(404).json({ success: false, message: 'Shop not found' });
-    }
-
-    if (shop.additionalUsersPendingChange) {
-      return res.status(409).json(buildPendingAdditionalUsersChangeError(shop));
-    }
-
-    const proposedMaxUsers = featureUpdates.maxUsers;
-    if (proposedMaxUsers >= shop.maxUsers) {
-      return res.status(400).json({
-        success: false,
-        code: 'ADDITIONAL_USERS_INCREASE_NOT_SCHEDULABLE',
-        message:
-          proposedMaxUsers === shop.maxUsers
-            ? 'No reduction to schedule. Your requested capacity matches the current limit.'
-            : 'Increasing additional users cannot be scheduled. Use the regular update to apply increases immediately.',
-      });
-    }
-
-    const capacityCheck = await validateUserCapacityAgainstExistingUsers(
-      normalizedShopId,
-      proposedMaxUsers,
-    );
-    if (capacityCheck.error) {
-      return res.status(capacityCheck.error.status).json(capacityCheck.error.body);
-    }
-
-    const scheduleCheck = shouldScheduleAdditionalUsersReduction(shop);
-    if (!scheduleCheck.required) {
-      return res.status(400).json({
-        success: false,
-        code: 'ADDITIONAL_USERS_SCHEDULE_NOT_REQUIRED',
-        message:
-          'This reduction can be applied immediately. Use the regular update instead of scheduling.',
-      });
-    }
-
-    const pendingChange = {
-      isAdditionalUsersAdded: featureUpdates.isAdditionalUsersAdded,
-      numAdditionalUsers: featureUpdates.numAdditionalUsers,
-      requestedAt: new Date(),
-    };
-
-    const updated = await ShopsData.findOneAndUpdate(
-      { shopId: normalizedShopId },
-      { $set: { additionalUsersPendingChange: pendingChange } },
-      { returnDocument: 'after', runValidators: true },
-    ).lean();
-
-    return res.status(200).json({
-      success: true,
-      shopId: updated.shopId,
-      message:
-        'Additional user reduction scheduled for your next billing cycle. Current capacity stays until your subscription payment is approved.',
-      features: mapShopUsersFeaturesResponse(updated),
-      pendingScheduled: true,
-    });
-  } catch (error) {
-    console.log('error in scheduleShopUsersFeaturesReduction', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-const cancelShopUsersFeaturesReductionSchedule = async (req, res) => {
-  try {
-    const shopId = req.body.shopId ?? req.query.shopId ?? req.user?.shopId;
-
-    if (!shopId?.trim()) {
-      return res.status(400).json({ success: false, message: 'Shop id is required' });
-    }
-
-    const normalizedShopId = normalizeShopId(shopId);
-
-    if (!isValidShopIdFormat(normalizedShopId)) {
-      return res.status(400).json({ success: false, message: 'Invalid shop id format' });
-    }
-
-    if (req.user?.shopId && req.user.shopId !== normalizedShopId) {
-      return res.status(403).json({ success: false, message: 'Not authorized for this shop' });
-    }
-
-    const access = await resolveFeatureUpdateAccess(req, normalizedShopId);
-    if (access.error) {
-      return res.status(access.error.status).json(access.error.body);
-    }
-
-    const shop = await ShopsData.findOne({ shopId: normalizedShopId })
-      .select(SHOP_USERS_FEATURE_FIELDS)
-      .lean();
-
-    if (!shop) {
-      return res.status(404).json({ success: false, message: 'Shop not found' });
-    }
-
-    if (!shop.additionalUsersPendingChange) {
-      return res.status(400).json({
-        success: false,
-        code: 'ADDITIONAL_USERS_SCHEDULE_NOT_FOUND',
-        message: 'No scheduled additional user reduction found for this shop.',
-      });
-    }
-
-    const updated = await ShopsData.findOneAndUpdate(
-      { shopId: normalizedShopId },
-      { $unset: { additionalUsersPendingChange: '' } },
-      { returnDocument: 'after', runValidators: true },
-    ).lean();
-
-    return res.status(200).json({
-      success: true,
-      shopId: updated.shopId,
-      message: 'Scheduled additional user reduction cancelled.',
-      features: mapShopUsersFeaturesResponse(updated),
-      pendingScheduled: false,
-    });
-  } catch (error) {
-    console.log('error in cancelShopUsersFeaturesReductionSchedule', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -1471,8 +1196,6 @@ module.exports = {
   /** Features */
   updateShopModuleFeatures,
   updateShopUsersFeatures,
-  scheduleShopUsersFeaturesReduction,
-  cancelShopUsersFeaturesReductionSchedule,
   updateShopSmsFeatures,
 
   /** Get features */

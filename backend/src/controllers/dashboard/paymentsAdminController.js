@@ -507,35 +507,6 @@ function validateSubscriptionRejectScenario(shop, paymentId) {
   return {};
 }
 
-function applyPendingAdditionalUsersChange(shop) {
-  const pending = shop.additionalUsersPendingChange;
-  if (!pending) {
-    return false;
-  }
-
-  if (pending.isAdditionalUsersAdded === false) {
-    shop.isAdditionalUsersAdded = false;
-    shop.numAdditionalUsers = null;
-    shop.maxUsers = DEFAULT_MAX_USERS;
-  } else if (pending.isAdditionalUsersAdded === true) {
-    const count = Number.parseInt(String(pending.numAdditionalUsers ?? ""), 10);
-    if (!Number.isFinite(count) || count < 1) {
-      const err = new Error(
-        "Scheduled additional users count is invalid on pending change",
-      );
-      err.code = "SUBSCRIPTION_APPROVE_PENDING_USERS";
-      throw err;
-    }
-    shop.isAdditionalUsersAdded = true;
-    shop.numAdditionalUsers = count;
-    shop.maxUsers = DEFAULT_MAX_USERS + count;
-  }
-
-  shop.additionalUsersPendingChange = null;
-  shop.markModified("additionalUsersPendingChange");
-  return true;
-}
-
 async function applyShopUpdatesOnSubscriptionApprove(shop, payment, scenario) {
   const subscriptionType = shop.subscriptionType;
   const durationDays = SUBSCRIPTION_DURATION_DAYS[subscriptionType];
@@ -564,8 +535,6 @@ async function applyShopUpdatesOnSubscriptionApprove(shop, payment, scenario) {
     default:
       throw new Error("Unhandled subscription approval scenario");
   }
-
-  applyPendingAdditionalUsersChange(shop);
 
   await shop.save();
 }
@@ -631,8 +600,6 @@ async function applyShopUpdatesOnResetSubscriptionApprove(shop, payment) {
   shop.currentPaymentDoneDate = paymentDoneDate;
   shop.status = "active";
   shop.subscriptionDueDays = 0;
-
-  applyPendingAdditionalUsersChange(shop);
 
   await shop.save();
 }

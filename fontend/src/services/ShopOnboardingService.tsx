@@ -16,9 +16,6 @@ import {
   GetShopUsersFeaturesResponse,
   UpdateShopUsersFeaturesRequest,
   UpdateShopUsersFeaturesResponse,
-  ScheduleShopUsersFeaturesReductionResponse,
-  CancelShopUsersFeaturesReductionScheduleRequest,
-  CancelShopUsersFeaturesReductionScheduleResponse,
   SendOtpOnboardingRequest,
   SendOtpOnboardingResponse,
   VerifyOtpOnboardingRequest,
@@ -208,68 +205,6 @@ export const updateShopUsersFeatures_Service = createAsyncThunk(
       const apiError: ApiErrorResponse = {
         error: "Error",
         message: "Shop user settings update failed",
-        status: response.status,
-        timestamp: new Date().toISOString(),
-      };
-      return rejectWithValue(apiError);
-    } catch (error: unknown) {
-      return rejectWithValue(toApiErrorResponse(error));
-    }
-  },
-);
-
-export const scheduleShopUsersFeaturesReduction_Service = createAsyncThunk(
-  "shopOnboarding/scheduleUsersFeaturesReduction",
-  async (payload: UpdateShopUsersFeaturesRequest, { rejectWithValue }) => {
-    try {
-      await ensureInternetConnection();
-
-      const response = await apiClient.put<ScheduleShopUsersFeaturesReductionResponse>(
-        "/api/shops/features/users/schedule-reduction",
-        payload,
-      );
-
-      if (isHttpSuccess(response.status)) {
-        console.log("Scheduled shop user reduction response:", response.data);
-        return response.data;
-      }
-
-      const apiError: ApiErrorResponse = {
-        error: "Error",
-        message: "Scheduling additional user reduction failed",
-        status: response.status,
-        timestamp: new Date().toISOString(),
-      };
-      return rejectWithValue(apiError);
-    } catch (error: unknown) {
-      return rejectWithValue(toApiErrorResponse(error));
-    }
-  },
-);
-
-export const cancelShopUsersFeaturesReductionSchedule_Service = createAsyncThunk(
-  "shopOnboarding/cancelUsersFeaturesReductionSchedule",
-  async (
-    payload: CancelShopUsersFeaturesReductionScheduleRequest,
-    { rejectWithValue },
-  ) => {
-    try {
-      await ensureInternetConnection();
-
-      const response =
-        await apiClient.delete<CancelShopUsersFeaturesReductionScheduleResponse>(
-          "/api/shops/features/users/schedule-reduction",
-          { data: payload },
-        );
-
-      if (isHttpSuccess(response.status)) {
-        console.log("Cancelled shop user reduction schedule response:", response.data);
-        return response.data;
-      }
-
-      const apiError: ApiErrorResponse = {
-        error: "Error",
-        message: "Cancelling scheduled reduction failed",
         status: response.status,
         timestamp: new Date().toISOString(),
       };

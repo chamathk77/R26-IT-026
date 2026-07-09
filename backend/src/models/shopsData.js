@@ -118,14 +118,6 @@ const SUBSCRIPTION_DURATION_DAYS = {
   "1year": 360,
 };
 
-/** Days before nextPaymentDate when additional-user reductions must be scheduled. */
-const ADDITIONAL_USERS_REDUCTION_CUTOFF_DAYS = {
-  "1month": 10,
-  "3months": 15,
-  "6months": 30,
-  "1year": 45,
-};
-
 function getSubscriptionFee(subscriptionType) {
   const entry = SUBSCRIPTION_FEES.find(
     (item) => item.type === subscriptionType,
@@ -167,26 +159,6 @@ const ONBOARD_STEPS = [
   "passwordSet",
   "completed",
 ];
-
-const additionalUsersPendingChangeSchema = new mongoose.Schema(
-  {
-    isAdditionalUsersAdded: {
-      type: Boolean,
-      required: true,
-    },
-    numAdditionalUsers: {
-      type: Number,
-      default: null,
-      min: 0,
-    },
-    requestedAt: {
-      type: Date,
-      required: true,
-      default: Date.now,
-    },
-  },
-  { _id: false },
-);
 
 const shopsDataSchema = new mongoose.Schema(
   {
@@ -322,10 +294,6 @@ const shopsDataSchema = new mongoose.Schema(
       type: Number,
       default: null,
       min: 0,
-    },
-    additionalUsersPendingChange: {
-      type: additionalUsersPendingChangeSchema,
-      default: null,
     },
     /** Future release: shop web portal access (same API as mobile). */
     webModule: {
@@ -490,8 +458,6 @@ ShopsData.SMS_PACKAGE_TYPES = SMS_PACKAGE_TYPES;
 ShopsData.ADDITIONAL_USER_FEE_LKR = ADDITIONAL_USER_FEE_LKR;
 ShopsData.WEB_MODULE_FEE_LKR = WEB_MODULE_FEE_LKR;
 ShopsData.SUBSCRIPTION_DURATION_DAYS = SUBSCRIPTION_DURATION_DAYS;
-ShopsData.ADDITIONAL_USERS_REDUCTION_CUTOFF_DAYS =
-  ADDITIONAL_USERS_REDUCTION_CUTOFF_DAYS;
 ShopsData.getSubscriptionFee = getSubscriptionFee;
 ShopsData.buildSubscriptionPlansList = buildSubscriptionPlansList;
 ShopsData.findSmsPackageByUsage = findSmsPackageByUsage;
@@ -536,7 +502,7 @@ module.exports = ShopsData;
 // maxUsers: number
 // isAdditionalUsersAdded: boolean
 // numAdditionalUsers: number
-// additionalUsersPendingChange: { isAdditionalUsersAdded, numAdditionalUsers, requestedAt }
+// additionalUsersPendingChange: removed — reductions apply immediately when valid
 
 // status: string
 // subscriptionStartDate: date
