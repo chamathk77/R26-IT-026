@@ -1,5 +1,6 @@
 const Payments = require('../models/payments');
 const ShopsData = require('../models/shopsData');
+const { sendSms } = require('./smsService');
 const {
   generateSmsReceiptNumber,
   getPaymentMonthFromDate,
@@ -7,6 +8,7 @@ const {
 } = require('../utils/paymentReceiptHelper');
 
 const SMS_RENEWAL_PERIOD_DAYS = 30;
+const SMS_PAYMENT_DUE_DAYS = 14;
 
 function startOfDay(date = new Date()) {
   const d = new Date(date);
@@ -50,6 +52,32 @@ async function markSmsFeatureDue(shopIdOrObjectId) {
       },
     },
   );
+}
+
+function buildSmsPackageInvoiceMessage({ receiptNumber, paymentAmount }) {
+  const amountLabel = Number(paymentAmount).toLocaleString('en-LK');
+  return (
+    `Smart Cost: Your SMS package invoice (Receipt: ${receiptNumber}, Rs. ${amountLabel}) ` +
+    `has been uploaded in Payments. Please pay within ${SMS_PAYMENT_DUE_DAYS} days to keep SMS active.`
+  );
+}
+
+async function sendSmsPackageInvoiceSms(shop, { receiptNumber, paymentAmount }) {
+  const mobile = shop.ownerMobileNumber?.trim();
+  if (!mobile) {
+    return { sent: false, reason: 'Owner mobile number is not set' };
+  }
+
+  try {
+    await sendSms({
+      to: mobile,
+      message: buildSmsPackageInvoiceMessage({ receiptNumber, paymentAmount }),
+    });
+    return { sent: true };
+  } catch (error) {
+    console.log('[sms-bill-cron] SMS failed for shop', shop.shopId, error.message);
+    return { sent: false, reason: error.message || 'SMS send failed' };
+  }
 }
 
 async function processShopForSmsBilling(shop, today) {
@@ -124,6 +152,11 @@ async function processShopForSmsBilling(shop, today) {
     },
   );
 
+  const sms = await sendSmsPackageInvoiceSms(shop, {
+    receiptNumber,
+    paymentAmount: packageFee,
+  });
+
   return {
     action: 'invoiced',
     shopId,
@@ -135,12 +168,14 @@ async function processShopForSmsBilling(shop, today) {
     description,
     smsPackageType: smsFeature.smsPackageType ?? null,
     smsFeatureStatus: 'due',
+    smsSent: sms.sent,
+    smsReason: sms.sent ? null : sms.reason,
   };
 }
 
 /**
  * Daily SMS billing job: for each shop with active SMS and a passed renewal date,
- * create a notPaid SMS invoice and mark smsFeatureStatus as due.
+ * create a notPaid SMS invoice, mark smsFeatureStatus as due, and notify the owner by SMS.
  */
 
 async function runDailySmsBillCheck(meta = {}) {
@@ -160,7 +195,7 @@ async function runDailySmsBillCheck(meta = {}) {
       'smsfeature.smsNextRenewalDate': { $ne: null, $lte: today },
       'smsfeature.smsFeatureStatus': 'active',
     })
-      .select('shopId smsfeature')
+      .select('shopId smsfeature ownerMobileNumber')
       .sort({ 'smsfeature.smsNextRenewalDate': 1 })
       .lean();
 
