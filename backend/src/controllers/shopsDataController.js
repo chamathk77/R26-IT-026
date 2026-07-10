@@ -284,48 +284,52 @@ async function resolveFeatureUpdateAccess(req, normalizedShopId) {
   return { shop, userRole: roleAccess.userRole };
 }
 
-function findSmsPackage(packageType) {
-  const normalized = String(packageType ?? '').trim();
-  return ShopsData.SMS_PACKAGES.find((pkg) => pkg.type === normalized) ?? null;
-}
-
-function normalizeSmsPackageType(value) {
-  const normalized = String(value ?? '').trim();
-  if (!ShopsData.SMS_PACKAGE_TYPES.includes(normalized)) {
-    return null;
-  }
-  return normalized;
-}
-
-function mapSmsPackageResponse(shop) {
-  const selectedSmsPackage = shop.smsPackageType
-    ? findSmsPackage(shop.smsPackageType)
+function mapShopSmsFeaturesResponse(shop) {
+  const smsFeature = shop.smsfeature ?? {};
+  const rawPackageType = smsFeature.smsPackageType;
+  const smsPackageType = isValidSmsPackageType(rawPackageType)
+    ? String(rawPackageType).trim()
     : null;
 
   return {
-    smsPackageType: shop.smsPackageType ?? null,
-    smsMonthlyAllowance: shop.smsMonthlyAllowance ?? null,
-    smsUsedInPeriod: shop.smsUsedInPeriod ?? 0,
-    smsPackageAmount: shop.smsPackageAmount ?? null,
-    smsNextRenewalDate: shop.smsNextRenewalDate ?? null,
-    selectedSmsPackage,
-  };
-}
-
-function mapShopSmsFeaturesResponse(shop) {
-  const smsFeature = shop.smsfeature ?? {};
-
-  return {
     senderId: smsFeature.senderId ?? null,
-    smsPackageType: smsFeature.smsPackageType ?? null,
+    smsPackageType,
     smsUsedInPeriod: smsFeature.smsUsedInPeriod ?? 0,
-    smsFeatureStatus: smsFeature.smsFeatureStatus ?? 'inactive',
+    isSmsFeatureActive: smsFeature.isSmsFeatureActive ?? false,
+    smsFeatureStatus: smsFeature.smsFeatureStatus ?? 'notActivated',
     smsNextRenewalDate: smsFeature.smsNextRenewalDate ?? null,
+    smsDueDays: smsFeature.smsDueDays ?? 0,
+    smsReceiptNo: smsFeature.smsReceiptNo ?? null,
   };
 }
 
 const DEFAULT_SMS_PACKAGE_TYPE = '0-500';
 const SMS_RENEWAL_PERIOD_DAYS = 30;
+
+function isBlankSmsPackageType(value) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return !normalized || normalized === 'null' || normalized === 'undefined';
+}
+
+function isValidSmsPackageType(value) {
+  if (isBlankSmsPackageType(value)) {
+    return false;
+  }
+  return ShopsData.SMS_PACKAGE_TYPES.includes(String(value).trim());
+}
+
+function applyMissingSmsActivationDefaults(smsFeature, updates) {
+  if (!smsFeature.smsNextRenewalDate) {
+    updates['smsfeature.smsNextRenewalDate'] = addDays(
+      startOfDay(),
+      SMS_RENEWAL_PERIOD_DAYS,
+    );
+  }
+
+  if (isBlankSmsPackageType(smsFeature.smsPackageType) || !isValidSmsPackageType(smsFeature.smsPackageType)) {
+    updates['smsfeature.smsPackageType'] = DEFAULT_SMS_PACKAGE_TYPE;
+  }
+}
 
 function mapManageSmsFeatureResponse(shop) {
   return mapShopSmsFeaturesResponse(shop);
@@ -333,26 +337,43 @@ function mapManageSmsFeatureResponse(shop) {
 
 function buildManageSmsFeatureUpdates(shop, enabled) {
   const smsFeature = shop.smsfeature ?? {};
-  const updates = {};
+  const currentStatus = smsFeature.smsFeatureStatus ?? 'notActivated';
 
-  if (enabled) {
-    const senderId = smsFeature.senderId?.trim() || null;
-    updates['smsfeature.smsFeatureStatus'] = senderId ? 'active' : 'requested';
-
-    if (!smsFeature.smsNextRenewalDate) {
-      updates['smsfeature.smsNextRenewalDate'] = addDays(
-        startOfDay(),
-        SMS_RENEWAL_PERIOD_DAYS,
-      );
-    }
-
-    if (!smsFeature.smsPackageType) {
-      updates['smsfeature.smsPackageType'] = DEFAULT_SMS_PACKAGE_TYPE;
-    }
-  } else {
-    updates['smsfeature.smsFeatureStatus'] = 'inactive';
+  if (!enabled) {
+    return {
+      'smsfeature.isSmsFeatureActive': false,
+      'smsfeature.smsFeatureStatus': 'inactive',
+    };
   }
 
+  // First-time activation: only when status is notActivated
+  if (currentStatus === 'notActivated') {
+    const updates = {
+      'smsfeature.isSmsFeatureActive': true,
+      'smsfeature.smsFeatureStatus': 'active',
+      'smsfeature.smsDueDays': 0,
+      'smsfeature.smsReceiptNo': null,
+    };
+    applyMissingSmsActivationDefaults(smsFeature, updates);
+    return updates;
+  }
+
+  // Re-enable after user previously deactivated
+  if (currentStatus === 'inactive') {
+    const updates = {
+      'smsfeature.isSmsFeatureActive': true,
+      'smsfeature.smsFeatureStatus': 'active',
+    };
+    applyMissingSmsActivationDefaults(smsFeature, updates);
+    return updates;
+  }
+
+  // Already active, pending, or due — keep billing fields, just ensure feature flag is on
+  const updates = {
+    'smsfeature.isSmsFeatureActive': true,
+    'smsfeature.smsFeatureStatus': 'active',
+  };
+  applyMissingSmsActivationDefaults(smsFeature, updates);
   return updates;
 }
 
@@ -482,57 +503,6 @@ const getSubscriptionPlans = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
-
-function resolveSmsPackageUpdates({ smsPackageType, sendReceiptSms, shop }) {
-  if (!sendReceiptSms) {
-    return { updates: {} };
-  }
-
-  const hasIncomingPackage =
-    smsPackageType !== undefined && smsPackageType !== null && String(smsPackageType).trim() !== '';
-  const normalizedType = hasIncomingPackage
-    ? normalizeSmsPackageType(smsPackageType)
-    : shop.smsPackageType;
-
-  if (hasIncomingPackage && !normalizedType) {
-    return {
-      error: {
-        status: 400,
-        body: {
-          success: false,
-          message: `smsPackageType must be one of: ${ShopsData.SMS_PACKAGE_TYPES.join(', ')}`,
-          code: 'INVALID_SMS_PACKAGE',
-        },
-      },
-    };
-  }
-
-  if (!normalizedType) {
-    return {
-      error: {
-        status: 400,
-        body: {
-          success: false,
-          message: 'smsPackageType is required when sendReceiptSms is enabled',
-          code: 'SMS_PACKAGE_REQUIRED',
-        },
-      },
-    };
-  }
-
-  const selectedPackage = findSmsPackage(normalizedType);
-  const updates = {
-    smsPackageType: selectedPackage.type,
-    smsMonthlyAllowance: selectedPackage.messageCount,
-    smsPackageAmount: selectedPackage.fee,
-  };
-
-  if (shop.smsPackageType !== selectedPackage.type) {
-    updates.smsUsedInPeriod = 0;
-  }
-
-  return { updates, selectedPackage };
-}
 
 async function parseShopModuleFeaturesInput(body) {
     const {
@@ -669,64 +639,6 @@ async function parseShopUsersFeaturesInput(body) {
   return {
     normalizedShopId,
     featureUpdates,
-  };
-}
-
-async function parseShopSmsFeaturesInput(body) {
-  const { shopId, sendReceiptSms, smsPackageType } = body;
-
-  if (!shopId?.trim()) {
-    return { error: { status: 400, body: { success: false, message: 'Shop id is required' } } };
-  }
-
-  const normalizedShopId = normalizeShopId(shopId);
-
-  if (!isValidShopIdFormat(normalizedShopId)) {
-    return { error: { status: 400, body: { success: false, message: 'Invalid shop id format' } } };
-  }
-
-  const shop = await ShopsData.findOne({ shopId: normalizedShopId });
-  if (!shop) {
-    return { error: { status: 404, body: { success: false, message: 'Shop not found' } } };
-  }
-
-  const sendReceiptSmsParsed = requireBooleanField(sendReceiptSms, 'sendReceiptSms');
-  if (sendReceiptSmsParsed.error) {
-    return { error: { status: 400, body: { success: false, message: sendReceiptSmsParsed.error } } };
-  }
-
-  if (sendReceiptSmsParsed.value) {
-    const senderId = shop.senderId?.trim();
-    if (!senderId) {
-      return {
-        error: {
-          status: 400,
-          body: {
-            success: false,
-            message:
-              'Cannot activate receipt SMS. Please request to register your shop name as an SMS sender ID first.',
-            code: 'SENDER_ID_NOT_REGISTERED',
-          },
-        },
-      };
-    }
-  }
-
-  const smsPackageResult = resolveSmsPackageUpdates({
-    smsPackageType,
-      sendReceiptSms: sendReceiptSmsParsed.value,
-    shop,
-  });
-  if (smsPackageResult.error) {
-    return { error: smsPackageResult.error };
-  }
-
-  return {
-    normalizedShopId,
-    featureUpdates: {
-      sendReceiptSms: sendReceiptSmsParsed.value,
-      ...smsPackageResult.updates,
-    },
   };
 }
 
@@ -969,7 +881,24 @@ const manageSmsFeature = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Shop not found' });
     }
 
-    const featureUpdates = buildManageSmsFeatureUpdates(shop, enabledParsed.value);
+    const smsFeature = shop.smsfeature ?? {};
+    const senderId = smsFeature.senderId?.trim() || null;
+    const enabled = enabledParsed.value;
+
+    // Scenario 1: enable requested but sender ID is not registered
+    if (enabled && !senderId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Need to register your shop name to activate. Please contact admin.',
+        code: 'SENDER_ID_NOT_REGISTERED',
+      });
+    }
+
+    // Scenario 2: first activation — enabled + sender ID + smsFeatureStatus is notActivated
+    // Scenario 2b: re-enable — enabled + sender ID + status inactive (no package/renewal reset)
+    // Scenario 3: disable
+    const featureUpdates = buildManageSmsFeatureUpdates(shop, enabled);
     const updated = await ShopsData.findOneAndUpdate(
       { shopId },
       { $set: featureUpdates },
@@ -981,7 +910,7 @@ const manageSmsFeature = async (req, res) => {
     return res.status(200).json({
       success: true,
       shopId: updated.shopId,
-      message: enabledParsed.value
+      message: enabled
         ? 'SMS feature enabled successfully'
         : 'SMS feature disabled successfully',
       features: mapManageSmsFeatureResponse(updated),
@@ -992,42 +921,6 @@ const manageSmsFeature = async (req, res) => {
   }
 };
 
-const updateShopSmsFeatures = async (req, res) => {
-  try {
-    const shopId = req.body.shopId ?? req.user?.shopId;
-    const parsed = await parseShopSmsFeaturesInput({ ...req.body, shopId });
-    if (parsed.error) {
-      return res.status(parsed.error.status).json(parsed.error.body);
-    }
-
-    const { normalizedShopId, featureUpdates } = parsed;
-
-    if (req.user?.shopId && req.user.shopId !== normalizedShopId) {
-      return res.status(403).json({ success: false, message: 'Not authorized for this shop' });
-    }
-
-    const access = await resolveFeatureUpdateAccess(req, normalizedShopId);
-    if (access.error) {
-      return res.status(access.error.status).json(access.error.body);
-    }
-
-    const updated = await ShopsData.findOneAndUpdate(
-      { shopId: normalizedShopId },
-      { $set: featureUpdates },
-      { returnDocument: 'after', runValidators: true },
-    ).lean();
-
-    res.status(200).json({
-      success: true,
-      shopId: updated.shopId,
-      message: 'Shop SMS settings updated',
-      features: mapShopSmsFeaturesResponse(updated),
-    });
-  } catch (error) {
-    console.log('error in updateShopSmsFeatures', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
 
 function normalizeSubscriptionType(value) {
   const normalized = String(value ?? '').trim().toLowerCase();
@@ -1279,7 +1172,6 @@ module.exports = {
   updateShopModuleFeatures,
   updateShopUsersFeatures,
   manageSmsFeature,
-  updateShopSmsFeatures,
 
   /** Get features */
   getShopModuleFeatures,

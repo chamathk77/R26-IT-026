@@ -11,7 +11,6 @@ const {
   updateShopModuleFeatures,
   updateShopUsersFeatures,
   manageSmsFeature,
-  updateShopSmsFeatures,
   setSubscription,
   removeOnboardingData,
 } = require('../controllers/shopsDataController');
@@ -27,7 +26,6 @@ router.post('/features/onboarding', onboardingShopFeatures);
 router.put('/features/modules', protect, updateShopModuleFeatures);
 router.put('/features/users', protect, updateShopUsersFeatures);
 router.put('/features/sms/manage', protect, manageSmsFeature);
-router.put('/features/sms', protect, updateShopSmsFeatures);
 router.get('/sms-packages', protect, getSmsPackages);
 router.get('/subscription-plans', protect, getSubscriptionPlans);
 

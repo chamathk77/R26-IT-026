@@ -31,8 +31,6 @@ import {
   GetShopSmsFeaturesResponse,
   ManageSmsFeatureRequest,
   ManageSmsFeatureResponse,
-  UpdateShopSmsFeaturesRequest,
-  UpdateShopSmsFeaturesResponse,
 } from "../type/shopOnboarding";
 
 function isHttpSuccess(status: number): boolean {
@@ -462,34 +460,6 @@ export const manageSmsFeature_Service = createAsyncThunk(
       const apiError: ApiErrorResponse = {
         error: "Error",
         message: "SMS feature update failed",
-        status: response.status,
-        timestamp: new Date().toISOString(),
-      };
-      return rejectWithValue(apiError);
-    } catch (error: unknown) {
-      return rejectWithValue(toApiErrorResponse(error));
-    }
-  },
-);
-
-export const updateShopSmsFeatures_Service = createAsyncThunk(
-  "shopOnboarding/updateSmsFeatures",
-  async (payload: UpdateShopSmsFeaturesRequest, { rejectWithValue }) => {
-    try {
-      await ensureInternetConnection();
-
-      const response = await apiClient.put<UpdateShopSmsFeaturesResponse>(
-        "/api/shops/features/sms",
-        payload,
-      );
-
-      if (isHttpSuccess(response.status)) {
-        return response.data;
-      }
-
-      const apiError: ApiErrorResponse = {
-        error: "Error",
-        message: "SMS settings update failed",
         status: response.status,
         timestamp: new Date().toISOString(),
       };

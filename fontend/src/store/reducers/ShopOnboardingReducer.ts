@@ -16,7 +16,6 @@ import {
   fetchSmsPackages_Service,
   fetchShopSmsFeatures_Service,
   manageSmsFeature_Service,
-  updateShopSmsFeatures_Service,
   removeOnboardingData_Service,
 } from '../../services/ShopOnboardingService';
 import {
@@ -35,7 +34,6 @@ import {
   GetSmsPackagesResponse,
   GetShopSmsFeaturesResponse,
   ManageSmsFeatureResponse,
-  UpdateShopSmsFeaturesResponse,
   RemoveOnboardingDataResponse,
 } from '../../type/shopOnboarding';
 
@@ -134,12 +132,6 @@ interface ShopOnboardingState {
     error: string | null;
     success: boolean;
     data: ManageSmsFeatureResponse | null;
-  };
-  updateSmsFeatures: {
-    loading: boolean;
-    error: string | null;
-    success: boolean;
-    data: UpdateShopSmsFeaturesResponse | null;
   };
   removeOnboardingData: {
     loading: boolean;
@@ -240,12 +232,6 @@ const initialState: ShopOnboardingState = {
     data: null,
   },
   manageSmsFeature: {
-    loading: false,
-    error: null,
-    success: false,
-    data: null,
-  },
-  updateSmsFeatures: {
     loading: false,
     error: null,
     success: false,
@@ -610,25 +596,6 @@ export const ShopOnboardingSlice = createSlice({
       state.manageSmsFeature.error =
         (action.payload as string) || action.error.message || 'SMS feature update failed';
       state.manageSmsFeature.data = null;
-    });
-
-    builder.addCase(updateShopSmsFeatures_Service.pending, (state) => {
-      state.updateSmsFeatures.loading = true;
-      state.updateSmsFeatures.error = null;
-      state.updateSmsFeatures.success = false;
-    });
-    builder.addCase(updateShopSmsFeatures_Service.fulfilled, (state, action) => {
-      state.updateSmsFeatures.loading = false;
-      state.updateSmsFeatures.success = true;
-      state.updateSmsFeatures.error = null;
-      state.updateSmsFeatures.data = action.payload;
-    });
-    builder.addCase(updateShopSmsFeatures_Service.rejected, (state, action) => {
-      state.updateSmsFeatures.loading = false;
-      state.updateSmsFeatures.success = false;
-      state.updateSmsFeatures.error =
-        (action.payload as string) || action.error.message || 'SMS settings update failed';
-      state.updateSmsFeatures.data = null;
     });
 
     builder.addCase(removeOnboardingData_Service.pending, (state) => {

@@ -243,8 +243,11 @@ export interface ShopSmsFeaturesPayload {
   senderId: string | null;
   smsPackageType: string | null;
   smsUsedInPeriod: number;
+  isSmsFeatureActive: boolean;
   smsNextRenewalDate: string | null;
-  smsFeatureStatus: 'requested' | 'active' | 'pending' | 'due' | 'inactive' | string;
+  smsDueDays: number;
+  smsReceiptNo: string | null;
+  smsFeatureStatus: 'notActivated' | 'active' | 'pending' | 'due' | 'inactive' | string;
 }
 
 export interface ManageSmsFeatureRequest {
@@ -259,19 +262,6 @@ export interface ManageSmsFeatureResponse {
 }
 
 export interface GetShopSmsFeaturesResponse {
-  success: boolean;
-  shopId: string;
-  message: string;
-  features: ShopSmsFeaturesPayload;
-}
-
-export interface UpdateShopSmsFeaturesRequest {
-  shopId: string;
-  sendReceiptSms: boolean;
-  smsPackageType?: string | null;
-}
-
-export interface UpdateShopSmsFeaturesResponse {
   success: boolean;
   shopId: string;
   message: string;
