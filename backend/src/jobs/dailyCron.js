@@ -1,7 +1,9 @@
 const cron = require('node-cron');
 const { runDailyTrialExpirationCheck } = require('../services/trialExpirationService');
 const { runDailyBillingCheck } = require('../services/billingCheckService');
+const { runDailySmsBillCheck } = require('../services/smsBillCronService');
 const { runDailyDueDaysCheck } = require('../services/paymentDueCheckService');
+const { runDailySmsDueDaysCheck } = require('../services/smsDueDaysCronService');
 
 const DEFAULT_SCHEDULE = '0 0 * * *';
 const DEFAULT_TIMEZONE = 'Asia/Colombo';
@@ -14,12 +16,26 @@ function isBillingCronEnabled() {
   return process.env.BILLING_CRON_ENABLED !== 'false';
 }
 
+function isSmsBillCronEnabled() {
+  return process.env.SMS_BILL_CRON_ENABLED !== 'false';
+}
+
 function isDueDaysCronEnabled() {
   return process.env.DUE_DAYS_CRON_ENABLED !== 'false';
 }
 
+function isSmsDueDaysCronEnabled() {
+  return process.env.SMS_DUE_DAYS_CRON_ENABLED !== 'false';
+}
+
 function isAnyDailyCronEnabled() {
-  return isTrialCronEnabled() || isBillingCronEnabled() || isDueDaysCronEnabled();
+  return (
+    isTrialCronEnabled() ||
+    isBillingCronEnabled() ||
+    isSmsBillCronEnabled() ||
+    isDueDaysCronEnabled() ||
+    isSmsDueDaysCronEnabled()
+  );
 }
 
 function getDailyCronSchedule() {
@@ -29,7 +45,10 @@ function getDailyCronSchedule() {
   if (isBillingCronEnabled()) {
     return process.env.BILLING_CRON_SCHEDULE || DEFAULT_SCHEDULE;
   }
-  return process.env.DUE_DAYS_CRON_SCHEDULE || DEFAULT_SCHEDULE;
+  if (isDueDaysCronEnabled()) {
+    return process.env.DUE_DAYS_CRON_SCHEDULE || DEFAULT_SCHEDULE;
+  }
+  return process.env.SMS_DUE_DAYS_CRON_SCHEDULE || DEFAULT_SCHEDULE;
 }
 
 function getDailyCronTimezone() {
@@ -39,7 +58,10 @@ function getDailyCronTimezone() {
   if (isBillingCronEnabled()) {
     return process.env.BILLING_CRON_TIMEZONE || DEFAULT_TIMEZONE;
   }
-  return process.env.DUE_DAYS_CRON_TIMEZONE || DEFAULT_TIMEZONE;
+  if (isDueDaysCronEnabled()) {
+    return process.env.DUE_DAYS_CRON_TIMEZONE || DEFAULT_TIMEZONE;
+  }
+  return process.env.SMS_DUE_DAYS_CRON_TIMEZONE || DEFAULT_TIMEZONE;
 }
 
 function describeEnabledJobs() {
@@ -50,8 +72,14 @@ function describeEnabledJobs() {
   if (isBillingCronEnabled()) {
     jobs.push('subscription billing');
   }
+  if (isSmsBillCronEnabled()) {
+    jobs.push('SMS billing');
+  }
   if (isDueDaysCronEnabled()) {
-    jobs.push('due days');
+    jobs.push('subscription due days');
+  }
+  if (isSmsDueDaysCronEnabled()) {
+    jobs.push('SMS due days');
   }
   return jobs.join(', then ');
 }
@@ -77,6 +105,15 @@ async function runMidnightDailyJobs(meta = {}) {
     }
   }
 
+  if (isSmsBillCronEnabled()) {
+    console.log('[daily-cron] Running SMS billing invoice generation...');
+    try {
+      await runDailySmsBillCheck(meta);
+    } catch (error) {
+      console.error('[daily-cron] SMS billing failed:', error.message);
+    }
+  }
+
   if (isDueDaysCronEnabled()) {
     console.log('[daily-cron] Running subscription due days check...');
     try {
@@ -85,12 +122,21 @@ async function runMidnightDailyJobs(meta = {}) {
       console.error('[daily-cron] Due days check failed:', error.message);
     }
   }
+
+  if (isSmsDueDaysCronEnabled()) {
+    console.log('[daily-cron] Running SMS due days check...');
+    try {
+      await runDailySmsDueDaysCheck(meta);
+    } catch (error) {
+      console.error('[daily-cron] SMS due days check failed:', error.message);
+    }
+  }
 }
 
 function startDailyCron() {
   if (!isAnyDailyCronEnabled()) {
     console.log(
-      '[daily-cron] Disabled (TRIAL_CRON_ENABLED, BILLING_CRON_ENABLED, and DUE_DAYS_CRON_ENABLED are all false)',
+      '[daily-cron] Disabled (TRIAL_CRON_ENABLED, BILLING_CRON_ENABLED, SMS_BILL_CRON_ENABLED, DUE_DAYS_CRON_ENABLED, and SMS_DUE_DAYS_CRON_ENABLED are all false)',
     );
     return null;
   }
@@ -123,5 +169,7 @@ module.exports = {
   runMidnightDailyJobs,
   isTrialCronEnabled,
   isBillingCronEnabled,
+  isSmsBillCronEnabled,
   isDueDaysCronEnabled,
+  isSmsDueDaysCronEnabled,
 };
