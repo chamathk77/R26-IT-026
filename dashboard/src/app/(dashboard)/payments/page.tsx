@@ -5,6 +5,7 @@ import { Box, Card, CardContent, Grid, Typography } from '@mui/material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import PersonAddAlt1OutlinedIcon from '@mui/icons-material/PersonAddAlt1Outlined';
 import AutorenewOutlinedIcon from '@mui/icons-material/AutorenewOutlined';
+import SmsOutlinedIcon from '@mui/icons-material/SmsOutlined';
 import DashboardShell from '@/components/layout/DashboardShell';
 
 const PAYMENT_SECTIONS = [
@@ -22,6 +23,13 @@ const PAYMENT_SECTIONS = [
     icon: AutorenewOutlinedIcon,
     gradient: 'linear-gradient(135deg, #6a1b9a 0%, #283593 100%)',
   },
+  {
+    title: 'SMS',
+    description: 'Review SMS package billing invoices and uploaded payment receipts.',
+    href: '/payments/sms',
+    icon: SmsOutlinedIcon,
+    gradient: 'linear-gradient(135deg, #00695c 0%, #2e7d32 100%)',
+  },
 ] as const;
 
 export default function PaymentsHubPage() {
@@ -32,7 +40,7 @@ export default function PaymentsHubPage() {
           const Icon = section.icon;
 
           return (
-            <Grid key={section.href} size={{ xs: 12, md: 6 }}>
+            <Grid key={section.href} size={{ xs: 12, md: 4 }}>
               <Card
                 component={Link}
                 href={section.href}

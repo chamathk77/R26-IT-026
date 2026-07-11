@@ -128,6 +128,45 @@ export const manageSmsFeatureStyles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  noticeCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  noticeIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noticeTextBlock: {
+    flex: 1,
+  },
+  noticeTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  noticeBody: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  noticeAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 10,
+  },
+  noticeActionText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 13,
+  },
   currentPackageTitle: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 16,

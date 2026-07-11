@@ -3,11 +3,15 @@ import { api } from './axios';
 import type {
   FetchOnboardingPaymentsParams,
   FetchPendingPaymentsParams,
+  FetchSmsPaymentsParams,
   FetchSubscriptionPaymentsParams,
   OnboardingPaymentsResponse,
   PaymentActionResponse,
   PaymentDetailsResponse,
   PendingPaymentsResponse,
+  SmsPaymentActionResponse,
+  SmsPaymentDetailsResponse,
+  SmsPaymentsResponse,
   SubscriptionPaymentsResponse,
 } from './payments.types';
 
@@ -69,6 +73,56 @@ export async function fetchSubscriptionPayments(
         ...(params.status ? { status: params.status } : {}),
       },
     },
+  );
+  return response.data;
+}
+
+export async function fetchSmsPayments(
+  params: FetchSmsPaymentsParams = {},
+): Promise<SmsPaymentsResponse> {
+  const response = await api.get<SmsPaymentsResponse>('/api/dashboard/sms-billing', {
+    params: {
+      page: params.page ?? 1,
+      limit: params.limit ?? 20,
+      ...(params.status ? { status: params.status } : {}),
+      ...(params.shopId ? { shopId: params.shopId } : {}),
+    },
+  });
+  return response.data;
+}
+
+export async function fetchSmsPaymentDetails(
+  paymentId: string,
+): Promise<SmsPaymentDetailsResponse> {
+  const response = await api.get<SmsPaymentDetailsResponse>(
+    `/api/dashboard/sms-billing/${paymentId}`,
+  );
+  return response.data;
+}
+
+export async function approveSmsBill(paymentId: string): Promise<SmsPaymentActionResponse> {
+  const response = await api.post<SmsPaymentActionResponse>(
+    `/api/dashboard/sms-billing/${paymentId}/approve`,
+  );
+  return response.data;
+}
+
+export async function rejectSmsBill(
+  paymentId: string,
+  reason: string,
+): Promise<SmsPaymentActionResponse> {
+  const response = await api.post<SmsPaymentActionResponse>(
+    `/api/dashboard/sms-billing/${paymentId}/reject`,
+    { reason },
+  );
+  return response.data;
+}
+
+export async function resetAndApproveSmsBill(
+  paymentId: string,
+): Promise<SmsPaymentActionResponse> {
+  const response = await api.post<SmsPaymentActionResponse>(
+    `/api/dashboard/sms-billing/${paymentId}/reset-and-approve`,
   );
   return response.data;
 }

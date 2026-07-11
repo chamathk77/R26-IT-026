@@ -80,6 +80,87 @@ export interface FetchSubscriptionPaymentsParams {
   status?: PaymentStatusFilter | '';
 }
 
+export interface FetchSmsPaymentsParams {
+  page?: number;
+  limit?: number;
+  status?: PaymentStatusFilter | '';
+  shopId?: string;
+}
+
+export interface SmsPaymentShopSummary {
+  shopId: string;
+  shopName: string;
+  ownerFirstName: string;
+  ownerLastName: string;
+  ownerMobileNumber?: string;
+  shopMobileNumber: string;
+  email: string;
+  status: string;
+  smsFeatureStatus?: string | null;
+  smsDueDays?: number;
+  smsPackageType?: string | null;
+  smsReceiptNo?: string | null;
+  isSmsFeatureActive?: boolean;
+}
+
+export interface SmsPaymentListItem {
+  _id: string;
+  shopId: string;
+  receiptNumber: string;
+  receiptImagePath?: string;
+  receiptImageUrl?: string | null;
+  receiptImageAvailable?: boolean;
+  submittedDate?: string | null;
+  paymentMonth?: string | null;
+  paymentAmount?: number | null;
+  paymentType?: string;
+  subscriptionType?: string | null;
+  exactPaymentDay?: string | null;
+  expiryDate?: string | null;
+  status: string;
+  reason?: string | null;
+  description?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  shop: SmsPaymentShopSummary | null;
+}
+
+export interface SmsShopDetails extends ShopDetails {
+  ownerMobileNumber?: string;
+  smsFeatureStatus?: string | null;
+  smsDueDays?: number;
+  smsPackageType?: string | null;
+  smsReceiptNo?: string | null;
+  isSmsFeatureActive?: boolean;
+  smsNextRenewalDate?: string | null;
+}
+
+export interface SmsPaymentsResponse {
+  success: boolean;
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  count: number;
+  paymentType?: 'sms';
+  status?: PaymentStatusFilter | null;
+  allowedStatuses?: PaymentStatusFilter[];
+  payments: SmsPaymentListItem[];
+}
+
+export interface SmsPaymentDetailsResponse {
+  success: boolean;
+  payment: PaymentRecord;
+  shop: SmsShopDetails | null;
+}
+
+export interface SmsPaymentActionResponse {
+  success: boolean;
+  message: string;
+  payment: PaymentRecord;
+  shop: SmsShopDetails | null;
+}
+
 export interface PendingPaymentsResponse {
   success: boolean;
   page: number;

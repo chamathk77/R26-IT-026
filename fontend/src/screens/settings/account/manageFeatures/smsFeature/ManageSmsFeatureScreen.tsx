@@ -59,12 +59,14 @@ function getSmsStatusMeta(status?: string | null) {
     case 'pending':
       return { label: 'Pending', tone: 'warning' as const, color: '#b45309' };
     case 'due':
-      return { label: 'Due', tone: 'neutral' as const, color: '#dc2626' };
+      return { label: 'Payment due', tone: 'warning' as const, color: '#dc2626' };
     case 'inactive':
     default:
       return { label: 'Inactive', tone: 'neutral' as const, color: '#64748b' };
   }
 }
+
+const SMS_PAYMENT_WINDOW_DAYS = 14;
 
 function formatBillingDate(value?: string | null): string | null {
   if (!value) return null;
@@ -184,8 +186,15 @@ export default function ManageSmsFeatureScreen({ navigation }: Props) {
   const savedEnabled = isSmsFeatureEnabled(features);
   const hasChanges = Boolean(features) && enabledDraft !== savedEnabled;
   const statusMeta = getSmsStatusMeta(features?.smsFeatureStatus);
+  const smsFeatureStatus = features?.smsFeatureStatus ?? null;
+  const smsDueDays = Number(features?.smsDueDays ?? 0);
+  const daysLeftToPay = Math.max(0, SMS_PAYMENT_WINDOW_DAYS - smsDueDays);
+  const showDueNotice = smsFeatureStatus === 'due';
+  const showPendingNotice = smsFeatureStatus === 'pending';
   const showSmsDetails =
-    features?.smsFeatureStatus === 'active' || features?.smsFeatureStatus === 'due';
+    smsFeatureStatus === 'active' ||
+    smsFeatureStatus === 'due' ||
+    smsFeatureStatus === 'pending';
 
   const currentPackage = useMemo(
     () => packages.find((pkg) => pkg.type === features?.smsPackageType) ?? null,
@@ -462,6 +471,16 @@ export default function ManageSmsFeatureScreen({ navigation }: Props) {
                   </Text>
                   <SettingsBadge label={statusMeta.label} tone={statusMeta.tone} paperTheme={paperTheme} />
                 </View>
+                {showDueNotice || showPendingNotice ? (
+                  <View style={styles.statusRow}>
+                    <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                      SMS due days
+                    </Text>
+                    <Text style={[styles.summaryValueStrong, { color: statusMeta.color }]}>
+                      {smsDueDays}
+                    </Text>
+                  </View>
+                ) : null}
                 {features.senderId ? (
                   <View style={styles.statusRow}>
                     <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
@@ -477,6 +496,80 @@ export default function ManageSmsFeatureScreen({ navigation }: Props) {
                   </Text>
                 )}
               </View>
+
+              {showDueNotice ? (
+                <View
+                  style={[
+                    styles.noticeCard,
+                    {
+                      backgroundColor: resolvedTheme === 'dark' ? '#450a0a' : '#fef2f2',
+                      borderColor: '#fca5a5',
+                    },
+                  ]}
+                >
+                  <View style={[styles.noticeIconWrap, { backgroundColor: '#fee2e2' }]}>
+                    <Ionicons name="alert-circle-outline" size={22} color="#dc2626" />
+                  </View>
+                  <View style={styles.noticeTextBlock}>
+                    <Text style={[styles.noticeTitle, { color: '#991b1b' }]}>
+                      Payment required
+                    </Text>
+                    <Text style={[styles.noticeBody, { color: '#7f1d1d' }]}>
+                      Your SMS invoice is due. Please pay within {SMS_PAYMENT_WINDOW_DAYS} days to
+                      continue SMS.
+                      {daysLeftToPay > 0
+                        ? ` ${daysLeftToPay} day${daysLeftToPay === 1 ? '' : 's'} remaining.`
+                        : ' The payment window has ended.'}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => navigation.navigate('SubscriptionPayments')}
+                      activeOpacity={0.85}
+                      style={styles.noticeAction}
+                    >
+                      <Text style={[styles.noticeActionText, { color: '#b91c1c' }]}>
+                        Open Payments
+                      </Text>
+                      <Ionicons name="chevron-forward" size={16} color="#b91c1c" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : null}
+
+              {showPendingNotice ? (
+                <View
+                  style={[
+                    styles.noticeCard,
+                    {
+                      backgroundColor: resolvedTheme === 'dark' ? '#422006' : '#fffbeb',
+                      borderColor: '#fcd34d',
+                    },
+                  ]}
+                >
+                  <View style={[styles.noticeIconWrap, { backgroundColor: '#fef3c7' }]}>
+                    <Ionicons name="lock-closed-outline" size={22} color="#b45309" />
+                  </View>
+                  <View style={styles.noticeTextBlock}>
+                    <Text style={[styles.noticeTitle, { color: '#92400e' }]}>
+                      Settle payment to activate
+                    </Text>
+                    <Text style={[styles.noticeBody, { color: '#78350f' }]}>
+                      SMS has been paused after {smsDueDays} overdue day
+                      {smsDueDays === 1 ? '' : 's'}. Please settle the previous payment before
+                      activating SMS again.
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => navigation.navigate('SubscriptionPayments')}
+                      activeOpacity={0.85}
+                      style={styles.noticeAction}
+                    >
+                      <Text style={[styles.noticeActionText, { color: '#b45309' }]}>
+                        Open Payments
+                      </Text>
+                      <Ionicons name="chevron-forward" size={16} color="#b45309" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : null}
 
               <Text style={[styles.sectionLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
                 SMS feature
