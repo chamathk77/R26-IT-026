@@ -1,5 +1,6 @@
 const Payments = require('../models/payments');
 const ShopsData = require('../models/shopsData');
+const SmsBillCronReport = require('../models/smsBillCronReport');
 const { sendSms } = require('./smsService');
 const {
   generateSmsReceiptNumber,
@@ -49,6 +50,7 @@ async function markSmsFeatureDue(shopIdOrObjectId) {
     {
       $set: {
         'smsfeature.smsFeatureStatus': 'due',
+        'smsfeature.smsDueDays': 0,
       },
     },
   );
@@ -148,6 +150,7 @@ async function processShopForSmsBilling(shop, today) {
       $set: {
         'smsfeature.smsReceiptNo': String(payment._id),
         'smsfeature.smsFeatureStatus': 'due',
+        'smsfeature.smsDueDays': 0,
       },
     },
   );
@@ -173,11 +176,80 @@ async function processShopForSmsBilling(shop, today) {
   };
 }
 
+function getReportDateKey(date = new Date(), timezone = 'Asia/Colombo') {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+function normalizeInvoicedEntry(entry) {
+  const smsSent = entry.smsSent ?? false;
+  return {
+    shopId: entry.shopId,
+    receiptNumber: entry.receiptNumber ?? null,
+    paymentId: entry.paymentId ?? null,
+    paymentAmount: entry.paymentAmount ?? null,
+    smsPackageType: entry.smsPackageType ?? null,
+    exactPaymentDay: entry.exactPaymentDay ?? null,
+    smsFeatureStatus: entry.smsFeatureStatus ?? null,
+    smsSent,
+    smsReason: entry.smsReason ?? (smsSent ? null : 'SMS send failed'),
+  };
+}
+
+function resolveRunStatus({ fatalError, errorsCount, invoicedCount }) {
+  if (fatalError) {
+    return 'failed';
+  }
+  if (errorsCount > 0) {
+    return invoicedCount > 0 ? 'partial' : 'failed';
+  }
+  return 'success';
+}
+
+async function saveSmsBillCronReport(report, meta = {}) {
+  const checkedAt = new Date(report.checkedAt || Date.now());
+  const timezone = meta.timezone || 'Asia/Colombo';
+  const invoiced = (report.invoiced || []).map(normalizeInvoicedEntry);
+  const skipped = report.skipped || [];
+  const errors = report.errors || [];
+  const smsSentCount = invoiced.filter((entry) => entry.smsSent).length;
+
+  const payload = {
+    reportDate: getReportDateKey(checkedAt, timezone),
+    checkedAt,
+    schedule: meta.schedule ?? null,
+    timezone,
+    totalShopsChecked: report.totalShopsChecked ?? 0,
+    invoicedCount: invoiced.length,
+    skippedCount: skipped.length,
+    errorsCount: errors.length,
+    smsSentCount,
+    smsFailedCount: invoiced.length - smsSentCount,
+    fatalError: report.fatalError ?? null,
+    reportData: {
+      invoiced,
+      skipped,
+      errors,
+    },
+  };
+
+  payload.runStatus = resolveRunStatus(payload);
+
+  return SmsBillCronReport.findOneAndUpdate(
+    { reportDate: payload.reportDate },
+    { $set: payload },
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
+  );
+}
+
 /**
  * Daily SMS billing job: for each shop with active SMS and a passed renewal date,
  * create a notPaid SMS invoice, mark smsFeatureStatus as due, and notify the owner by SMS.
  */
-
 async function runDailySmsBillCheck(meta = {}) {
   const today = startOfDay();
 
@@ -241,6 +313,9 @@ async function runDailySmsBillCheck(meta = {}) {
       console.log('[sms-bill-cron] Errors:', report.errors);
     }
 
+    const savedReport = await saveSmsBillCronReport(report, meta);
+    report.reportId = savedReport._id;
+
     return report;
   } catch (error) {
     report.fatalError = error.message;
@@ -248,6 +323,14 @@ async function runDailySmsBillCheck(meta = {}) {
       shopId: null,
       reason: error.message,
     });
+
+    try {
+      const savedReport = await saveSmsBillCronReport(report, meta);
+      report.reportId = savedReport._id;
+    } catch (saveError) {
+      console.error('[sms-bill-cron] Failed to save SMS bill cron report:', saveError.message);
+    }
+
     throw error;
   }
 }
@@ -256,4 +339,5 @@ module.exports = {
   runDailySmsBillCheck,
   processShopForSmsBilling,
   isRenewalDatePassed,
+  saveSmsBillCronReport,
 };

@@ -1,6 +1,7 @@
 const ShopsData = require('../models/shopsData');
 const User = require('../models/user');
 const Payments = require('../models/payments');
+const mongoose = require('mongoose');
 const { addDays } = require('../utils/trialHelper');
 const {
   generatePlanSubscriptionReceiptNumber,
@@ -876,7 +877,7 @@ const manageSmsFeature = async (req, res) => {
       return res.status(roleAccess.error.status).json(roleAccess.error.body);
     }
 
-    const shop = await ShopsData.findOne({ shopId }).select('shopId smsfeature').lean();
+    const shop = await ShopsData.findOne({ shopId }).select('shopId status smsfeature').lean();
     if (!shop) {
       return res.status(404).json({ success: false, message: 'Shop not found' });
     }
@@ -884,6 +885,17 @@ const manageSmsFeature = async (req, res) => {
     const smsFeature = shop.smsfeature ?? {};
     const senderId = smsFeature.senderId?.trim() || null;
     const enabled = enabledParsed.value;
+
+    // Enable only: shop must not be on trial
+    if (enabled && shop.status === 'trial') {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Feature settings cannot be updated while your shop is on a trial. Please subscribe or activate your account first.',
+        code: 'FEATURE_UPDATE_NOT_ALLOWED_IN_TRIAL',
+        status: shop.status,
+      });
+    }
 
     // Scenario 1: enable requested but sender ID is not registered
     if (enabled && !senderId) {
@@ -893,6 +905,46 @@ const manageSmsFeature = async (req, res) => {
           'Need to register your shop name to activate. Please contact admin.',
         code: 'SENDER_ID_NOT_REGISTERED',
       });
+    }
+
+    // Scenario: enable while SMS billing is pending — block until previous SMS payment is cleared
+    if (enabled && (smsFeature.smsFeatureStatus ?? 'notActivated') === 'pending') {
+      const smsReceiptNo = smsFeature.smsReceiptNo?.trim() || null;
+      if (!smsReceiptNo) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please complete previous payment before active',
+          code: 'SMS_PREVIOUS_PAYMENT_REQUIRED',
+        });
+      }
+
+      const payment = mongoose.Types.ObjectId.isValid(smsReceiptNo)
+        ? await Payments.findById(smsReceiptNo).select('status paymentType shopId').lean()
+        : null;
+
+      if (!payment || payment.shopId !== shopId || payment.paymentType !== 'sms') {
+        return res.status(400).json({
+          success: false,
+          message: 'Please complete previous payment before active',
+          code: 'SMS_PREVIOUS_PAYMENT_REQUIRED',
+        });
+      }
+
+      if (payment.status === 'pending') {
+        return res.status(400).json({
+          success: false,
+          message: 'Your payment still under approval please wait',
+          code: 'SMS_PAYMENT_UNDER_APPROVAL',
+        });
+      }
+
+      if (payment.status === 'rejected' || payment.status === 'notPaid') {
+        return res.status(400).json({
+          success: false,
+          message: 'Please complete previous payment before active',
+          code: 'SMS_PREVIOUS_PAYMENT_REQUIRED',
+        });
+      }
     }
 
     // Scenario 2: first activation — enabled + sender ID + smsFeatureStatus is notActivated

@@ -148,14 +148,35 @@ function formatAmount(amount: number | null): string {
 }
 
 function formatPaymentType(type: PaymentRecord['paymentType']): string {
-  return type === 'upFront' ? 'Up-front' : 'Subscription';
+  if (type === 'upFront') return 'Up-front';
+  if (type === 'sms') return 'SMS';
+  return 'Subscription';
 }
 
 function getPaymentTitle(payment: PaymentRecord): string {
   if (payment.paymentType === 'upFront') {
     return 'Up-front payment';
   }
+  if (payment.paymentType === 'sms') {
+    return 'SMS package billing';
+  }
   return 'Subscription payment';
+}
+
+function formatDate(isoDate: string | null | undefined): string {
+  if (!isoDate) return '—';
+  const parsed = new Date(isoDate);
+  if (Number.isNaN(parsed.getTime())) return isoDate;
+  return parsed.toLocaleDateString('en-LK', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatPaymentMonth(month: string | null | undefined): string {
+  if (!month) return '—';
+  return month.charAt(0).toUpperCase() + month.slice(1);
 }
 
 function getStatusMeta(status: PaymentStatus) {
@@ -345,7 +366,7 @@ export default function PayNowScreen({ navigation, route }: Props) {
               ]}
             >
               <Ionicons
-                name="card-outline"
+                name={payment.paymentType === 'sms' ? 'chatbubble-ellipses-outline' : 'card-outline'}
                 size={28}
                 color={paperTheme.colors.primary}
               />
@@ -394,6 +415,22 @@ export default function PayNowScreen({ navigation, route }: Props) {
               value={formatPaymentType(payment.paymentType)}
               paperTheme={paperTheme}
             />
+            {payment.paymentType === 'sms' ? (
+              <SettingsDetailRow
+                icon="calendar-outline"
+                label="Billing month"
+                value={formatPaymentMonth(payment.paymentMonth)}
+                paperTheme={paperTheme}
+              />
+            ) : null}
+            {payment.paymentType === 'sms' && payment.exactPaymentDay ? (
+              <SettingsDetailRow
+                icon="alarm-outline"
+                label="SMS renewal date"
+                value={formatDate(payment.exactPaymentDay)}
+                paperTheme={paperTheme}
+              />
+            ) : null}
             <SettingsDetailRow
               icon="cash-outline"
               label="Payment amount"

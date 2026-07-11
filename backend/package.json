@@ -6,6 +6,13 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "cron:daily": "node src/scripts/runDailyCrons.js",
+    "cron:trial": "node src/scripts/runTrialCron.js",
+    "cron:billing": "node src/scripts/runBillingCron.js",
+    "cron:due-days": "node src/scripts/runDueDaysCron.js",
+    "cron:sms-bill": "node src/scripts/runSmsBillCron.js",
+    "cron:sms-due-days": "node src/scripts/runSmsDueDaysCron.js",
+    "cron:sms": "node src/scripts/runSmsCrons.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

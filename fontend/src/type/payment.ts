@@ -1,6 +1,6 @@
 export type PaymentStatus = 'pending' | 'approve' | 'rejected' | 'notPaid';
 
-export type PaymentType = 'subscription' | 'upFront';
+export type PaymentType = 'subscription' | 'upFront' | 'sms';
 
 export type PaymentSubscriptionType = '1month' | '3months' | '6months' | '1year';
 

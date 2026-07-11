@@ -1,4 +1,5 @@
 const ShopsData = require('../models/shopsData');
+const SmsDueDaysCronReport = require('../models/smsDueDaysCronReport');
 
 const SMS_DUE_STATUS = 'due';
 const SMS_PENDING_STATUS = 'pending';
@@ -51,6 +52,65 @@ function processShopSmsDueDays(shop) {
       isSmsFeatureActive: statusChanged ? false : smsFeature.isSmsFeatureActive ?? null,
     },
   };
+}
+
+function getReportDateKey(date = new Date(), timezone = 'Asia/Colombo') {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+function resolveRunStatus({ fatalError, errorsCount, processedCount }) {
+  if (fatalError) {
+    return 'failed';
+  }
+  if (errorsCount > 0) {
+    return processedCount > 0 ? 'partial' : 'failed';
+  }
+  return 'success';
+}
+
+async function saveSmsDueDaysCronReport(report, meta = {}) {
+  const checkedAt = new Date(report.checkedAt || Date.now());
+  const timezone = meta.timezone || 'Asia/Colombo';
+  const processed = report.processed || [];
+  const escalated = report.escalated || [];
+  const skipped = report.skipped || [];
+  const errors = report.errors || [];
+
+  const payload = {
+    reportDate: getReportDateKey(checkedAt, timezone),
+    checkedAt,
+    schedule: meta.schedule ?? null,
+    timezone,
+    totalShopsChecked: report.totalShopsChecked ?? 0,
+    processedCount: processed.length,
+    escalatedCount: escalated.length,
+    skippedCount: skipped.length,
+    errorsCount: errors.length,
+    fatalError: report.fatalError ?? null,
+    reportData: {
+      processed,
+      escalated,
+      skipped,
+      errors,
+    },
+  };
+
+  payload.runStatus = resolveRunStatus({
+    fatalError: payload.fatalError,
+    errorsCount: payload.errorsCount,
+    processedCount: payload.processedCount,
+  });
+
+  return SmsDueDaysCronReport.findOneAndUpdate(
+    { reportDate: payload.reportDate },
+    { $set: payload },
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
+  );
 }
 
 /**
@@ -118,6 +178,9 @@ async function runDailySmsDueDaysCheck(meta = {}) {
       console.log('[sms-due-days-cron] Errors:', report.errors);
     }
 
+    const savedReport = await saveSmsDueDaysCronReport(report, meta);
+    report.reportId = savedReport._id;
+
     return report;
   } catch (error) {
     report.fatalError = error.message;
@@ -125,6 +188,17 @@ async function runDailySmsDueDaysCheck(meta = {}) {
       shopId: null,
       reason: error.message,
     });
+
+    try {
+      const savedReport = await saveSmsDueDaysCronReport(report, meta);
+      report.reportId = savedReport._id;
+    } catch (saveError) {
+      console.error(
+        '[sms-due-days-cron] Failed to save SMS due days cron report:',
+        saveError.message,
+      );
+    }
+
     throw error;
   }
 }
@@ -132,6 +206,7 @@ async function runDailySmsDueDaysCheck(meta = {}) {
 module.exports = {
   runDailySmsDueDaysCheck,
   processShopSmsDueDays,
+  saveSmsDueDaysCronReport,
   OVERDUE_DAYS_THRESHOLD,
   COUNTABLE_SMS_STATUSES,
 };

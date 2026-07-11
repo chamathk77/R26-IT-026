@@ -26,6 +26,10 @@ function getBaseLineItemName(payment: PaymentRecord): string {
     return 'Up-front payment';
   }
 
+  if (payment.paymentType === 'sms') {
+    return 'SMS package billing';
+  }
+
   if (payment.subscriptionType) {
     return SUBSCRIPTION_TYPE_LABELS[payment.subscriptionType] ?? 'Subscription plan';
   }

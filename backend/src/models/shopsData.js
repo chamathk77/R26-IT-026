@@ -106,7 +106,7 @@ function buildSmsUsageIncrementUpdate(currentUsedCount) {
 }
 
 /** Per additional user monthly fee (LKR). Change here to update billing everywhere. */
-const ADDITIONAL_USER_FEE_LKR = 399;
+const ADDITIONAL_USER_FEE_LKR = 390;
 
 /** Web portal add-on monthly fee (LKR). Billing integration — future release. */
 const WEB_MODULE_FEE_LKR = 2990;
@@ -115,7 +115,7 @@ const SUBSCRIPTION_DURATION_DAYS = {
   "1month": 30,
   "3months": 90,
   "6months": 180,
-  "1year": 360,
+  "1year": 364,
 };
 
 function getSubscriptionFee(subscriptionType) {

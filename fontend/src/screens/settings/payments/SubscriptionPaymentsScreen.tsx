@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Image,
   Linking,
+  RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -42,6 +43,7 @@ const PAYMENT_TYPE_OPTIONS: { key: PaymentTypeFilter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'subscription', label: 'Subscription' },
   { key: 'upFront', label: 'Up-front' },
+  { key: 'sms', label: 'SMS' },
 ];
 
 const STATUS_OPTIONS: { key: StatusFilter; label: string }[] = [
@@ -105,7 +107,11 @@ function shouldShowExpiryDate(payment: PaymentRecord): boolean {
 
 function shouldShowExactPaymentDate(payment: PaymentRecord): boolean {
   if (!payment.exactPaymentDay) return false;
-  return payment.paymentType === 'upFront' || isMultiMonthSubscriptionPlan(payment);
+  return (
+    payment.paymentType === 'upFront' ||
+    payment.paymentType === 'sms' ||
+    isMultiMonthSubscriptionPlan(payment)
+  );
 }
 
 function formatSubscriptionTypeLabel(type: string | null | undefined): string {
@@ -116,6 +122,10 @@ function formatSubscriptionTypeLabel(type: string | null | undefined): string {
 function getPaymentTitle(payment: PaymentRecord): string {
   if (payment.paymentType === 'upFront') {
     return 'Up-front payment';
+  }
+
+  if (payment.paymentType === 'sms') {
+    return 'SMS package billing';
   }
 
   const planLabel = payment.subscriptionType
@@ -130,6 +140,13 @@ function getPaymentTitle(payment: PaymentRecord): string {
 function getPaymentPeriodDetail(payment: PaymentRecord): { label: string; value: string } | null {
   if (payment.paymentType === 'upFront') {
     return null;
+  }
+
+  if (payment.paymentType === 'sms') {
+    return {
+      label: 'Billing month',
+      value: formatPaymentMonth(payment.paymentMonth),
+    };
   }
 
   if (
@@ -149,14 +166,24 @@ function getPaymentPeriodDetail(payment: PaymentRecord): { label: string; value:
   };
 }
 
+function getExactPaymentDateLabel(payment: PaymentRecord): string {
+  if (payment.paymentType === 'sms') {
+    return 'SMS renewal date';
+  }
+  return 'Exact payment day';
+}
+
 function getSummaryTitle(typeFilter: PaymentTypeFilter): string {
   if (typeFilter === 'upFront') return 'Up-front payment';
   if (typeFilter === 'subscription') return 'Subscription payment';
+  if (typeFilter === 'sms') return 'SMS package billing';
   return 'All payments';
 }
 
 function formatPaymentType(type: PaymentType): string {
-  return type === 'upFront' ? 'Up-front' : 'Subscription';
+  if (type === 'upFront') return 'Up-front';
+  if (type === 'sms') return 'SMS';
+  return 'Subscription';
 }
 
 function formatDateTime(isoDate: string | null): string {
@@ -381,7 +408,8 @@ function PaymentHistoryCard({
                 { color: paperTheme.colors.onSurfaceVariant },
               ]}
             >
-              Payment date {formatDate(payment.exactPaymentDay!)}
+              {payment.paymentType === 'sms' ? 'Renewal' : 'Payment date'}{' '}
+              {formatDate(payment.exactPaymentDay!)}
             </Text>
           ) : null}
           {shouldShowExpiryDate(payment) ? (
@@ -446,6 +474,13 @@ function PaymentHistoryCard({
             value={formatPaymentType(payment.paymentType)}
             paperTheme={paperTheme}
           />
+          {payment.description?.trim() ? (
+            <PaymentDetailRow
+              label="Description"
+              value={payment.description.trim()}
+              paperTheme={paperTheme}
+            />
+          ) : null}
           {paymentPeriodDetail ? (
             <PaymentDetailRow
               label={paymentPeriodDetail.label}
@@ -455,7 +490,7 @@ function PaymentHistoryCard({
           ) : null}
           {shouldShowExactPaymentDate(payment) ? (
             <PaymentDetailRow
-              label="Exact payment day"
+              label={getExactPaymentDateLabel(payment)}
               value={formatDate(payment.exactPaymentDay)}
               paperTheme={paperTheme}
             />
@@ -566,6 +601,7 @@ export default function SubscriptionPaymentsScreen({ navigation }: Props) {
   const [paymentTypeFilter, setPaymentTypeFilter] = useState<PaymentTypeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [expandedPaymentId, setExpandedPaymentId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const loadPayments = useCallback(async () => {
     if (!shopId) {
@@ -613,6 +649,15 @@ export default function SubscriptionPaymentsScreen({ navigation }: Props) {
       }, 150);
     }
   }, [dispatch, shopId, show_Alert]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadPayments();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadPayments]);
 
   useFocusEffect(
     useCallback(() => {
@@ -745,6 +790,14 @@ export default function SubscriptionPaymentsScreen({ navigation }: Props) {
         <ScrollView
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={paperTheme.colors.primary}
+              colors={[paperTheme.colors.primary]}
+            />
+          }
         >
           <Text
             style={[
@@ -888,7 +941,7 @@ export default function SubscriptionPaymentsScreen({ navigation }: Props) {
           )}
         </ScrollView>
 
-        {loading && (
+        {loading && !refreshing && (
           <View style={paymentStyles.loadingOverlay}>
             <ActivityIndicator size="large" color={paperTheme.colors.primary} />
             <Text
