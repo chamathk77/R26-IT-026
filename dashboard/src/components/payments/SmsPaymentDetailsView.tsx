@@ -65,6 +65,7 @@ function DetailField({
 }
 
 const SMS_OVERDUE_THRESHOLD = 14;
+const HIGHLIGHTABLE_PAYMENT_STATUSES = new Set(['pending', 'rejected', 'notPaid']);
 
 interface SmsPaymentDetailsViewProps {
   paymentId: string;
@@ -119,7 +120,9 @@ export default function SmsPaymentDetailsView({ paymentId }: SmsPaymentDetailsVi
   const canShowActions = payment?.status === 'pending';
   const smsDueDays = Number(shop?.smsDueDays ?? 0);
   const isOverduePending =
-    shop?.smsFeatureStatus === 'pending' && smsDueDays > SMS_OVERDUE_THRESHOLD;
+    Boolean(payment?.status && HIGHLIGHTABLE_PAYMENT_STATUSES.has(payment.status)) &&
+    shop?.smsFeatureStatus === 'pending' &&
+    smsDueDays > SMS_OVERDUE_THRESHOLD;
 
   const handleApprove = async () => {
     if (!paymentId || !payment) return;

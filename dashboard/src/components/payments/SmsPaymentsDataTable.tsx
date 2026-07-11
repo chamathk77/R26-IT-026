@@ -19,8 +19,12 @@ import { formatDate } from '@/lib/utils/formatDate';
 import { formatPaymentStatusLabel, getPaymentStatusColor } from './paymentUi';
 
 const SMS_OVERDUE_THRESHOLD = 14;
+const HIGHLIGHTABLE_PAYMENT_STATUSES = new Set(['pending', 'rejected', 'notPaid']);
 
 function isSmsOverduePending(payment: SmsPaymentListItem): boolean {
+  if (!HIGHLIGHTABLE_PAYMENT_STATUSES.has(payment.status)) {
+    return false;
+  }
   const smsStatus = payment.shop?.smsFeatureStatus ?? null;
   const dueDays = Number(payment.shop?.smsDueDays ?? 0);
   return smsStatus === 'pending' && dueDays > SMS_OVERDUE_THRESHOLD;

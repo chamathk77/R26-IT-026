@@ -230,12 +230,13 @@ const shopsDataSchema = new mongoose.Schema(
       default: "startOnboarding",
     },
     smsfeature: {
+
       senderId: {
         type: String,
         default: null,
         trim: true,
       },
-
+      
       smsPackageType: {
         type: String,
         enum: SMS_PACKAGE_TYPES,
@@ -247,6 +248,7 @@ const shopsDataSchema = new mongoose.Schema(
         default: 0,
         min: 0,
       },
+
       isSmsFeatureActive: {
         type: Boolean,
         default: false,
@@ -262,16 +264,19 @@ const shopsDataSchema = new mongoose.Schema(
         type: Date,
         default: null,
       },
+
       smsDueDays: {
         type: Number,
         default: 0,
         min: 0,
       },
+
       smsReceiptNo: {
         type: String,
         default: null,
         trim: true,
       },
+
     },
 
     //module related
