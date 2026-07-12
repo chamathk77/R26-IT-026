@@ -34,6 +34,7 @@ import ManageSmsFeatureScreen from '../screens/settings/account/manageFeatures/s
 import ManageAddUsersScreen from '../screens/settings/account/manageFeatures/manageUsersFeature/ManageAddUsersScreen';
 import ManageUserFormScreen from '../screens/settings/account/manageUserForm/ManageUserFormScreen';
 import ThemePreferenceScreen from '../screens/settings/preferences/ThemePreferenceScreen';
+import PrinterConnectionScreen from '../screens/settings/preferences/printer/PrinterConnectionScreen';
 import SubscriptionPaymentsScreen from '../screens/settings/payments/SubscriptionPaymentsScreen';
 import AnalyticsScreen from '../screens/analytics/AnalyticsScreen';
 import PayNowScreen from '../screens/settings/payments/PayNowScreen';
@@ -102,6 +103,7 @@ export default function AppNavigator() {
         <Stack.Screen name="ManageAddUsers" component={ManageAddUsersScreen} />
         <Stack.Screen name="ManageUserForm" component={ManageUserFormScreen} />
         <Stack.Screen name="ThemePreference" component={ThemePreferenceScreen} />
+        <Stack.Screen name="PrinterConnection" component={PrinterConnectionScreen} />
         <Stack.Screen name="SubscriptionPayments" component={SubscriptionPaymentsScreen} />
         <Stack.Screen name="Analytics" component={AnalyticsScreen} />
         <Stack.Screen name="PayNow" component={PayNowScreen} />

@@ -356,6 +356,15 @@ export default function SettingsScreen({ navigation }: Props) {
       iconColor: primary,
       onPress: () => navigation.navigate('ThemePreference'),
     },
+    {
+      key: 'printer',
+      title: 'Receipt printer',
+      description: 'Connect via network (LAN) or USB cable',
+      icon: 'print-outline',
+      iconBg: '#ecfdf5',
+      iconColor: '#047857',
+      onPress: () => navigation.navigate('PrinterConnection'),
+    },
   ];
 
   const sessionItems: MenuItem[] = [

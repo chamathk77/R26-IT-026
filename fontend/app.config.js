@@ -54,6 +54,8 @@ module.exports = ({ config }) => ({
         'We need photo library access to upload verification images.',
       NSMicrophoneUsageDescription:
         'We need microphone access when recording audio in the app.',
+      NSLocalNetworkUsageDescription:
+        'SmartCost needs local network access to connect to your LAN receipt printer.',
     },
   },
   android: {
