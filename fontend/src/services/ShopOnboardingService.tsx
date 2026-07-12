@@ -470,6 +470,60 @@ export const manageSmsFeature_Service = createAsyncThunk(
   },
 );
 
+export const cancelSmsDeactivation_Service = createAsyncThunk(
+  "shopOnboarding/cancelSmsDeactivation",
+  async (_payload: undefined, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.post<ManageSmsFeatureResponse>(
+        "/api/shops/features/sms/cancel-deactivation",
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: "Error",
+        message: "Could not cancel scheduled SMS deactivation",
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const scheduleSmsDeactivation_Service = createAsyncThunk(
+  "shopOnboarding/scheduleSmsDeactivation",
+  async (_payload: undefined, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.post<ManageSmsFeatureResponse>(
+        "/api/shops/features/sms/schedule-deactivation",
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: "Error",
+        message: "Could not schedule SMS deactivation",
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
 export const setSubscription_Service = createAsyncThunk(
   "shopOnboarding/setSubscription",
   async (payload: SetSubscriptionRequest, { rejectWithValue }) => {

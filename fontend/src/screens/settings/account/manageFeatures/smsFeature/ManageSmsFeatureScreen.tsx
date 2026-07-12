@@ -25,6 +25,8 @@ import {
   fetchShopSmsFeatures_Service,
   fetchSmsPackages_Service,
   manageSmsFeature_Service,
+  cancelSmsDeactivation_Service,
+  scheduleSmsDeactivation_Service,
 } from '../../../../../services/ShopOnboardingService';
 import type { ShopSmsFeaturesPayload, SmsPackage } from '../../../../../type/shopOnboarding';
 import { formatSmsPackageLabel } from '../../../../../type/shopOnboarding';
@@ -32,6 +34,7 @@ import { formatLkr } from '../../../../../type/onboarding';
 import {
   getApiErrorMessage,
   handleSessionExpiredApiError,
+  parseApiError,
 } from '../../../../../utils/apiErrorAlert';
 import { cardShadow, settingsDetailStyles as sharedStyles } from '../../../shared/settingsDetailStyles';
 import { SettingsBadge } from '../../../shared/SettingsDetailComponents';
@@ -39,6 +42,8 @@ import { manageSmsFeatureStyles as styles } from './manageSmsFeatureStyles';
 import SmsPackagesModal from './SmsPackagesModal';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageSmsFeature'>;
+
+const SMS_INACTIVE_BLOCKED_BY_USAGE = 'SMS_INACTIVE_BLOCKED_BY_USAGE';
 
 function isSmsFeatureEnabled(
   features?: { isSmsFeatureActive?: boolean; smsFeatureStatus?: string | null } | null,
@@ -180,6 +185,7 @@ export default function ManageSmsFeatureScreen({ navigation }: Props) {
   const [enabledDraft, setEnabledDraft] = useState(false);
   const [packagesModalVisible, setPackagesModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [cancelScheduleLoading, setCancelScheduleLoading] = useState(false);
 
   const showLoader = fetchLoading && !features;
   const isSubmitting = manageLoading;
@@ -191,6 +197,7 @@ export default function ManageSmsFeatureScreen({ navigation }: Props) {
   const daysLeftToPay = Math.max(0, SMS_PAYMENT_WINDOW_DAYS - smsDueDays);
   const showDueNotice = smsFeatureStatus === 'due';
   const showPendingNotice = smsFeatureStatus === 'pending';
+  const showDeactivationScheduledNotice = Boolean(features?.isSmsDeactivationScheduled);
   const showSmsDetails =
     smsFeatureStatus === 'active' ||
     smsFeatureStatus === 'due' ||
@@ -295,6 +302,100 @@ export default function ManageSmsFeatureScreen({ navigation }: Props) {
     }
   }, [ensurePackagesLoaded, reloadSmsFeatures]);
 
+  const onCancelScheduledDeactivation = useCallback(async () => {
+    if (cancelScheduleLoading) return;
+
+    setCancelScheduleLoading(true);
+    try {
+      const response = await dispatch(cancelSmsDeactivation_Service()).unwrap();
+      await reloadSmsFeatures({ silent: true });
+      setTimeout(() => {
+        show_Alert(
+          'success',
+          'Request cancelled',
+          response.message || 'Scheduled SMS deactivation has been cancelled.',
+          1,
+          false,
+          'OK',
+          () => {},
+        );
+      }, 150);
+    } catch (error: unknown) {
+      const handled = await handleSessionExpiredApiError(error, show_Alert);
+      if (handled) return;
+      setTimeout(() => {
+        show_Alert(
+          'error',
+          'Cancel failed',
+          getApiErrorMessage(error, 'Could not cancel the scheduled deactivation.'),
+          1,
+          false,
+          'OK',
+          () => {},
+        );
+      }, 150);
+    } finally {
+      setCancelScheduleLoading(false);
+    }
+  }, [cancelScheduleLoading, dispatch, reloadSmsFeatures, show_Alert]);
+
+  const onScheduleDeactivation = useCallback(async () => {
+    if (cancelScheduleLoading) return;
+
+    setCancelScheduleLoading(true);
+    try {
+      const response = await dispatch(scheduleSmsDeactivation_Service()).unwrap();
+      await reloadSmsFeatures({ silent: true });
+      setEnabledDraft(isSmsFeatureEnabled(response.features));
+      setTimeout(() => {
+        show_Alert(
+          'success',
+          'Deactivation scheduled',
+          response.message ||
+            'SMS deactivation has been scheduled for after this month’s bill is approved.',
+          1,
+          false,
+          'OK',
+          () => {},
+        );
+      }, 150);
+    } catch (error: unknown) {
+      const handled = await handleSessionExpiredApiError(error, show_Alert);
+      if (handled) return;
+      setTimeout(() => {
+        show_Alert(
+          'error',
+          'Schedule failed',
+          getApiErrorMessage(error, 'Could not schedule SMS deactivation.'),
+          1,
+          false,
+          'OK',
+          () => {},
+        );
+      }, 150);
+    } finally {
+      setCancelScheduleLoading(false);
+    }
+  }, [cancelScheduleLoading, dispatch, reloadSmsFeatures, show_Alert]);
+
+  const showScheduleDeactivationConfirm = useCallback(() => {
+    setTimeout(() => {
+      show_Alert(
+        'pending',
+        'Schedule SMS deactivation?',
+        'SMS will stay active for now. After this month’s SMS bill is approved, the feature will turn off automatically. Do you want to schedule that?',
+        2,
+        false,
+        'Schedule',
+        () => {
+          void onScheduleDeactivation();
+        },
+        'Cancel',
+        () => {},
+      );
+    }, 350);
+  }, [onScheduleDeactivation, show_Alert]);
+
   const onUpdate = async () => {
     if (!features || isSubmitting || !hasChanges) {
       return;
@@ -342,6 +443,26 @@ export default function ManageSmsFeatureScreen({ navigation }: Props) {
 
       const handled = await handleSessionExpiredApiError(error, show_Alert);
       if (handled) return;
+
+      const parsed = parseApiError(error);
+      if (!enabledDraft && parsed.code === SMS_INACTIVE_BLOCKED_BY_USAGE) {
+        setEnabledDraft(true);
+        show_Alert(
+          'error',
+          'Cannot deactivate now',
+          parsed.message ||
+            'Usage exceeds 100 messages this month. Settle the bill or schedule deactivation.',
+          2,
+          false,
+          'Schedule',
+          () => {
+            showScheduleDeactivationConfirm();
+          },
+          'Cancel',
+          () => {},
+        );
+        return;
+      }
 
       show_Alert(
         'error',
@@ -471,6 +592,14 @@ export default function ManageSmsFeatureScreen({ navigation }: Props) {
                   </Text>
                   <SettingsBadge label={statusMeta.label} tone={statusMeta.tone} paperTheme={paperTheme} />
                 </View>
+                {showDeactivationScheduledNotice ? (
+                  <View style={styles.statusRow}>
+                    <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                      Deactivation request
+                    </Text>
+                    <SettingsBadge label="Pending" tone="warning" paperTheme={paperTheme} />
+                  </View>
+                ) : null}
                 {showDueNotice || showPendingNotice ? (
                   <View style={styles.statusRow}>
                     <Text style={[styles.summaryLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
@@ -566,6 +695,57 @@ export default function ManageSmsFeatureScreen({ navigation }: Props) {
                         Open Payments
                       </Text>
                       <Ionicons name="chevron-forward" size={16} color="#b45309" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : null}
+
+              {showDeactivationScheduledNotice ? (
+                <View
+                  style={[
+                    styles.noticeCard,
+                    {
+                      backgroundColor: resolvedTheme === 'dark' ? '#1e3a5f' : '#eff6ff',
+                      borderColor: '#93c5fd',
+                    },
+                  ]}
+                >
+                  <View style={[styles.noticeIconWrap, { backgroundColor: '#dbeafe' }]}>
+                    <Ionicons name="time-outline" size={22} color="#1d4ed8" />
+                  </View>
+                  <View style={styles.noticeTextBlock}>
+                    <Text style={[styles.noticeTitle, { color: '#1e40af' }]}>
+                      Deactivation pending
+                    </Text>
+                    <Text style={[styles.noticeBody, { color: '#1e3a8a' }]}>
+                      A request to turn off SMS is scheduled. SMS will stay active until this
+                      month’s bill is approved, then it will deactivate automatically.
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        void onCancelScheduledDeactivation();
+                      }}
+                      activeOpacity={0.85}
+                      style={[
+                        styles.cancelScheduleButton,
+                        {
+                          borderColor: '#dc2626',
+                          backgroundColor: resolvedTheme === 'dark' ? '#450a0a' : '#fff',
+                          opacity: cancelScheduleLoading ? 0.7 : 1,
+                        },
+                      ]}
+                      disabled={cancelScheduleLoading}
+                    >
+                      {cancelScheduleLoading ? (
+                        <ActivityIndicator size="small" color="#dc2626" />
+                      ) : (
+                        <>
+                          <Ionicons name="close-circle-outline" size={18} color="#dc2626" />
+                          <Text style={[styles.cancelScheduleButtonText, { color: '#dc2626' }]}>
+                            Cancel schedule
+                          </Text>
+                        </>
+                      )}
                     </TouchableOpacity>
                   </View>
                 </View>

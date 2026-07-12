@@ -167,6 +167,22 @@ export const manageSmsFeatureStyles = StyleSheet.create({
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 13,
   },
+  cancelScheduleButton: {
+    marginTop: 14,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    alignSelf: 'stretch',
+  },
+  cancelScheduleButtonText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
+  },
   currentPackageTitle: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 16,

@@ -236,7 +236,7 @@ const shopsDataSchema = new mongoose.Schema(
         default: null,
         trim: true,
       },
-      
+
       smsPackageType: {
         type: String,
         enum: SMS_PACKAGE_TYPES,
@@ -275,6 +275,12 @@ const shopsDataSchema = new mongoose.Schema(
         type: String,
         default: null,
         trim: true,
+      },
+
+      // Set when usage > 100 blocks immediate deactivation; apply after month SMS bill is approved
+      isSmsDeactivationScheduled: {
+        type: Boolean,
+        default: false,
       },
 
     },
@@ -507,8 +513,12 @@ module.exports = ShopsData;
 // smsPackageType: 0-500 | 500-1000 | ... | 4000-4500 (monthly message usage tier)
 // smsMonthlyAllowance: number | null
 // smsUsedInPeriod: number
-// smsPackageAmount: number | null (monthly fee LKR)
+// isSmsFeatureActive: boolean
+// smsFeatureStatus: notActivated | active | pending | due | inactive
 // smsNextRenewalDate: date | null
+// smsDueDays: number
+// smsReceiptNo: string | null
+// isSmsDeactivationScheduled: boolean (queued deactivate after SMS bill approve when usage > 100)
 // kpi: boolean
 // analyticsModule: boolean
 // smsMobileNumber: boolean

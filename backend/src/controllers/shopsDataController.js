@@ -301,11 +301,13 @@ function mapShopSmsFeaturesResponse(shop) {
     smsNextRenewalDate: smsFeature.smsNextRenewalDate ?? null,
     smsDueDays: smsFeature.smsDueDays ?? 0,
     smsReceiptNo: smsFeature.smsReceiptNo ?? null,
+    isSmsDeactivationScheduled: smsFeature.isSmsDeactivationScheduled ?? false,
   };
 }
 
 const DEFAULT_SMS_PACKAGE_TYPE = '0-500';
 const SMS_RENEWAL_PERIOD_DAYS = 30;
+const SMS_INACTIVE_USAGE_LIMIT = 100;
 
 function isBlankSmsPackageType(value) {
   const normalized = String(value ?? '').trim().toLowerCase();
@@ -344,6 +346,10 @@ function buildManageSmsFeatureUpdates(shop, enabled) {
     return {
       'smsfeature.isSmsFeatureActive': false,
       'smsfeature.smsFeatureStatus': 'inactive',
+      'smsfeature.smsReceiptNo': null,
+      'smsfeature.smsDueDays': 0,
+      'smsfeature.smsNextRenewalDate': null,
+      'smsfeature.smsPackageType': null,
     };
   }
 
@@ -361,12 +367,14 @@ function buildManageSmsFeatureUpdates(shop, enabled) {
 
   // Re-enable after user previously deactivated
   if (currentStatus === 'inactive') {
-    const updates = {
+    return {
       'smsfeature.isSmsFeatureActive': true,
       'smsfeature.smsFeatureStatus': 'active',
+      'smsfeature.smsReceiptNo': null,
+      'smsfeature.smsDueDays': 0,
+      'smsfeature.smsNextRenewalDate': addDays(startOfDay(), SMS_RENEWAL_PERIOD_DAYS),
+      'smsfeature.smsPackageType': DEFAULT_SMS_PACKAGE_TYPE,
     };
-    applyMissingSmsActivationDefaults(smsFeature, updates);
-    return updates;
   }
 
   // Already active, pending, or due — keep billing fields, just ensure feature flag is on
@@ -885,6 +893,19 @@ const manageSmsFeature = async (req, res) => {
     const smsFeature = shop.smsfeature ?? {};
     const senderId = smsFeature.senderId?.trim() || null;
     const enabled = enabledParsed.value;
+    const smsUsedInPeriod = Number(smsFeature.smsUsedInPeriod ?? 0);
+
+    // Disable only: block if current period usage exceeds the free threshold
+    if (!enabled && smsUsedInPeriod > SMS_INACTIVE_USAGE_LIMIT) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'You cannot deactivate SMS right now because usage this month exceeds 100 messages. Please settle this month’s SMS bill first, or schedule deactivation to apply after that bill is approved.',
+        code: 'SMS_INACTIVE_BLOCKED_BY_USAGE',
+        smsUsedInPeriod,
+        usageLimit: SMS_INACTIVE_USAGE_LIMIT,
+      });
+    }
 
     // Enable only: shop must not be on trial
     if (enabled && shop.status === 'trial') {
@@ -969,6 +990,132 @@ const manageSmsFeature = async (req, res) => {
     });
   } catch (error) {
     console.log('error in manageSmsFeature', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const SCHEDULABLE_SMS_DEACTIVATION_STATUSES = new Set(['active', 'due']);
+
+/**
+ * Schedule SMS deactivation for after the current period bill is approved.
+ * Allowed only when smsFeatureStatus is active or due.
+ */
+const createPendingInactiveSmsRequest = async (req, res) => {
+  try {
+    const shopId = normalizeShopId(req.user?.shopId);
+    if (!shopId) {
+      return res.status(400).json({ success: false, message: 'Shop id is required' });
+    }
+
+    if (!isValidShopIdFormat(shopId)) {
+      return res.status(400).json({ success: false, message: 'Invalid shop id format' });
+    }
+
+    const roleAccess = await resolveFeatureUpdateRoleAccess(req);
+    if (roleAccess.error) {
+      return res.status(roleAccess.error.status).json(roleAccess.error.body);
+    }
+
+    const shop = await ShopsData.findOne({ shopId }).select('shopId smsfeature').lean();
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found' });
+    }
+
+    const smsFeature = shop.smsfeature ?? {};
+    const smsFeatureStatus = smsFeature.smsFeatureStatus ?? 'notActivated';
+
+    if (!SCHEDULABLE_SMS_DEACTIVATION_STATUSES.has(smsFeatureStatus)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'SMS deactivation can only be scheduled while the SMS feature is active or due.',
+        code: 'SMS_DEACTIVATION_SCHEDULE_NOT_ALLOWED',
+        smsFeatureStatus,
+      });
+    }
+
+    if (smsFeature.isSmsDeactivationScheduled === true) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'SMS deactivation is already scheduled. There is already a pending request for after this month’s bill is approved.',
+        code: 'SMS_DEACTIVATION_ALREADY_SCHEDULED',
+        features: mapManageSmsFeatureResponse(shop),
+      });
+    }
+
+    const updated = await ShopsData.findOneAndUpdate(
+      { shopId },
+      { $set: { 'smsfeature.isSmsDeactivationScheduled': true } },
+      { returnDocument: 'after', runValidators: true },
+    )
+      .select('shopId smsfeature')
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      shopId: updated.shopId,
+      message:
+        'SMS deactivation has been scheduled. The feature will turn off after this month’s SMS bill is approved.',
+      features: mapManageSmsFeatureResponse(updated),
+    });
+  } catch (error) {
+    console.log('error in createPendingInactiveSmsRequest', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Cancel a previously scheduled SMS deactivation request.
+ */
+const cancelPendingInactiveSmsRequest = async (req, res) => {
+  try {
+    const shopId = normalizeShopId(req.user?.shopId);
+    if (!shopId) {
+      return res.status(400).json({ success: false, message: 'Shop id is required' });
+    }
+
+    if (!isValidShopIdFormat(shopId)) {
+      return res.status(400).json({ success: false, message: 'Invalid shop id format' });
+    }
+
+    const roleAccess = await resolveFeatureUpdateRoleAccess(req);
+    if (roleAccess.error) {
+      return res.status(roleAccess.error.status).json(roleAccess.error.body);
+    }
+
+    const shop = await ShopsData.findOne({ shopId }).select('shopId smsfeature').lean();
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found' });
+    }
+
+    const smsFeature = shop.smsfeature ?? {};
+
+    if (smsFeature.isSmsDeactivationScheduled !== true) {
+      return res.status(200).json({
+        success: true,
+        shopId,
+        message: 'No scheduled SMS deactivation request to cancel.',
+        features: mapManageSmsFeatureResponse(shop),
+      });
+    }
+
+    const updated = await ShopsData.findOneAndUpdate(
+      { shopId },
+      { $set: { 'smsfeature.isSmsDeactivationScheduled': false } },
+      { returnDocument: 'after', runValidators: true },
+    )
+      .select('shopId smsfeature')
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      shopId: updated.shopId,
+      message: 'Scheduled SMS deactivation has been cancelled. SMS will remain active.',
+      features: mapManageSmsFeatureResponse(updated),
+    });
+  } catch (error) {
+    console.log('error in cancelPendingInactiveSmsRequest', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -1224,6 +1371,8 @@ module.exports = {
   updateShopModuleFeatures,
   updateShopUsersFeatures,
   manageSmsFeature,
+  createPendingInactiveSmsRequest,
+  cancelPendingInactiveSmsRequest,
 
   /** Get features */
   getShopModuleFeatures,

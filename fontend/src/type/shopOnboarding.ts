@@ -248,6 +248,7 @@ export interface ShopSmsFeaturesPayload {
   smsDueDays: number;
   smsReceiptNo: string | null;
   smsFeatureStatus: 'notActivated' | 'active' | 'pending' | 'due' | 'inactive' | string;
+  isSmsDeactivationScheduled?: boolean;
 }
 
 export interface ManageSmsFeatureRequest {

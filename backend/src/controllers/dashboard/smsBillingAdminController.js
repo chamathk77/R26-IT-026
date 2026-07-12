@@ -65,6 +65,7 @@ function mapSmsShopResponse(shop) {
     isSmsFeatureActive: smsFeature.isSmsFeatureActive ?? false,
     smsNextRenewalDate: smsFeature.smsNextRenewalDate ?? null,
     smsUsedInPeriod: smsFeature.smsUsedInPeriod ?? 0,
+    isSmsDeactivationScheduled: smsFeature.isSmsDeactivationScheduled === true,
   };
 }
 
@@ -174,15 +175,56 @@ function applySmsFeatureActivation(shop, { renewalBaseDate }) {
   shop.smsfeature.isSmsFeatureActive = true;
   shop.smsfeature.smsUsedInPeriod = 0;
   shop.smsfeature.smsPackageType = DEFAULT_SMS_PACKAGE_TYPE;
+  shop.smsfeature.isSmsDeactivationScheduled = false;
+}
+
+/**
+ * Apply queued SMS deactivation after the month bill is approved.
+ */
+function applySmsFeatureScheduledDeactivation(shop) {
+  if (!shop.smsfeature) {
+    shop.smsfeature = {};
+  }
+
+  shop.smsfeature.isSmsFeatureActive = false;
+  shop.smsfeature.smsFeatureStatus = 'inactive';
+  shop.smsfeature.smsNextRenewalDate = null;
+  shop.smsfeature.smsDueDays = 0;
+  shop.smsfeature.smsReceiptNo = null;
+  shop.smsfeature.smsUsedInPeriod = null;
+  shop.smsfeature.smsPackageType = null;
+  shop.smsfeature.isSmsDeactivationScheduled = false;
+}
+
+/**
+ * After bill approval: honor scheduled deactivation, otherwise renew/activate SMS.
+ */
+function applySmsFeatureAfterBillApproval(shop, { renewalBaseDate }) {
+  const deactivationScheduled = shop.smsfeature?.isSmsDeactivationScheduled === true;
+
+  if (deactivationScheduled) {
+    applySmsFeatureScheduledDeactivation(shop);
+    return { deactivated: true };
+  }
+
+  applySmsFeatureActivation(shop, { renewalBaseDate });
+  return { deactivated: false };
 }
 
 function getShopCustomerMobile(shop) {
   return shop.ownerMobileNumber?.trim() || shop.shopMobileNumber?.trim() || '';
 }
 
-function buildSmsBillApprovedMessage({ receiptNumber, paymentAmount }) {
+function buildSmsBillApprovedMessage({ receiptNumber, paymentAmount, deactivated }) {
   const amountLabel =
     paymentAmount != null ? `Rs. ${Number(paymentAmount).toLocaleString('en-LK')}` : '';
+  if (deactivated) {
+    return (
+      `Smart Cost: Your SMS package payment has been approved` +
+      (amountLabel ? ` (${amountLabel})` : '') +
+      `. Receipt: ${receiptNumber}. SMS has been deactivated as you requested. Thank you.`
+    );
+  }
   return (
     `Smart Cost: Your SMS package payment has been approved` +
     (amountLabel ? ` (${amountLabel})` : '') +
@@ -197,7 +239,7 @@ function buildSmsBillRejectedMessage({ receiptNumber, reason }) {
   );
 }
 
-async function sendSmsBillApprovedSms(shop, payment) {
+async function sendSmsBillApprovedSms(shop, payment, { deactivated = false } = {}) {
   const mobile = getShopCustomerMobile(shop);
   if (!mobile) {
     return { sent: false, reason: 'Shop owner mobile number is not set' };
@@ -209,6 +251,7 @@ async function sendSmsBillApprovedSms(shop, payment) {
       message: buildSmsBillApprovedMessage({
         receiptNumber: payment.receiptNumber,
         paymentAmount: payment.paymentAmount,
+        deactivated,
       }),
     });
     return { sent: true };
@@ -362,7 +405,9 @@ const approveSmsBill = async (req, res) => {
       ? startOfDay(shop.smsfeature.smsNextRenewalDate)
       : startOfDay();
 
-    applySmsFeatureActivation(shop, { renewalBaseDate: currentRenewal });
+    const { deactivated } = applySmsFeatureAfterBillApproval(shop, {
+      renewalBaseDate: currentRenewal,
+    });
 
     payment.status = 'approve';
     payment.reason = null;
@@ -373,14 +418,17 @@ const approveSmsBill = async (req, res) => {
     await shop.save();
     await payment.save();
 
-    const customerSms = await sendSmsBillApprovedSms(shop, payment);
+    const customerSms = await sendSmsBillApprovedSms(shop, payment, { deactivated });
     if (!customerSms.sent) {
       console.log('SMS bill approved SMS not sent', customerSms.reason);
     }
 
     return res.status(200).json({
       success: true,
-      message: 'SMS payment approved successfully',
+      message: deactivated
+        ? 'SMS payment approved. Scheduled deactivation has been applied.'
+        : 'SMS payment approved successfully',
+      deactivated,
       customerSms,
       payment: formatPaymentRecord(payment.toObject(), req),
       shop: mapSmsShopResponse(shop),
@@ -454,7 +502,9 @@ const resetAndApproveSmsBill = async (req, res) => {
 
     const { payment, shop } = loaded;
 
-    applySmsFeatureActivation(shop, { renewalBaseDate: startOfDay() });
+    const { deactivated } = applySmsFeatureAfterBillApproval(shop, {
+      renewalBaseDate: startOfDay(),
+    });
 
     payment.status = 'approve';
     payment.reason = null;
@@ -465,14 +515,17 @@ const resetAndApproveSmsBill = async (req, res) => {
     await shop.save();
     await payment.save();
 
-    const customerSms = await sendSmsBillApprovedSms(shop, payment);
+    const customerSms = await sendSmsBillApprovedSms(shop, payment, { deactivated });
     if (!customerSms.sent) {
       console.log('SMS bill reset-and-approve SMS not sent', customerSms.reason);
     }
 
     return res.status(200).json({
       success: true,
-      message: 'SMS payment reset and approved successfully',
+      message: deactivated
+        ? 'SMS payment reset and approved. Scheduled deactivation has been applied.'
+        : 'SMS payment reset and approved successfully',
+      deactivated,
       customerSms,
       payment: formatPaymentRecord(payment.toObject(), req),
       shop: mapSmsShopResponse(shop),
