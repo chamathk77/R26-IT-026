@@ -1120,6 +1120,168 @@ const cancelPendingInactiveSmsRequest = async (req, res) => {
   }
 };
 
+const SUBSCRIPTION_CHANGE_ALLOWED_STATUSES = new Set(['active', 'due']);
+
+/**
+ * Queue a subscription plan change while the shop is on an active or due plan.
+ */
+const createPendingRequest_ChangeSubscription = async (req, res) => {
+  try {
+    const shopId = normalizeShopId(req.user?.shopId);
+    if (!shopId) {
+      return res.status(400).json({ success: false, message: 'Shop id is required' });
+    }
+
+    if (!isValidShopIdFormat(shopId)) {
+      return res.status(400).json({ success: false, message: 'Invalid shop id format' });
+    }
+
+    const roleAccess = await resolveFeatureUpdateRoleAccess(req);
+    if (roleAccess.error) {
+      return res.status(roleAccess.error.status).json(roleAccess.error.body);
+    }
+
+    const shop = await ShopsData.findOne({ shopId })
+      .select('shopId status isSubscriptionChangePending')
+      .lean();
+
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found' });
+    }
+
+    if (!SUBSCRIPTION_CHANGE_ALLOWED_STATUSES.has(shop.status)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Subscription change can only be requested while your shop status is active or due.',
+        code: 'SUBSCRIPTION_CHANGE_NOT_ALLOWED',
+        status: shop.status,
+      });
+    }
+
+    if (shop.isSubscriptionChangePending === true) {
+      return res.status(400).json({
+        success: false,
+        message: 'A subscription change request is already pending.',
+        code: 'SUBSCRIPTION_CHANGE_ALREADY_PENDING',
+        shopId,
+        isSubscriptionChangePending: true,
+      });
+    }
+
+    const updated = await ShopsData.findOneAndUpdate(
+      { shopId },
+      { $set: { isSubscriptionChangePending: true } },
+      { returnDocument: 'after', runValidators: true },
+    )
+      .select('shopId status isSubscriptionChangePending')
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      shopId: updated.shopId,
+      message: 'Subscription change request has been created and is pending.',
+      status: updated.status,
+      isSubscriptionChangePending: updated.isSubscriptionChangePending === true,
+    });
+  } catch (error) {
+    console.log('error in createPendingRequest_ChangeSubscription', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Cancel a pending subscription plan change request.
+ */
+const cancelPendingRequest_ChangeSubscription = async (req, res) => {
+  try {
+    const shopId = normalizeShopId(req.user?.shopId);
+    if (!shopId) {
+      return res.status(400).json({ success: false, message: 'Shop id is required' });
+    }
+
+    if (!isValidShopIdFormat(shopId)) {
+      return res.status(400).json({ success: false, message: 'Invalid shop id format' });
+    }
+
+    const roleAccess = await resolveFeatureUpdateRoleAccess(req);
+    if (roleAccess.error) {
+      return res.status(roleAccess.error.status).json(roleAccess.error.body);
+    }
+
+    const shop = await ShopsData.findOne({ shopId })
+      .select('shopId status isSubscriptionChangePending')
+      .lean();
+
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found' });
+    }
+
+    if (shop.isSubscriptionChangePending !== true) {
+      return res.status(200).json({
+        success: true,
+        shopId,
+        message: 'No pending subscription change request to cancel.',
+        status: shop.status,
+        isSubscriptionChangePending: false,
+      });
+    }
+
+    const updated = await ShopsData.findOneAndUpdate(
+      { shopId },
+      { $set: { isSubscriptionChangePending: false } },
+      { returnDocument: 'after', runValidators: true },
+    )
+      .select('shopId status isSubscriptionChangePending')
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      shopId: updated.shopId,
+      message: 'Pending subscription change request has been cancelled.',
+      status: updated.status,
+      isSubscriptionChangePending: updated.isSubscriptionChangePending === true,
+    });
+  } catch (error) {
+    console.log('error in cancelPendingRequest_ChangeSubscription', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Get whether a subscription plan change request is currently pending.
+ */
+const getPendingRequest_ChangeSubscription = async (req, res) => {
+  try {
+    const shopId = normalizeShopId(req.user?.shopId);
+    if (!shopId) {
+      return res.status(400).json({ success: false, message: 'Shop id is required' });
+    }
+
+    if (!isValidShopIdFormat(shopId)) {
+      return res.status(400).json({ success: false, message: 'Invalid shop id format' });
+    }
+
+    const shop = await ShopsData.findOne({ shopId })
+      .select('shopId status isSubscriptionChangePending')
+      .lean();
+
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      shopId: shop.shopId,
+      message: 'Subscription change pending status loaded',
+      status: shop.status,
+      isSubscriptionChangePending: shop.isSubscriptionChangePending === true,
+    });
+  } catch (error) {
+    console.log('error in getPendingRequest_ChangeSubscription', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 function normalizeSubscriptionType(value) {
   const normalized = String(value ?? '').trim().toLowerCase();
@@ -1383,5 +1545,7 @@ module.exports = {
 
   /** Subscription */
   setSubscription,
-  
+  createPendingRequest_ChangeSubscription,
+  cancelPendingRequest_ChangeSubscription,
+  getPendingRequest_ChangeSubscription,
 };

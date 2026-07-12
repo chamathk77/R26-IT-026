@@ -16,23 +16,23 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
-import { RootStackParamList } from '../../../navigation/RootStackParamsList';
-import { useTheme } from '../../../context/ThemeContext';
-import { AppDispatch, RootState } from '../../../store/store';
-import CommonHeader from '../../../components/CommonHeader/CommonHeader';
-import { fonts } from '../../../constants/fonts';
+import { RootStackParamList } from '../../../../navigation/RootStackParamsList';
+import { useTheme } from '../../../../context/ThemeContext';
+import { AppDispatch, RootState } from '../../../../store/store';
+import CommonHeader from '../../../../components/CommonHeader/CommonHeader';
+import { fonts } from '../../../../constants/fonts';
 import {
   fetchPaymentsByShop_Service,
   getReceiptImageUrl,
-} from '../../../services/PaymentService';
-import { PaymentRecord, PaymentStatus, PaymentType, PaymentSubscriptionType } from '../../../type/payment';
-import { useCommonAlert } from '../../../hooks/useCommonAlert';
-import { handleSessionExpiredApiError } from '../../../utils/apiErrorAlert';
-import CommonAlert from '../../../components/CommonAlert/CommonAlert';
-import { cardShadow, settingsDetailStyles as styles } from '../shared/settingsDetailStyles';
-import { SettingsBadge, SettingsEmptyState } from '../shared/SettingsDetailComponents';
+} from '../../../../services/PaymentService';
+import { PaymentRecord, PaymentStatus, PaymentType, PaymentSubscriptionType } from '../../../../type/payment';
+import { useCommonAlert } from '../../../../hooks/useCommonAlert';
+import { handleSessionExpiredApiError } from '../../../../utils/apiErrorAlert';
+import CommonAlert from '../../../../components/CommonAlert/CommonAlert';
+import { cardShadow, settingsDetailStyles as styles } from '../../shared/settingsDetailStyles';
+import { SettingsBadge, SettingsEmptyState } from '../../shared/SettingsDetailComponents';
 import PaymentBreakdownList from './PaymentBreakdownList';
-import { hasPaymentBreakdown } from '../../../utils/paymentBreakdown';
+import { hasPaymentBreakdown } from '../../../../utils/paymentBreakdown';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SubscriptionPayments'>;
 

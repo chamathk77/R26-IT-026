@@ -41,6 +41,10 @@ export interface LoginShop {
   trailEndDate?: string | null;
   isTrailStared?: boolean;
   isTrailCompleted?: boolean;
+  nextPaymentDate?: string | null;
+  subscriptionDueDays?: number | null;
+  subscriptionType?: string | null;
+  isSubscriptionChangePending?: boolean;
   [key: string]: unknown;
 }
 

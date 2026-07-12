@@ -86,6 +86,9 @@ export default function ShopDetailsScreen({ navigation }: Props) {
     .trim();
 
   const statusLabel = capitalize(formatValue(shop.status));
+  const shopStatus = String(shop.status ?? '').toLowerCase();
+  const dueDays = Number(shop.subscriptionDueDays ?? 0);
+
   const subscriptionRows = [
     {
       icon: 'pulse-outline' as const,
@@ -112,17 +115,13 @@ export default function ShopDetailsScreen({ navigation }: Props) {
       label: 'Email verified',
       value: formatValue(shop.isVerifyEmail),
     },
-    ...(shop.trailStartDate
+    ...(shopStatus === 'trial'
       ? [
           {
             icon: 'calendar-outline' as const,
             label: 'Trial start',
             value: formatValue(shop.trailStartDate),
           },
-        ]
-      : []),
-    ...(shop.trailEndDate
-      ? [
           {
             icon: 'calendar-outline' as const,
             label: 'Trial end',
@@ -130,12 +129,27 @@ export default function ShopDetailsScreen({ navigation }: Props) {
           },
         ]
       : []),
-    ...(!shop.trailStartDate && !shop.trailEndDate
+    ...(shopStatus === 'active'
       ? [
           {
-            icon: 'calendar-outline' as const,
-            label: 'Trial period',
-            value: 'Not started',
+            icon: 'card-outline' as const,
+            label: 'Next payment date',
+            value: formatValue(shop.nextPaymentDate),
+          },
+        ]
+      : []),
+    ...(shopStatus === 'due'
+      ? [
+          {
+            icon: 'alert-circle-outline' as const,
+            label: 'Due days',
+            value: String(dueDays),
+          },
+          {
+            icon: 'warning-outline' as const,
+            label: 'Login notice',
+            value:
+              'After 14 days you will not be able to log in. Pay before then to continue.',
           },
         ]
       : []),

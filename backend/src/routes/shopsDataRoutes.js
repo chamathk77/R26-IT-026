@@ -14,6 +14,9 @@ const {
   createPendingInactiveSmsRequest,
   cancelPendingInactiveSmsRequest,
   setSubscription,
+  createPendingRequest_ChangeSubscription,
+  cancelPendingRequest_ChangeSubscription,
+  getPendingRequest_ChangeSubscription,
   removeOnboardingData,
 } = require('../controllers/shopsDataController');
 const { startTrail, skipTrail, finishTrail } = require('../controllers/trialController');
@@ -38,6 +41,21 @@ router.get('/features/users', protect, getShopUsersFeatures);
 router.get('/features/sms', protect, getShopSmsFeatures);
 
 router.post('/subscription',protect, setSubscription);
+router.get(
+  '/subscription/change/pending',
+  protect,
+  getPendingRequest_ChangeSubscription,
+);
+router.post(
+  '/subscription/change/pending',
+  protect,
+  createPendingRequest_ChangeSubscription,
+);
+router.post(
+  '/subscription/change/cancel',
+  protect,
+  cancelPendingRequest_ChangeSubscription,
+);
 
 //trial related
 router.post('/start-trial', protect, startTrail);

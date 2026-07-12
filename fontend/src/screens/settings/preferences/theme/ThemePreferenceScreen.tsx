@@ -11,12 +11,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch } from 'react-redux';
-import { RootStackParamList } from '../../../navigation/RootStackParamsList';
-import { fonts } from '../../../constants/fonts';
-import { useTheme } from '../../../context/ThemeContext';
-import CommonHeader from '../../../components/CommonHeader/CommonHeader';
-import { setTheme } from '../../../store/reducers/SystemIntitializationReducer';
-import { ThemeMode } from '../../../utils/theme';
+import { RootStackParamList } from '../../../../navigation/RootStackParamsList';
+import { fonts } from '../../../../constants/fonts';
+import { useTheme } from '../../../../context/ThemeContext';
+import CommonHeader from '../../../../components/CommonHeader/CommonHeader';
+import { setTheme } from '../../../../store/reducers/SystemIntitializationReducer';
+import { ThemeMode } from '../../../../utils/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ThemePreference'>;
 

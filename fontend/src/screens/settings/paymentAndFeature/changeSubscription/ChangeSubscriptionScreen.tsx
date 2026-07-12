@@ -6,6 +6,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,11 +18,17 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootStackParamList } from '../../../../navigation/RootStackParamsList';
 import { useTheme } from '../../../../context/ThemeContext';
 import { AppDispatch, RootState } from '../../../../store/store';
+import { patchLoginShopData } from '../../../../store/reducers/AuthReducer';
 import CommonHeader from '../../../../components/CommonHeader/CommonHeader';
 import CommonAlert from '../../../../components/CommonAlert/CommonAlert';
 import { useCommonAlert } from '../../../../hooks/useCommonAlert';
 import { fonts } from '../../../../constants/fonts';
-import { fetchSubscriptionPlans_Service } from '../../../../services/ShopOnboardingService';
+import {
+  cancelSubscriptionChangePending_Service,
+  createSubscriptionChangePending_Service,
+  fetchSubscriptionChangePending_Service,
+  fetchSubscriptionPlans_Service,
+} from '../../../../services/ShopOnboardingService';
 import type { SubscriptionPlan } from '../../../../type/shopOnboarding';
 import { SubscriptionType } from '../../../../type/onboarding';
 import {
@@ -60,6 +67,7 @@ export default function ChangeSubscriptionScreen({ navigation }: Props) {
   const dispatch = useDispatch<AppDispatch>();
   const { paperTheme, resolvedTheme } = useTheme();
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
+  const isDark = resolvedTheme === 'dark';
 
   const plansLoading = useSelector(
     (state: RootState) => state.shopOnboarding.subscriptionPlans.loading,
@@ -68,22 +76,32 @@ export default function ChangeSubscriptionScreen({ navigation }: Props) {
     (state: RootState) =>
       state.shopOnboarding.subscriptionPlans.data?.subscriptions ?? [],
   );
-  const currentSubscriptionType = useSelector((state: RootState) => {
-    const shop = state.AuthReducer.Login.shopData;
-    const value = shop?.subscriptionType;
-    return typeof value === 'string' ? value : null;
-  });
+  const shop = useSelector((state: RootState) => state.AuthReducer.Login.shopData);
+  const currentSubscriptionType =
+    typeof shop?.subscriptionType === 'string' ? shop.subscriptionType : null;
 
   const [hasLoaded, setHasLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [isPending, setIsPending] = useState(
+    shop?.isSubscriptionChangePending === true,
+  );
+  const [actionLoading, setActionLoading] = useState(false);
 
-  const loadPlans = useCallback(
+  const refreshScreen = useCallback(
     async (isRefresh = false) => {
       if (isRefresh) {
         setRefreshing(true);
       }
+
       try {
-        await dispatch(fetchSubscriptionPlans_Service()).unwrap();
+        const [pendingResponse] = await Promise.all([
+          dispatch(fetchSubscriptionChangePending_Service()).unwrap(),
+          dispatch(fetchSubscriptionPlans_Service()).unwrap(),
+        ]);
+
+        const pending = pendingResponse.isSubscriptionChangePending === true;
+        setIsPending(pending);
+        dispatch(patchLoginShopData({ isSubscriptionChangePending: pending }));
         setHasLoaded(true);
       } catch (error: unknown) {
         const handled = await handleSessionExpiredApiError(error, show_Alert);
@@ -94,12 +112,12 @@ export default function ChangeSubscriptionScreen({ navigation }: Props) {
           show_Alert(
             'error',
             'Load failed',
-            getApiErrorMessage(error, 'Could not load subscription plans. Please try again.'),
+            getApiErrorMessage(error, 'Could not load subscription details. Please try again.'),
             2,
             false,
             'Retry',
             () => {
-              void loadPlans();
+              void refreshScreen();
             },
             'Cancel',
             () => {},
@@ -114,18 +132,141 @@ export default function ChangeSubscriptionScreen({ navigation }: Props) {
 
   useFocusEffect(
     useCallback(() => {
-      void loadPlans();
-    }, [loadPlans]),
+      void refreshScreen();
+    }, [refreshScreen]),
   );
 
+  const confirmSchedulePending = useCallback(() => {
+    show_Alert(
+      'pending',
+      'Schedule plan change?',
+      'Do you want to schedule a pending subscription change for the next billing cycle?',
+      2,
+      false,
+      'Schedule',
+      () => {
+        setTimeout(() => {
+          void (async () => {
+            setActionLoading(true);
+            try {
+              const response = await dispatch(
+                createSubscriptionChangePending_Service(),
+              ).unwrap();
+              const pending = response.isSubscriptionChangePending === true;
+              setIsPending(pending);
+              dispatch(patchLoginShopData({ isSubscriptionChangePending: pending }));
+              await refreshScreen(true);
+              setTimeout(() => {
+                show_Alert(
+                  'success',
+                  'Scheduled',
+                  response.message ||
+                    'Your subscription change request is pending for the next cycle.',
+                  1,
+                  false,
+                  'OK',
+                  () => {},
+                );
+              }, 150);
+            } catch (error: unknown) {
+              const handled = await handleSessionExpiredApiError(error, show_Alert);
+              if (handled) {
+                return;
+              }
+              setTimeout(() => {
+                show_Alert(
+                  'error',
+                  'Schedule failed',
+                  getApiErrorMessage(
+                    error,
+                    'Could not schedule subscription change. Please try again.',
+                  ),
+                  1,
+                  false,
+                  'OK',
+                  () => {},
+                );
+              }, 150);
+            } finally {
+              setActionLoading(false);
+            }
+          })();
+        }, 350);
+      },
+      'Cancel',
+      () => {},
+    );
+  }, [dispatch, refreshScreen, show_Alert]);
+
+  const confirmCancelPending = useCallback(() => {
+    show_Alert(
+      'error',
+      'Cancel pending request?',
+      'Do you want to cancel the scheduled subscription change for the next billing cycle?',
+      2,
+      false,
+      'Cancel request',
+      () => {
+        setTimeout(() => {
+          void (async () => {
+            setActionLoading(true);
+            try {
+              const response = await dispatch(
+                cancelSubscriptionChangePending_Service(),
+              ).unwrap();
+              const pending = response.isSubscriptionChangePending === true;
+              setIsPending(pending);
+              dispatch(patchLoginShopData({ isSubscriptionChangePending: pending }));
+              await refreshScreen(true);
+              setTimeout(() => {
+                show_Alert(
+                  'success',
+                  'Cancelled',
+                  response.message || 'Pending subscription change has been cancelled.',
+                  1,
+                  false,
+                  'OK',
+                  () => {},
+                );
+              }, 150);
+            } catch (error: unknown) {
+              const handled = await handleSessionExpiredApiError(error, show_Alert);
+              if (handled) {
+                return;
+              }
+              setTimeout(() => {
+                show_Alert(
+                  'error',
+                  'Cancel failed',
+                  getApiErrorMessage(
+                    error,
+                    'Could not cancel the pending request. Please try again.',
+                  ),
+                  1,
+                  false,
+                  'OK',
+                  () => {},
+                );
+              }, 150);
+            } finally {
+              setActionLoading(false);
+            }
+          })();
+        }, 350);
+      },
+      'Keep pending',
+      () => {},
+    );
+  }, [dispatch, refreshScreen, show_Alert]);
+
   const primary = paperTheme.colors.primary;
-  const showLoader = plansLoading && !hasLoaded;
+  const showLoader = (plansLoading || !hasLoaded) && !refreshing;
   const showEmpty = hasLoaded && plans.length === 0;
 
   return (
     <>
       <StatusBar
-        barStyle={resolvedTheme === 'dark' ? 'light-content' : 'dark-content'}
+        barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={paperTheme.colors.background}
       />
       <SafeAreaView
@@ -143,7 +284,7 @@ export default function ChangeSubscriptionScreen({ navigation }: Props) {
           <View style={styles.centered}>
             <ActivityIndicator size="large" color={primary} />
             <Text style={[styles.loadingText, { color: paperTheme.colors.onSurfaceVariant }]}>
-              Loading subscription plans…
+              Loading subscription details…
             </Text>
           </View>
         ) : showEmpty ? (
@@ -161,13 +302,116 @@ export default function ChangeSubscriptionScreen({ navigation }: Props) {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={() => {
-                  void loadPlans(true);
+                  void refreshScreen(true);
                 }}
                 tintColor={primary}
                 colors={[primary]}
               />
             }
           >
+            {isPending ? (
+              <View
+                style={[
+                  styles.pendingCard,
+                  {
+                    backgroundColor: isDark ? '#422006' : '#fffbeb',
+                    borderColor: '#f59e0b',
+                  },
+                  cardShadow(resolvedTheme),
+                ]}
+              >
+                <View
+                  style={[
+                    styles.pendingIconRing,
+                    { backgroundColor: isDark ? '#78350f' : '#fef3c7' },
+                  ]}
+                >
+                  <Ionicons name="time-outline" size={26} color="#b45309" />
+                </View>
+                <Text style={[styles.pendingTitle, { color: isDark ? '#fde68a' : '#92400e' }]}>
+                  Pending plan change
+                </Text>
+                <Text
+                  style={[styles.pendingBody, { color: isDark ? '#fcd34d' : '#a16207' }]}
+                >
+                  A subscription change request is already scheduled for your next billing
+                  cycle. You can cancel it anytime before that cycle starts.
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.cancelPendingBtn,
+                    {
+                      borderColor: '#fca5a5',
+                      backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+                      opacity: actionLoading ? 0.7 : 1,
+                    },
+                  ]}
+                  onPress={confirmCancelPending}
+                  disabled={actionLoading}
+                  activeOpacity={0.85}
+                >
+                  {actionLoading ? (
+                    <ActivityIndicator color="#dc2626" />
+                  ) : (
+                    <>
+                      <Ionicons name="close-circle-outline" size={18} color="#dc2626" />
+                      <Text style={styles.cancelPendingBtnText}>Cancel pending request</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View
+                style={[
+                  styles.scheduleCard,
+                  {
+                    backgroundColor: paperTheme.colors.surface,
+                    borderColor: paperTheme.colors.outlineVariant,
+                  },
+                  cardShadow(resolvedTheme),
+                ]}
+              >
+                <View
+                  style={[
+                    styles.pendingIconRing,
+                    { backgroundColor: paperTheme.colors.primaryContainer },
+                  ]}
+                >
+                  <Ionicons name="swap-horizontal-outline" size={26} color={primary} />
+                </View>
+                <Text style={[styles.pendingTitle, { color: paperTheme.colors.onSurface }]}>
+                  Change plan on next cycle
+                </Text>
+                <Text
+                  style={[
+                    styles.pendingBody,
+                    { color: paperTheme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  Schedule a pending subscription change. Your current plan stays active
+                  until the next billing cycle.
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.scheduleBtn,
+                    { backgroundColor: primary, opacity: actionLoading ? 0.7 : 1 },
+                  ]}
+                  onPress={confirmSchedulePending}
+                  disabled={actionLoading}
+                  activeOpacity={0.85}
+                >
+                  {actionLoading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="calendar-outline" size={18} color="#fff" />
+                      <Text style={styles.scheduleBtnText}>Schedule pending change</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
             <Text style={[styles.heading, { color: paperTheme.colors.onSurface }]}>
               Available plans
             </Text>
@@ -180,14 +424,13 @@ export default function ChangeSubscriptionScreen({ navigation }: Props) {
                 style={[
                   styles.currentBanner,
                   {
-                    backgroundColor:
-                      resolvedTheme === 'dark' ? '#052e16' : '#f0fdf4',
+                    backgroundColor: isDark ? '#052e16' : '#f0fdf4',
                     borderColor: '#86efac',
                   },
                 ]}
               >
                 <Ionicons name="checkmark-circle" size={18} color="#15803d" />
-                <Text style={[styles.currentBannerText, { color: '#166534' }]}>
+                <Text style={[styles.currentBannerText, { color: isDark ? '#bbf7d0' : '#166534' }]}>
                   Current plan:{' '}
                   {PLAN_LABELS[currentSubscriptionType as SubscriptionType] ??
                     currentSubscriptionType}
@@ -291,10 +534,9 @@ export default function ChangeSubscriptionScreen({ navigation }: Props) {
                       style={[
                         styles.saveChip,
                         {
-                          backgroundColor:
-                            resolvedTheme === 'dark'
-                              ? 'rgba(34, 197, 94, 0.18)'
-                              : '#ecfdf3',
+                          backgroundColor: isDark
+                            ? 'rgba(34, 197, 94, 0.18)'
+                            : '#ecfdf3',
                         },
                       ]}
                     >
@@ -352,6 +594,64 @@ const styles = StyleSheet.create({
     fontFamily: fonts.PoppinsRegular,
     fontSize: 14,
     textAlign: 'center',
+  },
+  pendingCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 18,
+  },
+  scheduleCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 18,
+  },
+  pendingIconRing: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  pendingTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 16,
+    marginBottom: 6,
+  },
+  pendingBody: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 14,
+  },
+  scheduleBtn: {
+    minHeight: 48,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  scheduleBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
+    color: '#fff',
+  },
+  cancelPendingBtn: {
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  cancelPendingBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
+    color: '#dc2626',
   },
   heading: {
     fontFamily: fonts.PoppinsSemiBold,

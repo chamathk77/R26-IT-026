@@ -181,6 +181,14 @@ export interface GetSubscriptionPlansResponse {
   subscriptions: SubscriptionPlan[];
 }
 
+export interface SubscriptionChangePendingResponse {
+  success: boolean;
+  shopId: string;
+  message: string;
+  status?: string;
+  isSubscriptionChangePending: boolean;
+}
+
 export interface SetSubscriptionPaymentSummary {
   _id: string;
   shopId: string;

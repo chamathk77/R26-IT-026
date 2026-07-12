@@ -25,6 +25,7 @@ import {
   SetSubscriptionRequest,
   SetSubscriptionResponse,
   GetSubscriptionPlansResponse,
+  SubscriptionChangePendingResponse,
   RemoveOnboardingDataRequest,
   RemoveOnboardingDataResponse,
   GetSmsPackagesResponse,
@@ -543,6 +544,87 @@ export const setSubscription_Service = createAsyncThunk(
       const apiError: ApiErrorResponse = {
         error: "Error",
         message: "Subscription update failed",
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const fetchSubscriptionChangePending_Service = createAsyncThunk(
+  "shopOnboarding/fetchSubscriptionChangePending",
+  async (_void, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.get<SubscriptionChangePendingResponse>(
+        "/api/shops/subscription/change/pending",
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: "Error",
+        message: "Could not load subscription change pending status",
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const createSubscriptionChangePending_Service = createAsyncThunk(
+  "shopOnboarding/createSubscriptionChangePending",
+  async (_void, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.post<SubscriptionChangePendingResponse>(
+        "/api/shops/subscription/change/pending",
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: "Error",
+        message: "Could not schedule subscription change",
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
+    }
+  },
+);
+
+export const cancelSubscriptionChangePending_Service = createAsyncThunk(
+  "shopOnboarding/cancelSubscriptionChangePending",
+  async (_void, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.post<SubscriptionChangePendingResponse>(
+        "/api/shops/subscription/change/cancel",
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: "Error",
+        message: "Could not cancel subscription change request",
         status: response.status,
         timestamp: new Date().toISOString(),
       };

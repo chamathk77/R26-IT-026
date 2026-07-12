@@ -25,7 +25,10 @@ import { useCommonAlert } from '../../../hooks/useCommonAlert';
 import type { LoginShop } from '../../../type/auth';
 import { cardShadow, settingsMenuStyles as styles } from '../shared/settingsDetailStyles';
 import { fonts } from '../../../constants/fonts';
-import { fetchShopModuleFeatures_Service } from '../../../services/ShopOnboardingService';
+import {
+  fetchShopModuleFeatures_Service,
+  fetchSubscriptionChangePending_Service,
+} from '../../../services/ShopOnboardingService';
 import { handleSessionExpiredApiError } from '../../../utils/apiErrorAlert';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
@@ -48,6 +51,21 @@ function formatTrialEndDate(isoDate: string | null | undefined): string {
   });
 }
 
+function formatShopDate(isoDate: string | null | undefined): string {
+  if (!isoDate) {
+    return '—';
+  }
+  const parsed = new Date(isoDate);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(isoDate);
+  }
+  return parsed.toLocaleDateString('en-LK', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 function getSubscriptionBadge(shop: LoginShop | null | undefined) {
   const status = shop?.status;
 
@@ -56,7 +74,6 @@ function getSubscriptionBadge(shop: LoginShop | null | undefined) {
       label: 'Subscribed',
       bg: '#dcfce7',
       color: '#15803d',
-      showEndDate: false,
     };
   }
 
@@ -65,7 +82,14 @@ function getSubscriptionBadge(shop: LoginShop | null | undefined) {
       label: 'Trial',
       bg: '#fef3c7',
       color: '#b45309',
-      showEndDate: true,
+    };
+  }
+
+  if (status === 'due') {
+    return {
+      label: 'Due',
+      bg: '#fee2e2',
+      color: '#b91c1c',
     };
   }
 
@@ -201,6 +225,7 @@ export default function SettingsScreen({ navigation }: Props) {
   const showCostModule = shop?.costModule === true;
   const showMarketingModule = shop?.marketingModule === true && !isTrialShop;
   const shopId = shop?.shopId || user?.shopId || '';
+  const isSubscriptionChangePending = shop?.isSubscriptionChangePending === true;
 
   const refreshShopModules = useCallback(async () => {
     if (!shopId) {
@@ -208,17 +233,20 @@ export default function SettingsScreen({ navigation }: Props) {
     }
 
     try {
-      const response = await dispatch(
-        fetchShopModuleFeatures_Service(String(shopId)),
-      ).unwrap();
+      const [modulesResponse, pendingResponse] = await Promise.all([
+        dispatch(fetchShopModuleFeatures_Service(String(shopId))).unwrap(),
+        dispatch(fetchSubscriptionChangePending_Service()).unwrap(),
+      ]);
 
       dispatch(
         patchLoginShopData({
-          kpi: response.features.kpi,
-          analyticsModule: response.features.analyticsModule,
-          customerManualOrder: response.features.customerManualOrder,
-          costModule: response.features.costModule,
-          marketingModule: response.features.marketingModule,
+          kpi: modulesResponse.features.kpi,
+          analyticsModule: modulesResponse.features.analyticsModule,
+          customerManualOrder: modulesResponse.features.customerManualOrder,
+          costModule: modulesResponse.features.costModule,
+          marketingModule: modulesResponse.features.marketingModule,
+          isSubscriptionChangePending:
+            pendingResponse.isSubscriptionChangePending === true,
         }),
       );
     } catch (error: unknown) {
@@ -319,7 +347,9 @@ export default function SettingsScreen({ navigation }: Props) {
           {
             key: 'change-subscription',
             title: 'Change subscription',
-            description: 'View available plans & pricing',
+            description: isSubscriptionChangePending
+              ? 'Pending next-cycle plan change scheduled'
+              : 'View plans & schedule a change for next cycle',
             icon: 'swap-horizontal-outline' as const,
             iconBg: '#fef3c7',
             iconColor: '#b45309',
@@ -523,7 +553,7 @@ export default function SettingsScreen({ navigation }: Props) {
                       {displayRole.charAt(0).toUpperCase() + displayRole.slice(1)}
                     </Text>
                   </View>
-                  {subscriptionBadge ? (
+                {subscriptionBadge ? (
                     <View
                       style={[
                         styles.statusBadge,
@@ -541,15 +571,15 @@ export default function SettingsScreen({ navigation }: Props) {
                     </View>
                   ) : null}
                 </View>
-                {subscriptionBadge?.showEndDate ? (
+
+                {shop?.status === 'trial' ? (
                   <View
                     style={[
                       styles.trialEndBanner,
                       {
                         backgroundColor:
                           resolvedTheme === 'dark' ? '#422006' : '#fffbeb',
-                        borderColor:
-                          resolvedTheme === 'dark' ? '#f59e0b' : '#f59e0b',
+                        borderColor: '#f59e0b',
                       },
                     ]}
                   >
@@ -558,27 +588,121 @@ export default function SettingsScreen({ navigation }: Props) {
                       size={18}
                       color={resolvedTheme === 'dark' ? '#fbbf24' : '#b45309'}
                     />
-                    <Text
-                      style={[
-                        styles.trialEndLabel,
-                        {
-                          color:
-                            resolvedTheme === 'dark' ? '#fcd34d' : '#92400e',
-                        },
-                      ]}
-                    >
-                      Trial ends
-                    </Text>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text
+                        style={[
+                          styles.trialEndLabel,
+                          {
+                            color:
+                              resolvedTheme === 'dark' ? '#fcd34d' : '#92400e',
+                          },
+                        ]}
+                      >
+                        Trial period
+                      </Text>
+                      <Text
+                        style={[
+                          styles.trialEndDate,
+                          {
+                            color:
+                              resolvedTheme === 'dark' ? '#fef3c7' : '#78350f',
+                          },
+                        ]}
+                      >
+                        {formatShopDate(shop.trailStartDate)} –{' '}
+                        {formatTrialEndDate(shop.trailEndDate)}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {shop?.status === 'active' ? (
+                  <View
+                    style={[
+                      styles.trialEndBanner,
+                      {
+                        backgroundColor:
+                          resolvedTheme === 'dark' ? '#052e16' : '#f0fdf4',
+                        borderColor: '#86efac',
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="calendar-outline"
+                      size={18}
+                      color={resolvedTheme === 'dark' ? '#4ade80' : '#15803d'}
+                    />
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text
+                        style={[
+                          styles.trialEndLabel,
+                          {
+                            color:
+                              resolvedTheme === 'dark' ? '#bbf7d0' : '#166534',
+                          },
+                        ]}
+                      >
+                        Next payment
+                      </Text>
+                      <Text
+                        style={[
+                          styles.trialEndDate,
+                          {
+                            color:
+                              resolvedTheme === 'dark' ? '#dcfce7' : '#14532d',
+                          },
+                        ]}
+                      >
+                        {formatShopDate(shop.nextPaymentDate)}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {shop?.status === 'due' ? (
+                  <View
+                    style={[
+                      styles.trialEndBanner,
+                      {
+                        backgroundColor:
+                          resolvedTheme === 'dark' ? '#450a0a' : '#fef2f2',
+                        borderColor: '#fca5a5',
+                        flexDirection: 'column',
+                        alignItems: 'flex-start',
+                      },
+                    ]}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Ionicons
+                        name="alert-circle-outline"
+                        size={18}
+                        color={resolvedTheme === 'dark' ? '#fca5a5' : '#b91c1c'}
+                      />
+                      <Text
+                        style={[
+                          styles.trialEndLabel,
+                          {
+                            color:
+                              resolvedTheme === 'dark' ? '#fecaca' : '#991b1b',
+                          },
+                        ]}
+                      >
+                        Payment due · {Number(shop.subscriptionDueDays ?? 0)} day
+                        {Number(shop.subscriptionDueDays ?? 0) === 1 ? '' : 's'}
+                      </Text>
+                    </View>
                     <Text
                       style={[
                         styles.trialEndDate,
                         {
                           color:
-                            resolvedTheme === 'dark' ? '#fef3c7' : '#78350f',
+                            resolvedTheme === 'dark' ? '#fecaca' : '#7f1d1d',
+                          marginTop: 4,
                         },
                       ]}
                     >
-                      {formatTrialEndDate(shop?.trailEndDate)}
+                      After 14 days you will not be able to log in. Pay before
+                      then to continue using Smart Cost.
                     </Text>
                   </View>
                 ) : null}

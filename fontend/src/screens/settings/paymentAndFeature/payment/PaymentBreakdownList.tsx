@@ -1,11 +1,11 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { PaymentRecord } from '../../../type/payment';
-import { fonts } from '../../../constants/fonts';
+import { PaymentRecord } from '../../../../type/payment';
+import { fonts } from '../../../../constants/fonts';
 import {
   formatPaymentAmount,
   getPaymentLineItems,
-} from '../../../utils/paymentBreakdown';
+} from '../../../../utils/paymentBreakdown';
 
 type ThemeColors = {
   onSurface: string;

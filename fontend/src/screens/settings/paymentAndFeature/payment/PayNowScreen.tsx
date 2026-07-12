@@ -14,28 +14,28 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { RootStackParamList } from '../../../navigation/RootStackParamsList';
-import { useTheme } from '../../../context/ThemeContext';
-import CommonHeader from '../../../components/CommonHeader/CommonHeader';
-import { fonts } from '../../../constants/fonts';
+import { RootStackParamList } from '../../../../navigation/RootStackParamsList';
+import { useTheme } from '../../../../context/ThemeContext';
+import CommonHeader from '../../../../components/CommonHeader/CommonHeader';
+import { fonts } from '../../../../constants/fonts';
 import { useDispatch, useSelector } from 'react-redux';
-import { PaymentRecord, PaymentStatus } from '../../../type/payment';
+import { PaymentRecord, PaymentStatus } from '../../../../type/payment';
 import {
   fetchPaymentsByShop_Service,
   paymentSubmit_Service,
-} from '../../../services/PaymentService';
-import { AppDispatch, RootState } from '../../../store/store';
-import { setLoginSession } from '../../../store/reducers/AuthReducer';
-import { useCommonAlert } from '../../../hooks/useCommonAlert';
-import { handleSessionExpiredApiError } from '../../../utils/apiErrorAlert';
-import CommonAlert from '../../../components/CommonAlert/CommonAlert';
-import { cardShadow, settingsDetailStyles as styles } from '../shared/settingsDetailStyles';
+} from '../../../../services/PaymentService';
+import { AppDispatch, RootState } from '../../../../store/store';
+import { setLoginSession } from '../../../../store/reducers/AuthReducer';
+import { useCommonAlert } from '../../../../hooks/useCommonAlert';
+import { handleSessionExpiredApiError } from '../../../../utils/apiErrorAlert';
+import CommonAlert from '../../../../components/CommonAlert/CommonAlert';
+import { cardShadow, settingsDetailStyles as styles } from '../../shared/settingsDetailStyles';
 import {
   SettingsBadge,
   SettingsDetailRow,
   SettingsSection,
-} from '../shared/SettingsDetailComponents';
-import { formatPaymentAmount } from '../../../utils/paymentBreakdown';
+} from '../../shared/SettingsDetailComponents';
+import { formatPaymentAmount } from '../../../../utils/paymentBreakdown';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PayNow'>;
 

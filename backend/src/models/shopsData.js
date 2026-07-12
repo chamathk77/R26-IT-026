@@ -407,6 +407,12 @@ const shopsDataSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+
+    // Set when shop requests a plan change while on a current plan; apply after billing cycle / approval
+    isSubscriptionChangePending: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true },
 );
@@ -545,6 +551,8 @@ module.exports = ShopsData;
 // isOneTimePaymentGenerated: boolean
 // oneTimePaymentReceiptNo: up-front payment document id
 // subscriptionDueDays: number
+// isSubscriptionChangePending: boolean (queued plan change while on current subscription)
+// pendingSubscriptionType: 1month | 3months | 6months | 1year | null (requested plan when change is pending)
 // isTrailStared: boolean
 // isTrailCompleted: boolean
 // trailStartDate: date
