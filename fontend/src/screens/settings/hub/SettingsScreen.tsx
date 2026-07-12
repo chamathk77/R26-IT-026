@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   ScrollView,
   StatusBar,
@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Portal } from 'react-native-paper';
 import { RootStackParamList } from '../../../navigation/RootStackParamsList';
@@ -16,7 +17,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useTheme } from '../../../context/ThemeContext';
 import { useDummySession } from '../../../context/DummySessionContext';
 import { AppDispatch, RootState } from '../../../store/store';
-import { clearLoginSession } from '../../../store/reducers/AuthReducer';
+import { clearLoginSession, patchLoginShopData } from '../../../store/reducers/AuthReducer';
 import { clearSavedToken } from '../../../utils/secureStorage';
 import CommonHeader from '../../../components/CommonHeader/CommonHeader';
 import CommonAlert from '../../../components/CommonAlert/CommonAlert';
@@ -24,6 +25,8 @@ import { useCommonAlert } from '../../../hooks/useCommonAlert';
 import type { LoginShop } from '../../../type/auth';
 import { cardShadow, settingsMenuStyles as styles } from '../shared/settingsDetailStyles';
 import { fonts } from '../../../constants/fonts';
+import { fetchShopModuleFeatures_Service } from '../../../services/ShopOnboardingService';
+import { handleSessionExpiredApiError } from '../../../utils/apiErrorAlert';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -192,6 +195,42 @@ export default function SettingsScreen({ navigation }: Props) {
   const shopLabel = shop?.shopName?.trim() || shop?.shopId || 'No shop linked';
   const subscriptionBadge = getSubscriptionBadge(shop);
   const showManageUsers = displayRole === 'owner';
+  const isTrialShop = shop?.status === 'trial';
+  const showKpiModule = shop?.kpi === true;
+  const showAnalyticsModule = shop?.analyticsModule === true;
+  const showCostModule = shop?.costModule === true;
+  const showMarketingModule = shop?.marketingModule === true && !isTrialShop;
+  const shopId = shop?.shopId || user?.shopId || '';
+
+  const refreshShopModules = useCallback(async () => {
+    if (!shopId) {
+      return;
+    }
+
+    try {
+      const response = await dispatch(
+        fetchShopModuleFeatures_Service(String(shopId)),
+      ).unwrap();
+
+      dispatch(
+        patchLoginShopData({
+          kpi: response.features.kpi,
+          analyticsModule: response.features.analyticsModule,
+          customerManualOrder: response.features.customerManualOrder,
+          costModule: response.features.costModule,
+          marketingModule: response.features.marketingModule,
+        }),
+      );
+    } catch (error: unknown) {
+      await handleSessionExpiredApiError(error, show_Alert);
+    }
+  }, [dispatch, shopId, show_Alert]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshShopModules();
+    }, [refreshShopModules]),
+  );
 
   const showComingSoonAlert = (moduleName: string) => {
     show_Alert(
@@ -250,6 +289,53 @@ export default function SettingsScreen({ navigation }: Props) {
       iconColor: primary,
       onPress: () => navigation.navigate('ShopDetails'),
     },
+  ];
+
+  const paymentAndFeatureItems: MenuItem[] = [
+    {
+      key: 'printer',
+      title: 'Receipt printer',
+      description: 'Connect via network (LAN) or USB cable',
+      icon: 'print-outline',
+      iconBg: '#ecfdf5',
+      iconColor: '#047857',
+      onPress: () => navigation.navigate('PrinterConnection'),
+    },
+    ...(showManageUsers
+      ? [
+          {
+            key: 'manage',
+            title: 'Manage accounts',
+            description: 'Admins & staff for your shop',
+            icon: 'people-outline' as const,
+            iconBg: paperTheme.colors.tertiaryContainer,
+            iconColor: paperTheme.colors.tertiary,
+            onPress: () => navigation.navigate('ManageAccount'),
+          },
+        ]
+      : []),
+    ...(!isTrialShop
+      ? [
+          {
+            key: 'change-subscription',
+            title: 'Change subscription',
+            description: 'View available plans & pricing',
+            icon: 'swap-horizontal-outline' as const,
+            iconBg: '#fef3c7',
+            iconColor: '#b45309',
+            onPress: () => navigation.navigate('ChangeSubscription'),
+          },
+        ]
+      : []),
+    {
+      key: 'payments',
+      title: 'Payment',
+      description: 'Payment history & current status',
+      icon: 'card-outline',
+      iconBg: '#dbeafe',
+      iconColor: '#1d4ed8',
+      onPress: () => navigation.navigate('SubscriptionPayments'),
+    },
     ...(displayRole === 'owner'
       ? [
           {
@@ -260,28 +346,6 @@ export default function SettingsScreen({ navigation }: Props) {
             iconBg: '#e0f2fe',
             iconColor: '#0284c7',
             onPress: () => navigation.navigate('ManageFeatures'),
-          },
-        ]
-      : []),
-    {
-      key: 'payments',
-      title: 'Subscription payments',
-      description: 'Payment history & current status',
-      icon: 'card-outline',
-      iconBg: '#dbeafe',
-      iconColor: '#1d4ed8',
-      onPress: () => navigation.navigate('SubscriptionPayments'),
-    },
-    ...(showManageUsers
-      ? [
-          {
-            key: 'manage',
-            title: 'Manage account',
-            description: 'Admins & staff for your shop',
-            icon: 'people-outline' as const,
-            iconBg: paperTheme.colors.tertiaryContainer,
-            iconColor: paperTheme.colors.tertiary,
-            onPress: () => navigation.navigate('ManageAccount'),
           },
         ]
       : []),
@@ -297,43 +361,59 @@ export default function SettingsScreen({ navigation }: Props) {
       iconColor: primary,
       onPress: goToPos,
     },
-    {
-      key: 'cost',
-      title: 'Cost Management',
-      description: 'Track spending, margins & financial insights',
-      icon: 'calculator-outline',
-      iconBg: '#ede9fe',
-      iconColor: '#6d28d9',
-      onPress: goToCostManagement,
-    },
-    {
-      key: 'analytics',
-      title: 'Analytics',
-      description: 'Sales, costs, profit & business insights',
-      icon: 'analytics-outline',
-      iconBg: '#ccfbf1',
-      iconColor: '#0f766e',
-      onPress: () => navigation.navigate('Analytics'),
-    },
-    {
-      key: 'kpi',
-      title: 'Key Performance Indicators',
-      description: 'KPI dashboard, metrics & performance tracking',
-      icon: 'stats-chart-outline',
-      iconBg: '#fef3c7',
-      iconColor: '#b45309',
-      onPress: () => navigation.navigate('KpiDashboard'),
-    },
-    {
-      key: 'customer-marketing',
-      title: 'Customer & Marketing',
-      description: 'Customer engagement, campaigns & outreach',
-      icon: 'megaphone-outline',
-      iconBg: '#fce7f3',
-      iconColor: '#db2777',
-      comingSoon: true,
-      onPress: () => showComingSoonAlert('Customer & Marketing'),
-    },
+    ...(showCostModule
+      ? [
+          {
+            key: 'cost',
+            title: 'Cost Management',
+            description: 'Track spending, margins & financial insights',
+            icon: 'calculator-outline' as const,
+            iconBg: '#ede9fe',
+            iconColor: '#6d28d9',
+            onPress: goToCostManagement,
+          },
+        ]
+      : []),
+    ...(showAnalyticsModule
+      ? [
+          {
+            key: 'analytics',
+            title: 'Analytics',
+            description: 'Sales, costs, profit & business insights',
+            icon: 'analytics-outline' as const,
+            iconBg: '#ccfbf1',
+            iconColor: '#0f766e',
+            onPress: () => navigation.navigate('Analytics'),
+          },
+        ]
+      : []),
+    ...(showKpiModule
+      ? [
+          {
+            key: 'kpi',
+            title: 'Key Performance Indicators',
+            description: 'KPI dashboard, metrics & performance tracking',
+            icon: 'stats-chart-outline' as const,
+            iconBg: '#fef3c7',
+            iconColor: '#b45309',
+            onPress: () => navigation.navigate('KpiDashboard'),
+          },
+        ]
+      : []),
+    ...(showMarketingModule
+      ? [
+          {
+            key: 'customer-marketing',
+            title: 'Customer & Marketing',
+            description: 'Customer engagement, campaigns & outreach',
+            icon: 'megaphone-outline' as const,
+            iconBg: '#fce7f3',
+            iconColor: '#db2777',
+            comingSoon: true,
+            onPress: () => showComingSoonAlert('Customer & Marketing'),
+          },
+        ]
+      : []),
     {
       key: 'reports',
       title: 'Reports',
@@ -355,15 +435,6 @@ export default function SettingsScreen({ navigation }: Props) {
       iconBg: paperTheme.colors.primaryContainer,
       iconColor: primary,
       onPress: () => navigation.navigate('ThemePreference'),
-    },
-    {
-      key: 'printer',
-      title: 'Receipt printer',
-      description: 'Connect via network (LAN) or USB cable',
-      icon: 'print-outline',
-      iconBg: '#ecfdf5',
-      iconColor: '#047857',
-      onPress: () => navigation.navigate('PrinterConnection'),
     },
   ];
 
@@ -518,6 +589,12 @@ export default function SettingsScreen({ navigation }: Props) {
           <SettingsMenuGroup
             label="Account"
             items={accountItems}
+            paperTheme={paperTheme}
+            resolvedTheme={resolvedTheme}
+          />
+          <SettingsMenuGroup
+            label="Payment and Feature"
+            items={paymentAndFeatureItems}
             paperTheme={paperTheme}
             resolvedTheme={resolvedTheme}
           />

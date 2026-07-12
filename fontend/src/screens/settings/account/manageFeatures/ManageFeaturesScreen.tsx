@@ -3,8 +3,10 @@ import { ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-nativ
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { useSelector } from 'react-redux';
 import { RootStackParamList } from '../../../../navigation/RootStackParamsList';
 import { useTheme } from '../../../../context/ThemeContext';
+import { RootState } from '../../../../store/store';
 import CommonHeader from '../../../../components/CommonHeader/CommonHeader';
 import {
   cardShadow,
@@ -82,6 +84,10 @@ function HubMenuGroup({
 export default function ManageFeaturesScreen({ navigation }: Props) {
   const { paperTheme, resolvedTheme } = useTheme();
   const primary = paperTheme.colors.primary;
+  const shopStatus = useSelector(
+    (state: RootState) => state.AuthReducer.Login.shopData?.status,
+  );
+  const isTrialShop = shopStatus === 'trial';
 
   const hubItems: HubItem[] = [
     {
@@ -93,24 +99,28 @@ export default function ManageFeaturesScreen({ navigation }: Props) {
       iconColor: '#b45309',
       onPress: () => navigation.navigate('ManageGeneralFeatures'),
     },
-    {
-      key: 'sms-activation',
-      title: 'SMS activation',
-      description: 'Receipt SMS packages, usage & renewal settings',
-      icon: 'chatbubble-ellipses-outline',
-      iconBg: '#dbeafe',
-      iconColor: '#1d4ed8',
-      onPress: () => navigation.navigate('ManageSmsFeature'),
-    },
-    {
-      key: 'add-users',
-      title: 'Add users',
-      description: 'Increase staff capacity beyond your included user limit',
-      icon: 'people-outline',
-      iconBg: '#e0e7ff',
-      iconColor: '#4338ca',
-      onPress: () => navigation.navigate('ManageAddUsers'),
-    },
+    ...(!isTrialShop
+      ? [
+          {
+            key: 'sms-activation',
+            title: 'SMS activation',
+            description: 'Receipt SMS packages, usage & renewal settings',
+            icon: 'chatbubble-ellipses-outline' as const,
+            iconBg: '#dbeafe',
+            iconColor: '#1d4ed8',
+            onPress: () => navigation.navigate('ManageSmsFeature'),
+          },
+          {
+            key: 'add-users',
+            title: 'Add users',
+            description: 'Increase staff capacity beyond your included user limit',
+            icon: 'people-outline' as const,
+            iconBg: '#e0e7ff',
+            iconColor: '#4338ca',
+            onPress: () => navigation.navigate('ManageAddUsers'),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -158,7 +168,9 @@ export default function ManageFeaturesScreen({ navigation }: Props) {
                 <Text
                   style={[styles.heroSubtitle, { color: paperTheme.colors.onSurfaceVariant }]}
                 >
-                  Choose what you want to manage — general modules, SMS, or additional users.
+                  {isTrialShop
+                    ? 'Manage general POS modules while your shop is on trial.'
+                    : 'Choose what you want to manage — general modules, SMS, or additional users.'}
                 </Text>
               </View>
             </View>
