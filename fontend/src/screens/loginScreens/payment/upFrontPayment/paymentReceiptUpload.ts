@@ -100,7 +100,6 @@ export async function pickReceiptFromGallery(show_Alert: ShowAlertFn): Promise<s
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
     allowsEditing: true,
-    aspect: [4, 3],
     quality: 0.85,
   });
 
@@ -119,7 +118,6 @@ export async function takeReceiptPhoto(show_Alert: ShowAlertFn): Promise<string 
 
   const result = await ImagePicker.launchCameraAsync({
     allowsEditing: true,
-    aspect: [4, 3],
     quality: 0.85,
   });
 

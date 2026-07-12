@@ -7,6 +7,7 @@ const {
   getShopSmsFeatures,
   getSmsPackages,
   getSubscriptionPlans,
+  getSettingsData,
   onboardingShopFeatures,
   updateShopModuleFeatures,
   updateShopUsersFeatures,
@@ -35,6 +36,7 @@ router.post('/features/sms/schedule-deactivation', protect, createPendingInactiv
 router.post('/features/sms/cancel-deactivation', protect, cancelPendingInactiveSmsRequest);
 router.get('/sms-packages', protect, getSmsPackages);
 router.get('/subscription-plans', protect, getSubscriptionPlans);
+router.get('/settings-data', protect, getSettingsData);
 
 router.get('/features/modules', protect, getShopModuleFeatures);
 router.get('/features/users', protect, getShopUsersFeatures);

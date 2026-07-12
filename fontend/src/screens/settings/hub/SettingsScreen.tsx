@@ -17,7 +17,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useTheme } from '../../../context/ThemeContext';
 import { useDummySession } from '../../../context/DummySessionContext';
 import { AppDispatch, RootState } from '../../../store/store';
-import { clearLoginSession, patchLoginShopData } from '../../../store/reducers/AuthReducer';
+import { clearLoginSession, setLoginSession } from '../../../store/reducers/AuthReducer';
 import { clearSavedToken } from '../../../utils/secureStorage';
 import CommonHeader from '../../../components/CommonHeader/CommonHeader';
 import CommonAlert from '../../../components/CommonAlert/CommonAlert';
@@ -25,10 +25,7 @@ import { useCommonAlert } from '../../../hooks/useCommonAlert';
 import type { LoginShop } from '../../../type/auth';
 import { cardShadow, settingsMenuStyles as styles } from '../shared/settingsDetailStyles';
 import { fonts } from '../../../constants/fonts';
-import {
-  fetchShopModuleFeatures_Service,
-  fetchSubscriptionChangePending_Service,
-} from '../../../services/ShopOnboardingService';
+import { fetchSettingsData_Service } from '../../../services/SettingsService';
 import { handleSessionExpiredApiError } from '../../../utils/apiErrorAlert';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
@@ -224,40 +221,26 @@ export default function SettingsScreen({ navigation }: Props) {
   const showAnalyticsModule = shop?.analyticsModule === true;
   const showCostModule = shop?.costModule === true;
   const showMarketingModule = shop?.marketingModule === true && !isTrialShop;
-  const shopId = shop?.shopId || user?.shopId || '';
   const isSubscriptionChangePending = shop?.isSubscriptionChangePending === true;
 
-  const refreshShopModules = useCallback(async () => {
-    if (!shopId) {
-      return;
-    }
-
+  const refreshSettingsData = useCallback(async () => {
     try {
-      const [modulesResponse, pendingResponse] = await Promise.all([
-        dispatch(fetchShopModuleFeatures_Service(String(shopId))).unwrap(),
-        dispatch(fetchSubscriptionChangePending_Service()).unwrap(),
-      ]);
-
+      const response = await dispatch(fetchSettingsData_Service()).unwrap();
       dispatch(
-        patchLoginShopData({
-          kpi: modulesResponse.features.kpi,
-          analyticsModule: modulesResponse.features.analyticsModule,
-          customerManualOrder: modulesResponse.features.customerManualOrder,
-          costModule: modulesResponse.features.costModule,
-          marketingModule: modulesResponse.features.marketingModule,
-          isSubscriptionChangePending:
-            pendingResponse.isSubscriptionChangePending === true,
+        setLoginSession({
+          user: response.user,
+          shop: response.shop,
         }),
       );
     } catch (error: unknown) {
       await handleSessionExpiredApiError(error, show_Alert);
     }
-  }, [dispatch, shopId, show_Alert]);
+  }, [dispatch, show_Alert]);
 
   useFocusEffect(
     useCallback(() => {
-      void refreshShopModules();
-    }, [refreshShopModules]),
+      void refreshSettingsData();
+    }, [refreshSettingsData]),
   );
 
   const showComingSoonAlert = (moduleName: string) => {

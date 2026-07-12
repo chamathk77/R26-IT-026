@@ -221,7 +221,6 @@ export default function PayNowScreen({ navigation, route }: Props) {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
-      aspect: [4, 3],
       quality: 0.85,
     });
 
@@ -238,7 +237,6 @@ export default function PayNowScreen({ navigation, route }: Props) {
 
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
-      aspect: [4, 3],
       quality: 0.85,
     });
 

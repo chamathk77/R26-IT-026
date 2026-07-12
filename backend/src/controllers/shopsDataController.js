@@ -7,6 +7,10 @@ const {
   generatePlanSubscriptionReceiptNumber,
   UPFRONT_INVOICE_IMAGE_PLACEHOLDER,
 } = require('../utils/paymentReceiptHelper');
+const {
+  formatShopForLogin,
+  formatUserForLogin,
+} = require('../utils/trialPromptHelper');
 
 const ONE_MONTH_SUBSCRIPTION = '1month';
 const MULTI_MONTH_SUBSCRIPTION_TYPES = ['3months', '6months', '1year'];
@@ -1283,6 +1287,60 @@ const getPendingRequest_ChangeSubscription = async (req, res) => {
   }
 };
 
+/**
+ * Load settings hub data for the logged-in user: shop + user profile.
+ */
+const getSettingsData = async (req, res) => {
+  try {
+    const shopId = normalizeShopId(req.user?.shopId);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Not authorized' });
+    }
+
+    if (!shopId) {
+      return res.status(400).json({ success: false, message: 'Shop id is required' });
+    }
+
+    if (!isValidShopIdFormat(shopId)) {
+      return res.status(400).json({ success: false, message: 'Invalid shop id format' });
+    }
+
+    const [shop, user] = await Promise.all([
+      ShopsData.findOne({ shopId }).lean(),
+      User.findById(userId).lean(),
+    ]);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found' });
+    }
+
+    const userShopId = normalizeShopId(user.shopId);
+    if (userShopId && userShopId !== shopId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized for this shop',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Settings data loaded',
+      shopId: shop.shopId,
+      shop: formatShopForLogin(shop),
+      user: formatUserForLogin(user),
+    });
+  } catch (error) {
+    console.log('error in getSettingsData', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 function normalizeSubscriptionType(value) {
   const normalized = String(value ?? '').trim().toLowerCase();
   if (!ShopsData.SUBSCRIPTION_TYPES.includes(normalized)) {
@@ -1542,6 +1600,7 @@ module.exports = {
   getShopSmsFeatures,
   getSmsPackages,
   getSubscriptionPlans,
+  getSettingsData,
 
   /** Subscription */
   setSubscription,

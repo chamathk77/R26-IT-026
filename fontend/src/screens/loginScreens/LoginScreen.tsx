@@ -424,10 +424,15 @@ export default function LoginScreen({ navigation }: Props) {
           return;
         }
 
-        if (response.shop?.status === "active") {
+        // `due` = subscription overdue but still within grace (backend still allows login).
+        if (
+          response.shop?.status === "active" ||
+          response.shop?.status === "due"
+        ) {
           navigation.reset({ index: 0, routes: [{ name: "PosMain" }] });
+          return;
         }
-        
+
         if (response.shop?.status === "paymentPending") {
           show_Alert(
             "pending",
