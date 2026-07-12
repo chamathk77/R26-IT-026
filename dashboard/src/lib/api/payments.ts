@@ -169,3 +169,32 @@ export async function rejectFirstMultiMonthSubscriptionPayment(
   );
   return response.data;
 }
+
+export async function approveSubscriptionPayment(
+  paymentId: string,
+): Promise<PaymentActionResponse> {
+  const response = await api.post<PaymentActionResponse>(
+    `/api/dashboard/payments/${paymentId}/approve-subscription`,
+  );
+  return response.data;
+}
+
+export async function rejectSubscriptionPayment(
+  paymentId: string,
+  reason: string,
+): Promise<PaymentActionResponse> {
+  const response = await api.post<PaymentActionResponse>(
+    `/api/dashboard/payments/${paymentId}/reject-subscription`,
+    { reason },
+  );
+  return response.data;
+}
+
+export async function resetAndApproveSubscriptionPayment(
+  paymentId: string,
+): Promise<PaymentActionResponse> {
+  const response = await api.post<PaymentActionResponse>(
+    `/api/dashboard/payments/${paymentId}/reset-and-approve-subscription`,
+  );
+  return response.data;
+}

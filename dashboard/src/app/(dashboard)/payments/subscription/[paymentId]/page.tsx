@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DashboardShell from '@/components/layout/DashboardShell';
-import PaymentDetailsView from '@/components/payments/PaymentDetailsView';
+import SubscriptionPaymentDetailsView from '@/components/payments/SubscriptionPaymentDetailsView';
 
 export default function SubscriptionPaymentDetailsPage() {
   const router = useRouter();
@@ -21,7 +21,7 @@ export default function SubscriptionPaymentDetailsPage() {
         Back to subscription payments
       </Button>
 
-      <PaymentDetailsView paymentId={paymentId} />
+      <SubscriptionPaymentDetailsView paymentId={paymentId} />
     </DashboardShell>
   );
 }

@@ -1,10 +1,45 @@
 const ShopsData = require('../models/shopsData');
 const DueDaysCronReport = require('../models/dueDaysCronReport');
+const { clearShopUserTokens } = require('./trialExpirationService');
+const { sendSms } = require('./smsService');
 
 const SUBSCRIPTION_DUE_STATUS = 'due';
 const SUBSCRIPTION_OVERDUE_STATUS = 'paymentPending';
 const OVERDUE_DAYS_THRESHOLD = 14;
 const COUNTABLE_DUE_STATUSES = [SUBSCRIPTION_DUE_STATUS, SUBSCRIPTION_OVERDUE_STATUS];
+
+function getShopOwnerMobile(shop) {
+  return shop.ownerMobileNumber?.trim() || shop.shopMobileNumber?.trim() || '';
+}
+
+function buildPaymentPendingDeactivationSms() {
+  return (
+    'Smart Cost: Your account has been temporarily deactivated because your subscription payment is overdue. ' +
+    'Please pay the outstanding amount and submit your receipt in the app to reactivate your account.'
+  );
+}
+
+async function sendPaymentPendingDeactivationSms(shop) {
+  const mobile = getShopOwnerMobile(shop);
+  if (!mobile) {
+    return { sent: false, reason: 'Owner mobile number is not set' };
+  }
+
+  try {
+    await sendSms({
+      to: mobile,
+      message: buildPaymentPendingDeactivationSms(),
+    });
+    return { sent: true };
+  } catch (error) {
+    console.log(
+      '[due-days-cron] paymentPending SMS not sent',
+      shop.shopId,
+      error.message,
+    );
+    return { sent: false, reason: error.message || 'SMS send failed' };
+  }
+}
 
 function processShopDueDays(shop) {
   const updates = {};
@@ -20,11 +55,12 @@ function processShopDueDays(shop) {
   const previousDueDays = Number(shop.subscriptionDueDays ?? 0);
   const newDueDays = previousDueDays + 1;
 
-  // Escalate to paymentPending once due days pass the threshold, but only while
+  // Escalate to paymentPending after 14 due days have passed, but only while
   // the shop is still in the `due` state. Shops already in paymentPending keep
   // incrementing without changing status.
   const statusChanged =
-    shop.status === SUBSCRIPTION_DUE_STATUS && previousDueDays > OVERDUE_DAYS_THRESHOLD;
+    shop.status === SUBSCRIPTION_DUE_STATUS &&
+    previousDueDays >= OVERDUE_DAYS_THRESHOLD;
 
   if (statusChanged) {
     updates.status = SUBSCRIPTION_OVERDUE_STATUS;
@@ -106,8 +142,9 @@ async function saveDueDaysCronReport(report, meta = {}) {
 }
 
 /**
- * Daily due-days job: increment subscriptionDueDays for shops with status due.
- * When due days exceed 14 before increment, move subscription to paymentPending.
+ * Daily due-days job: increment subscriptionDueDays for shops with status due
+ * or paymentPending. After 14 due days while still `due`, move status to
+ * paymentPending, log out all users for that shop, and notify the owner by SMS.
  */
 async function runDailyDueDaysCheck(meta = {}) {
   const report = {
@@ -120,7 +157,9 @@ async function runDailyDueDaysCheck(meta = {}) {
 
   try {
     const shops = await ShopsData.find({ status: { $in: COUNTABLE_DUE_STATUSES } })
-      .select('shopId status subscriptionDueDays')
+      .select(
+        'shopId status subscriptionDueDays ownerMobileNumber shopMobileNumber',
+      )
       .lean();
 
     report.totalShopsChecked = shops.length;
@@ -138,6 +177,14 @@ async function runDailyDueDaysCheck(meta = {}) {
         }
 
         await ShopsData.updateOne({ shopId: shop.shopId }, { $set: updates });
+
+        if (result.subscription?.statusChanged) {
+          const usersLoggedOut = await clearShopUserTokens(shop.shopId);
+          const customerSms = await sendPaymentPendingDeactivationSms(shop);
+          result.subscription.usersLoggedOut = usersLoggedOut;
+          result.subscription.customerSms = customerSms;
+        }
+
         report.subscription.push(result);
       } catch (error) {
         report.errors.push({
@@ -182,4 +229,5 @@ module.exports = {
   processShopDueDays,
   saveDueDaysCronReport,
   OVERDUE_DAYS_THRESHOLD,
+  buildPaymentPendingDeactivationSms,
 };

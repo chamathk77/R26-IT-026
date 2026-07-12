@@ -530,6 +530,7 @@ async function applyShopUpdatesOnSubscriptionApprove(shop, payment, scenario) {
       );
       shop.currentPaymentDoneDate = paymentDoneDate;
       shop.status = "active";
+      shop.subscriptionDueDays = 0;
       break;
     }
     default:
