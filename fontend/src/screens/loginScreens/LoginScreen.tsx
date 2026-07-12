@@ -442,13 +442,15 @@ export default function LoginScreen({ navigation }: Props) {
             false,
             "Pay Now",
             () => {
-              console.log("Pay Now pressed");
+              navigation.reset({
+                index: 0,
+                routes: [{ name: "PendingPayments" }],
+              });
             },
             "Cancel",
-            () => {
-              console.log("Cancel pressed");
-            },
+            () => {},
           );
+          return;
         }
       }
     } catch (error: unknown) {

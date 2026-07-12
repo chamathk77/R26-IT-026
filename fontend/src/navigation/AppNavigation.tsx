@@ -15,6 +15,7 @@ import PayUpfrontScreen from '../screens/loginScreens/payment/upFrontPayment/Pay
 import PayUpfrontBankTransferScreen from '../screens/loginScreens/payment/upFrontPayment/PayUpfrontBankTransferScreen';
 import PayInitialSubscriptionScreen from '../screens/loginScreens/payment/initialSubscriptionPayment/PayInitialSubscriptionScreen';
 import PayInitialSubscriptionBankTransferScreen from '../screens/loginScreens/payment/initialSubscriptionPayment/PayInitialSubscriptionBankTransferScreen';
+import PendingPaymentsScreen from '../screens/loginScreens/payment/pendingPayment/PendingPaymentsScreen';
 import SignUpScreen from '../screens/loginScreens/SignUpScreen';
 import MainBottomTabNavigator from './MainBottomTabNavigator';
 
@@ -79,6 +80,7 @@ export default function AppNavigator() {
           name="PayInitialSubscriptionBankTransferScreen"
           component={PayInitialSubscriptionBankTransferScreen}
         />
+        <Stack.Screen name="PendingPayments" component={PendingPaymentsScreen} />
         <Stack.Screen name="TrialDetailScreen" component={TrialDetailScreen} />
         <Stack.Screen name="SignUpScreen" component={SignUpScreen} />
         <Stack.Screen name="PosMain" component={MainBottomTabNavigator} />

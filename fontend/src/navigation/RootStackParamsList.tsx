@@ -60,6 +60,7 @@ export type RootStackParamList = {
   PrinterConnection: undefined;
   ChangeSubscription: undefined;
   SubscriptionPayments: undefined;
+  PendingPayments: undefined;
   Analytics: undefined;
   PayNow: { payment: PaymentRecord };
   KpiDashboard: undefined;
