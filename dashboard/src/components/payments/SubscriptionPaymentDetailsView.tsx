@@ -124,6 +124,7 @@ export default function SubscriptionPaymentDetailsView({
   const subscriptionDueDays = Number(shop?.subscriptionDueDays ?? 0);
   const shopStatus = shop?.status ?? '';
   const canResetAndApprove = RESET_APPROVE_SHOP_STATUSES.has(shopStatus);
+  const canApprove = shopStatus !== 'paymentPending';
   const isOverduePending =
     payment?.status === 'pending' && subscriptionDueDays > SUBSCRIPTION_OVERDUE_THRESHOLD;
 
@@ -478,7 +479,7 @@ export default function SubscriptionPaymentDetailsView({
                       fullWidth
                       variant="contained"
                       color="success"
-                      disabled={actionLoading !== null}
+                      disabled={actionLoading !== null || !canApprove}
                       onClick={() => void handleApprove()}
                       sx={{ fontWeight: 700, borderRadius: 2 }}
                     >
@@ -514,8 +515,9 @@ export default function SubscriptionPaymentDetailsView({
                     )}
                   </Button>
                   <Typography variant="caption" color="text.secondary">
-                    Approve extends the existing next payment date. Reset and approve starts a new
-                    cycle from today (only for paymentPending or diactiveByAdmin).
+                    {shopStatus === 'paymentPending'
+                      ? 'Shop status is paymentPending — use Reset and approve to restart billing from today. Approve is disabled.'
+                      : 'Approve extends the existing next payment date. Reset and approve starts a new cycle from today (only for paymentPending or diactiveByAdmin).'}
                   </Typography>
                 </Box>
               ) : null}

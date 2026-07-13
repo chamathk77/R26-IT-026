@@ -1203,6 +1203,8 @@ const resetAndApproveSubscriptionPayment = async (req, res) => {
     await applyShopUpdatesOnResetSubscriptionApprove(shop, payment);
     await payment.save();
 
+    const usersLoggedOut = await clearShopUserTokens(shop.shopId);
+
     const approvalSmsResult = await sendSubscriptionPaymentApprovedSms(
       shop,
       payment,
@@ -1227,6 +1229,7 @@ const resetAndApproveSubscriptionPayment = async (req, res) => {
       scenario: scenarioCheck.scenario,
       billingCycleReset: true,
       nextPaymentDate: shop.nextPaymentDate,
+      usersLoggedOut,
       customerSms: approvalSmsResult,
       payment: formatPaymentRecord(payment.toObject(), req),
       shop: formatShopSummary(shop.toObject()),
