@@ -605,6 +605,27 @@ async function applyShopUpdatesOnResetSubscriptionApprove(shop, payment) {
   await shop.save();
 }
 
+/**
+ * After a successful subscription approval, if the shop has a queued plan change,
+ * move them back to initialPaymentApproved so they can choose a new plan,
+ * and force logout all shop users.
+ */
+async function applySubscriptionChangePendingAfterApprove(shop) {
+  if (shop.isSubscriptionChangePending !== true) {
+    return { applied: false, usersLoggedOut: 0 };
+  }
+
+  shop.status = "initialPaymentApproved";
+  shop.subscriptionReceiptNo = null;
+  shop.subscriptionType = null;
+  shop.nextPaymentDate = null;
+  shop.isSubscriptionChangePending = false;
+  await shop.save();
+
+  const usersLoggedOut = await clearShopUserTokens(shop.shopId);
+  return { applied: true, usersLoggedOut };
+}
+
 function validateFirstMultiMonthSubscriptionPayment(shop, payment, paymentId) {
   const subscriptionType = shop.subscriptionType;
 
@@ -1109,6 +1130,8 @@ const approveSubscriptionPayment = async (req, res) => {
     }
 
     const subscriptionType = resolveSubscriptionTypeForSms(shop, payment);
+    const pendingChangeResult =
+      await applySubscriptionChangePendingAfterApprove(shop);
 
     res.status(200).json({
       success: true,
@@ -1118,6 +1141,8 @@ const approveSubscriptionPayment = async (req, res) => {
         true,
       ),
       scenario: scenarioCheck.scenario,
+      subscriptionChangePendingApplied: pendingChangeResult.applied,
+      usersLoggedOut: pendingChangeResult.usersLoggedOut,
       customerSms: approvalSmsResult,
       payment: formatPaymentRecord(payment.toObject(), req),
       shop: formatShopSummary(shop.toObject()),
@@ -1203,8 +1228,6 @@ const resetAndApproveSubscriptionPayment = async (req, res) => {
     await applyShopUpdatesOnResetSubscriptionApprove(shop, payment);
     await payment.save();
 
-    const usersLoggedOut = await clearShopUserTokens(shop.shopId);
-
     const approvalSmsResult = await sendSubscriptionPaymentApprovedSms(
       shop,
       payment,
@@ -1218,6 +1241,13 @@ const resetAndApproveSubscriptionPayment = async (req, res) => {
     }
 
     const subscriptionType = resolveSubscriptionTypeForSms(shop, payment);
+    const pendingChangeResult =
+      await applySubscriptionChangePendingAfterApprove(shop);
+
+    // Always logout on reset-approve; pending path also clears tokens (idempotent).
+    const usersLoggedOut = pendingChangeResult.applied
+      ? pendingChangeResult.usersLoggedOut
+      : await clearShopUserTokens(shop.shopId);
 
     res.status(200).json({
       success: true,
@@ -1229,6 +1259,7 @@ const resetAndApproveSubscriptionPayment = async (req, res) => {
       scenario: scenarioCheck.scenario,
       billingCycleReset: true,
       nextPaymentDate: shop.nextPaymentDate,
+      subscriptionChangePendingApplied: pendingChangeResult.applied,
       usersLoggedOut,
       customerSms: approvalSmsResult,
       payment: formatPaymentRecord(payment.toObject(), req),
