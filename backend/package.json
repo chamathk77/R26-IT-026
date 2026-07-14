@@ -13,6 +13,7 @@
     "cron:sms-bill": "node src/scripts/runSmsBillCron.js",
     "cron:sms-due-days": "node src/scripts/runSmsDueDaysCron.js",
     "cron:sms": "node src/scripts/runSmsCrons.js",
+    "migrate:dashboard-users": "node src/scripts/migrateDashboardUsers.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

@@ -185,10 +185,7 @@ function resolveMaxUsers(isAdditionalUsersAdded, numAdditionalUsers) {
 }
 
 function shopMobileUserFilter(shopId) {
-  return {
-    shopId,
-    isInternalUser: { $ne: true },
-  };
+  return { shopId };
 }
 
 async function getShopMobileUserCount(shopId) {

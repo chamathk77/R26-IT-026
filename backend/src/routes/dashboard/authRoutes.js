@@ -6,13 +6,13 @@ const {
 } = require('../../controllers/dashboard/internalAuthController');
 const {
   protectDashboard,
-  requireInternalAdmin,
+  requireDashboardAdmin,
 } = require('../../middleware/dashboardAuthMiddleware');
 
 const router = express.Router();
 
 router.post('/login', internalLogin);
-router.post('/signup', protectDashboard, requireInternalAdmin, internalSignup);
+router.post('/signup', protectDashboard, requireDashboardAdmin, internalSignup);
 router.post('/logout', protectDashboard, internalLogout);
 
 module.exports = router;

@@ -90,19 +90,8 @@ function createProtect() {
 
     try {
       const sessionUser = await User.findById(decoded.id)
-        .select('isInternalUser shopId')
+        .select('shopId')
         .lean();
-
-      if (sessionUser?.isInternalUser) {
-        await User.findByIdAndUpdate(decoded.id, { token: null });
-        return res.status(403).json({
-          success: false,
-          message:
-            'This account is for the SmartCost web dashboard only. Mobile app sign-in is not allowed.',
-          sessionEnded: true,
-          code: 'INTERNAL_USER_MOBILE_BLOCKED',
-        });
-      }
 
       if (sessionUser?.shopId) {
         req.user.shopId = String(sessionUser.shopId).trim().toUpperCase();

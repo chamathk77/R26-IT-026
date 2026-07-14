@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Payments = require('../models/payments');
 const ShopsData = require('../models/shopsData');
 const User = require('../models/user');
+const DashboardUser = require('../models/dashboardUser');
 const {
   publicReceiptPath,
   unlinkReceiptImageIfLocal,
@@ -535,8 +536,6 @@ const SUBMITTABLE_PAYMENT_STATUSES = ['notPaid', 'rejected'];
 
 const OUTSTANDING_UPFRONT_STATUSES = ['pending', 'rejected', 'notPaid'];
 
-const INTERNAL_PAYMENT_NOTIFY_ROLES = ['internalAdmin', 'internalStaff'];
-
 function formatSubmittedPaymentTypeLabel(paymentType) {
   return paymentType === 'upFront' ? 'up-front payment' : 'subscription payment';
 }
@@ -547,14 +546,12 @@ function buildPaymentSubmittedAdminSms({ shopId, paymentType, receiptNumber }) {
 }
 
 async function notifyInternalStaffPaymentSubmitted(payment) {
-  const internalUsers = await User.find({
-    role: { $in: INTERNAL_PAYMENT_NOTIFY_ROLES },
-  })
+  const internalUsers = await DashboardUser.find({ isActive: { $ne: false } })
     .select('phone role name')
     .lean();
 
   if (!internalUsers.length) {
-    return { sent: 0, failed: 0, skipped: 0, reason: 'No internal admin or staff users found' };
+    return { sent: 0, failed: 0, skipped: 0, reason: 'No dashboard users found' };
   }
 
   const message = buildPaymentSubmittedAdminSms({

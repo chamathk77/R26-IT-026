@@ -11,7 +11,6 @@ export interface LoginUser {
   role: string;
   shopId?: string;
   isFirsttimeLogin?: boolean;
-  isInternalUser?: boolean;
   [key: string]: unknown;
 }
 

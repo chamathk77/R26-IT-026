@@ -56,7 +56,6 @@ async function clearShopUserTokens(shopId) {
   const result = await User.updateMany(
     {
       shopId: normalizedShopId,
-      isInternalUser: { $ne: true },
       token: { $ne: null },
     },
     { $set: { token: null } },

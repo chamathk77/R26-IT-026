@@ -1,5 +1,8 @@
 const mongoose = require('mongoose');
 
+/** Mobile app shop users only — dashboard staff use DashboardUser. */
+const SHOP_ROLES = ['admin', 'owner', 'staff'];
+
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
@@ -8,7 +11,7 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true },
     role: {
       type: String,
-      enum: ['admin', 'owner', 'staff', 'internalAdmin', 'internalStaff'],
+      enum: SHOP_ROLES,
       required: true,
     },
     note: {
@@ -16,16 +19,11 @@ const userSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
-    isInternalUser: {
-      type: Boolean,
-      default: false,
-      index: true,
-    },
     shopId: {
       type: String,
       trim: true,
       uppercase: true,
-      default: '',
+      required: true,
       index: true,
     },
     isFirsttimeLogin: {
@@ -45,7 +43,11 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-module.exports = mongoose.model('User', userSchema);
+const User = mongoose.model('User', userSchema);
+
+User.SHOP_ROLES = SHOP_ROLES;
+
+module.exports = User;

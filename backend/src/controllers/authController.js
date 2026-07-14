@@ -276,15 +276,6 @@ const login = async (req, res) => {
       });
     }
 
-    if (user.isInternalUser) {
-      return res.status(403).json({
-        success: false,
-        message:
-          'This account is for the SmartCost web dashboard only. Please sign in on the dashboard.',
-        code: 'INTERNAL_USER_MOBILE_BLOCKED',
-      });
-    }
-
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({

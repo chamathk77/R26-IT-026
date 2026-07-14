@@ -1,9 +1,12 @@
 const bcrypt = require('bcryptjs');
+const DashboardUser = require('../../models/dashboardUser');
 const User = require('../../models/user');
-const { createAndSaveLoginToken, clearUserToken } = require('../../utils/tokenHelper');
+const {
+  createAndSaveDashboardLoginToken,
+  clearDashboardUserToken,
+} = require('../../utils/dashboardTokenHelper');
 const { formatUserForLogin } = require('../../utils/trialPromptHelper');
 
-const INTERNAL_ROLES = ['internalAdmin', 'internalStaff'];
 const DASHBOARD_TOKEN_SECONDS = 7 * 24 * 60 * 60;
 
 const internalLogin = async (req, res) => {
@@ -19,7 +22,7 @@ const internalLogin = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({ email: emailLower });
+    const user = await DashboardUser.findOne({ email: emailLower });
     if (!user) {
       return res.status(400).json({
         success: false,
@@ -27,11 +30,11 @@ const internalLogin = async (req, res) => {
       });
     }
 
-    if (!user.isInternalUser) {
+    if (user.isActive === false) {
       return res.status(403).json({
         success: false,
-        message: 'This account cannot access the SmartCost dashboard',
-        code: 'NOT_INTERNAL_USER',
+        message: 'This dashboard account has been deactivated',
+        code: 'DASHBOARD_USER_INACTIVE',
       });
     }
 
@@ -43,7 +46,7 @@ const internalLogin = async (req, res) => {
       });
     }
 
-    const token = await createAndSaveLoginToken(user._id);
+    const token = await createAndSaveDashboardLoginToken(user._id);
 
     res.status(200).json({
       success: true,
@@ -74,16 +77,23 @@ const internalSignup = async (req, res) => {
       });
     }
 
-    if (!INTERNAL_ROLES.includes(roleNormalized)) {
+    if (!DashboardUser.DASHBOARD_ROLES.includes(roleNormalized)) {
       return res.status(400).json({
         success: false,
-        message: `Role must be one of: ${INTERNAL_ROLES.join(', ')}`,
+        message: `Role must be one of: ${DashboardUser.DASHBOARD_ROLES.join(', ')}`,
       });
     }
 
-    const existingUser = await User.findOne({
-      $or: [{ email: emailLower }, { phone: phoneTrimmed }],
-    });
+    const [existingDashboardUser, existingShopUser] = await Promise.all([
+      DashboardUser.findOne({
+        $or: [{ email: emailLower }, { phone: phoneTrimmed }],
+      }).lean(),
+      User.findOne({
+        $or: [{ email: emailLower }, { phone: phoneTrimmed }],
+      }).lean(),
+    ]);
+
+    const existingUser = existingDashboardUser ?? existingShopUser;
     if (existingUser) {
       const msg =
         existingUser.email === emailLower
@@ -94,21 +104,18 @@ const internalSignup = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = await User.create({
+    const user = await DashboardUser.create({
       name: nameTrimmed,
       email: emailLower,
       phone: phoneTrimmed,
       password: hashedPassword,
       role: roleNormalized,
       note: noteTrimmed,
-      isInternalUser: true,
-      shopId: '',
-      isFirsttimeLogin: false,
     });
 
     res.status(201).json({
       success: true,
-      message: 'Internal dashboard user created successfully',
+      message: 'Dashboard user created successfully',
       user: formatUserForLogin(user),
     });
   } catch (error) {
@@ -124,7 +131,7 @@ const internalSignup = async (req, res) => {
 
 const internalLogout = async (req, res) => {
   try {
-    await clearUserToken(req.user.id);
+    await clearDashboardUserToken(req.user.id);
     res.status(200).json({
       success: true,
       message: 'Logged out successfully',

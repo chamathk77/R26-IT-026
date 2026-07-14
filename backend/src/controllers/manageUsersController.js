@@ -13,10 +13,7 @@ function isValidShopIdFormat(shopId) {
 }
 
 function shopMobileUserFilter(shopId) {
-  return {
-    shopId,
-    isInternalUser: { $ne: true },
-  };
+  return { shopId };
 }
 
 async function getShopMobileUserCount(shopId) {
@@ -184,10 +181,7 @@ const getShopUsers = async (req, res) => {
     }
     const { ownerShopId } = ownerAccess;
 
-    const users = await User.find({
-      shopId: ownerShopId,
-      isInternalUser: { $ne: true },
-    })
+    const users = await User.find(shopMobileUserFilter(ownerShopId))
       .select('name email phone role shopId createdAt updatedAt')
       .sort({ createdAt: -1 })
       .lean();
@@ -229,8 +223,7 @@ const updateShopUser = async (req, res) => {
 
     const user = await User.findOne({
       _id: userId,
-      shopId: ownerShopId,
-      isInternalUser: { $ne: true },
+      ...shopMobileUserFilter(ownerShopId),
     });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
@@ -333,8 +326,7 @@ const deleteShopUser = async (req, res) => {
 
     const user = await User.findOne({
       _id: userId,
-      shopId: ownerShopId,
-      isInternalUser: { $ne: true },
+      ...shopMobileUserFilter(ownerShopId),
     });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });

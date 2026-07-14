@@ -1,10 +1,10 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/user');
-const { validateStoredToken } = require('./authMiddleware');
+const DashboardUser = require('../models/dashboardUser');
+const { validateStoredDashboardToken } = require('../utils/dashboardTokenHelper');
 
-async function loadInternalUser(userId) {
-  return User.findById(userId)
-    .select('isInternalUser role name email phone')
+async function loadDashboardUser(userId) {
+  return DashboardUser.findById(userId)
+    .select('role name email phone isActive')
     .lean();
 }
 
@@ -34,7 +34,7 @@ function createProtectDashboard() {
       if (error.name === 'TokenExpiredError') {
         const expiredPayload = jwt.decode(bearerToken);
         if (expiredPayload?.id) {
-          await User.findByIdAndUpdate(expiredPayload.id, { token: null });
+          await DashboardUser.findByIdAndUpdate(expiredPayload.id, { token: null });
         }
         return res.status(401).json({
           success: false,
@@ -52,33 +52,34 @@ function createProtectDashboard() {
       });
     }
 
-    const tokenCheck = await validateStoredToken(decoded.id, bearerToken);
+    const tokenCheck = await validateStoredDashboardToken(decoded.id, bearerToken);
     if (!tokenCheck.valid) {
       return res.status(tokenCheck.status).json(tokenCheck.body);
     }
 
     try {
-      const user = await loadInternalUser(decoded.id);
+      const user = await loadDashboardUser(decoded.id);
       if (!user) {
         return res.status(401).json({
           success: false,
-          message: 'User not found',
+          message: 'Dashboard user not found',
           code: 'USER_NOT_FOUND',
         });
       }
 
-      if (!user.isInternalUser) {
+      if (user.isActive === false) {
         return res.status(403).json({
           success: false,
-          message: 'This area is for SmartCost internal dashboard users only',
-          code: 'NOT_INTERNAL_USER',
+          message: 'This dashboard account has been deactivated',
+          sessionEnded: true,
+          code: 'DASHBOARD_USER_INACTIVE',
         });
       }
 
       req.user = {
         id: decoded.id,
         role: user.role,
-        isInternalUser: true,
+        isDashboardUser: true,
       };
       next();
     } catch (error) {
@@ -87,21 +88,33 @@ function createProtectDashboard() {
   };
 }
 
-async function requireInternalAdmin(req, res, next) {
+async function requireDashboardAdmin(req, res, next) {
   try {
-    const user = await User.findById(req.user.id).select('role isInternalUser').lean();
-    if (!user?.isInternalUser) {
+    const user = await DashboardUser.findById(req.user.id)
+      .select('role isActive')
+      .lean();
+
+    if (!user) {
       return res.status(403).json({
         success: false,
-        message: 'Internal dashboard access required',
-        code: 'NOT_INTERNAL_USER',
+        message: 'Dashboard access required',
+        code: 'NOT_DASHBOARD_USER',
       });
     }
-    if (user.role !== 'internalAdmin') {
+
+    if (user.isActive === false) {
       return res.status(403).json({
         success: false,
-        message: 'Only internal admins can create dashboard users',
-        code: 'INTERNAL_ADMIN_REQUIRED',
+        message: 'This dashboard account has been deactivated',
+        code: 'DASHBOARD_USER_INACTIVE',
+      });
+    }
+
+    if (user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only dashboard admins can create dashboard users',
+        code: 'DASHBOARD_ADMIN_REQUIRED',
       });
     }
     next();
@@ -115,5 +128,5 @@ const protectDashboard = createProtectDashboard();
 module.exports = {
   protectDashboard,
   createProtectDashboard,
-  requireInternalAdmin,
+  requireDashboardAdmin,
 };
