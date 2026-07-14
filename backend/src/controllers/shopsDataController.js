@@ -1,4 +1,5 @@
 const ShopsData = require('../models/shopsData');
+const Branch = require('../models/branch');
 const User = require('../models/user');
 const Payments = require('../models/payments');
 const mongoose = require('mongoose');
@@ -134,9 +135,25 @@ const createShopOnboarding = async (req, res) => {
       onboardStep: 'shopRegistered',
     });
 
+    let branch;
+    try {
+      branch = await Branch.create({
+        shopId: shop.shopId,
+        branchName: String(shopName).trim(),
+        address: String(address).trim(),
+        phone: ownerMobileTrimmed,
+        isMainBranch: true,
+        isActive: true,
+      });
+    } catch (branchError) {
+      await ShopsData.deleteOne({ _id: shop._id });
+      throw branchError;
+    }
+
     res.status(201).json({
       success: true,
       shopId: shop.shopId,
+      branchId: branch.branchId,
       onboardStep: shop.onboardStep,
       message: 'Shop onboarding saved',
     });
@@ -1563,13 +1580,17 @@ const removeOnboardingData = async (req, res) => {
       });
     }
 
-    const userDeleteResult = await User.deleteMany({ shopId: normalizedShopId });
+    const [userDeleteResult, branchDeleteResult] = await Promise.all([
+      User.deleteMany({ shopId: normalizedShopId }),
+      Branch.deleteMany({ shopId: normalizedShopId }),
+    ]);
     await ShopsData.deleteOne({ shopId: normalizedShopId });
 
     res.status(200).json({
       success: true,
       shopId: normalizedShopId,
       removedUsers: userDeleteResult.deletedCount,
+      removedBranches: branchDeleteResult.deletedCount,
       message: 'Onboarding data removed successfully',
     });
   } catch (error) {
