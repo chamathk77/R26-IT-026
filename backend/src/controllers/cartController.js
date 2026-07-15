@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Cart = require('../models/cart');
 const Product = require('../models/product');
+const BranchStock = require('../models/branchStock');
 
 const CART_STATUSES = Cart.CART_STATUSES;
 
@@ -8,8 +9,16 @@ function normalizeShopId(value) {
   return value ? String(value).trim().toUpperCase() : '';
 }
 
+function normalizeBranchId(value) {
+  return value ? String(value).trim().toUpperCase() : '';
+}
+
 function getRequestShopId(req) {
   return normalizeShopId(req.user?.shopId);
+}
+
+function getRequestBranchId(req) {
+  return normalizeBranchId(req.user?.branchId);
 }
 
 function requireShopId(req, res) {
@@ -21,20 +30,45 @@ function requireShopId(req, res) {
   return shopId;
 }
 
-function buildShopCartFilter(shopId, userId, extra = {}) {
-  return { shopId: normalizeShopId(shopId), user: userId, ...extra };
+/** Requires shopId + branchId from token for all cart operations. */
+function requireShopAndBranchId(req, res) {
+  const shopId = requireShopId(req, res);
+  if (!shopId) return null;
+
+  const branchId = getRequestBranchId(req);
+  if (!branchId) {
+    res.status(400).json({ success: false, message: 'Branch id is required' });
+    return null;
+  }
+
+  return { shopId, branchId };
 }
 
-function assertCartAccess(cart, shopId, userId) {
+function buildShopCartFilter(shopId, branchId, userId, extra = {}) {
+  return {
+    shopId: normalizeShopId(shopId),
+    branchId: normalizeBranchId(branchId),
+    user: userId,
+    ...extra,
+  };
+}
+
+function assertCartAccess(cart, shopId, branchId, userId) {
   if (!cart) {
     throw new Error('Cart session not found');
   }
 
   const normalizedShopId = normalizeShopId(shopId);
   const cartShopId = normalizeShopId(cart.shopId);
+  const normalizedBranchId = normalizeBranchId(branchId);
+  const cartBranchId = normalizeBranchId(cart.branchId);
 
   if (!normalizedShopId || cartShopId !== normalizedShopId) {
     throw new Error('Cart session not found for this shop');
+  }
+
+  if (!normalizedBranchId || cartBranchId !== normalizedBranchId) {
+    throw new Error('Cart session not found for this branch');
   }
 
   if (String(cart.user) !== String(userId)) {
@@ -135,6 +169,7 @@ function isCheckoutClientError(message) {
     message.startsWith('Service amount is required for ') ||
     message.startsWith('Valid service amount is required for ') ||
     message.startsWith('Insufficient stock for ') ||
+    message === 'Branch id is required' ||
     message === 'Discount value is required when discount is enabled' ||
     message === 'Discount type must be amount or percentage when discount is enabled' ||
     message === 'Percentage discount cannot exceed 100'
@@ -168,27 +203,53 @@ function getInventoryProductLabel(product, fallbackName) {
   return product?.productName?.trim() || fallbackName || 'Product';
 }
 
-async function rollbackInventoryDeductions(shopId, deductions) {
+async function rollbackInventoryDeductions(shopId, branchId, deductions) {
   if (!deductions.length) return;
 
   await Promise.all(
     deductions.map(({ productId, quantity }) =>
-      Product.updateOne({ _id: productId, shopId }, { $inc: { qty: quantity } }),
+      BranchStock.updateOne(
+        { shopId, branchId, productId },
+        { $inc: { qty: quantity } },
+      ),
     ),
   );
 }
 
 async function validateAndDeductInventory(cart, productMap) {
   const shopId = normalizeShopId(cart.shopId);
+  const branchId = normalizeBranchId(cart.branchId);
+  if (!branchId) {
+    throw new Error('Branch id is required');
+  }
+
   const requirements = aggregateInventoryRequirements(cart);
   const deductions = [];
+
+  const inventoryProductIds = [...requirements.values()]
+    .filter((requirement) => productMap.get(requirement.productId)?.isInventoryAvailable)
+    .map((requirement) => requirement.productId);
+
+  const stocks = inventoryProductIds.length
+    ? await BranchStock.find({
+        shopId,
+        branchId,
+        productId: { $in: inventoryProductIds },
+      })
+        .select('productId qty')
+        .lean()
+    : [];
+
+  const qtyByProductId = new Map(
+    stocks.map((stock) => [String(stock.productId), Number(stock.qty) || 0]),
+  );
 
   try {
     for (const requirement of requirements.values()) {
       const product = productMap.get(requirement.productId);
       if (!product?.isInventoryAvailable) continue;
 
-      const availableQty = product.qty == null ? 0 : Number(product.qty);
+      const availableQty = qtyByProductId.get(requirement.productId) ?? 0;
       const label = getInventoryProductLabel(product, requirement.itemName);
 
       if (!Number.isFinite(requirement.quantity) || requirement.quantity <= 0) {
@@ -207,11 +268,11 @@ async function validateAndDeductInventory(cart, productMap) {
       if (!product?.isInventoryAvailable) continue;
 
       const label = getInventoryProductLabel(product, requirement.itemName);
-      const updated = await Product.findOneAndUpdate(
+      const updated = await BranchStock.findOneAndUpdate(
         {
-          _id: requirement.productId,
           shopId,
-          isInventoryAvailable: true,
+          branchId,
+          productId: requirement.productId,
           qty: { $gte: requirement.quantity },
         },
         { $inc: { qty: -requirement.quantity } },
@@ -230,7 +291,7 @@ async function validateAndDeductInventory(cart, productMap) {
       });
     }
   } catch (error) {
-    await rollbackInventoryDeductions(shopId, deductions);
+    await rollbackInventoryDeductions(shopId, branchId, deductions);
     throw error;
   }
 }
@@ -298,7 +359,7 @@ async function buildProductDetailsMap(productIds, shopId) {
   if (uniqueIds.length === 0 || !normalizedShopId) return new Map();
 
   const products = await Product.find({ _id: { $in: uniqueIds }, shopId: normalizedShopId })
-    .select('amount cost type isInventoryAvailable qty productName')
+    .select('amount cost type isInventoryAvailable productName')
     .lean();
 
   return new Map(products.map((product) => [String(product._id), product]));
@@ -338,7 +399,12 @@ async function finalizeCartForProceed(cart, options = {}) {
 
 async function proceedCartSession(cart, options = {}) {
   if (options.shopId && options.userId) {
-    assertCartAccess(cart, options.shopId, options.userId);
+    assertCartAccess(
+      cart,
+      options.shopId,
+      options.branchId ?? cart.branchId,
+      options.userId,
+    );
   }
 
   if (cart.status !== 'added') {
@@ -356,41 +422,58 @@ async function proceedCartSession(cart, options = {}) {
   return cart;
 }
 
-async function getNextCartNumber(shopId) {
+async function getNextCartNumber(shopId, branchId) {
   const normalizedShopId = normalizeShopId(shopId);
+  const normalizedBranchId = normalizeBranchId(branchId);
   if (!normalizedShopId) {
     throw new Error('Shop id is required');
   }
+  if (!normalizedBranchId) {
+    throw new Error('Branch id is required');
+  }
 
-  const latest = await Cart.findOne({ shopId: normalizedShopId })
+  const latest = await Cart.findOne({
+    shopId: normalizedShopId,
+    branchId: normalizedBranchId,
+  })
     .sort({ cartNumber: -1 })
     .select('cartNumber')
     .lean();
 
   let candidate = (latest?.cartNumber ?? 0) + 1;
 
-  // One shop cannot reuse the same cart number.
-  while (await Cart.exists({ shopId: normalizedShopId, cartNumber: candidate })) {
+  while (
+    await Cart.exists({
+      shopId: normalizedShopId,
+      branchId: normalizedBranchId,
+      cartNumber: candidate,
+    })
+  ) {
     candidate += 1;
   }
 
   return candidate;
 }
 
-async function createPendingCart({ shopId, userId, sessionId }) {
+async function createPendingCart({ shopId, branchId, userId, sessionId }) {
   const normalizedShopId = normalizeShopId(shopId);
+  const normalizedBranchId = normalizeBranchId(branchId);
   if (!normalizedShopId) {
     throw new Error('Shop id is required');
+  }
+  if (!normalizedBranchId) {
+    throw new Error('Branch id is required');
   }
 
   const MAX_ATTEMPTS = 5;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-    const cartNumber = await getNextCartNumber(normalizedShopId);
+    const cartNumber = await getNextCartNumber(normalizedShopId, normalizedBranchId);
 
     try {
       return await Cart.create({
         shopId: normalizedShopId,
+        branchId: normalizedBranchId,
         user: userId,
         sessionId,
         cartNumber,
@@ -417,7 +500,7 @@ async function createPendingCart({ shopId, userId, sessionId }) {
     }
   }
 
-  throw new Error('Could not assign a unique cart number for this shop');
+  throw new Error('Could not assign a unique cart number for this branch');
 }
 
 async function buildProductPriceMap(productIds, shopId) {
@@ -444,6 +527,7 @@ function mapCartSessionSummary(cart) {
     sessionId: cart.sessionId,
     cartNumber: cart.cartNumber,
     shopId: cart.shopId,
+    branchId: cart.branchId,
     status: cart.status,
     itemCount: cart.items.length,
     totalAmount: Number(cart.totalPrice.toFixed(2)),
@@ -475,6 +559,7 @@ async function flattenCartItems(carts, shopId) {
         _id: `${cart._id}:${item.productId}`,
         user: cart.user,
         shopId: cart.shopId,
+        branchId: cart.branchId,
         sessionId: cart.sessionId,
         cartNumber: cart.cartNumber,
         product: item.productId,
@@ -493,13 +578,15 @@ async function flattenCartItems(carts, shopId) {
 /** Create empty pending cart when user starts a new order (+ icon flow). */
 const createCartSession = async (req, res) => {
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
     const sessionId = new mongoose.Types.ObjectId();
 
     const cart = await createPendingCart({
       shopId,
+      branchId,
       userId: req.user.id,
       sessionId,
     });
@@ -509,6 +596,7 @@ const createCartSession = async (req, res) => {
       sessionId: cart.sessionId,
       cartNumber: cart.cartNumber,
       shopId: cart.shopId,
+      branchId: cart.branchId,
       status: cart.status,
       message: 'Pending cart created',
     });
@@ -516,7 +604,7 @@ const createCartSession = async (req, res) => {
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
-        message: 'This cart number already exists for your shop. Please retry.',
+        message: 'This cart number already exists for your branch. Please retry.',
       });
     }
     res.status(500).json({ success: false, message: error.message });
@@ -525,8 +613,9 @@ const createCartSession = async (req, res) => {
 
 const getCartSessions = async (req, res) => {
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
     const statusRaw = req.query?.status;
     const statusFilter =
@@ -541,7 +630,7 @@ const getCartSessions = async (req, res) => {
       });
     }
 
-    const filter = buildShopCartFilter(shopId, req.user.id);
+    const filter = buildShopCartFilter(shopId, branchId, req.user.id);
     if (statusFilter) {
       filter.status = statusFilter;
     }
@@ -551,6 +640,7 @@ const getCartSessions = async (req, res) => {
     res.status(200).json({
       success: true,
       shopId,
+      branchId,
       data: carts.map(mapCartSessionSummary),
       message: 'Cart sessions loaded',
     });
@@ -561,8 +651,9 @@ const getCartSessions = async (req, res) => {
 
 const getCartItems = async (req, res) => {
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
     const { sessionId } = req.query;
     const statusRaw = req.query?.status;
@@ -571,7 +662,7 @@ const getCartItems = async (req, res) => {
         ? null
         : String(statusRaw).trim().toLowerCase();
 
-    const filter = buildShopCartFilter(shopId, req.user.id);
+    const filter = buildShopCartFilter(shopId, branchId, req.user.id);
 
     if (sessionId !== undefined && sessionId !== null && sessionId !== '') {
       if (!mongoose.Types.ObjectId.isValid(sessionId)) {
@@ -596,6 +687,7 @@ const getCartItems = async (req, res) => {
     res.status(200).json({
       success: true,
       shopId,
+      branchId,
       data: items,
       message: 'Cart items loaded',
     });
@@ -610,8 +702,9 @@ const getCartItems = async (req, res) => {
 /** Add or update a product line on an existing cart (cart must be created first). */
 const addCartItem = async (req, res) => {
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
     const { productId, quantity, sessionId } = req.body;
 
@@ -634,7 +727,9 @@ const addCartItem = async (req, res) => {
       });
     }
 
-    const cart = await Cart.findOne(buildShopCartFilter(shopId, req.user.id, { sessionId }));
+    const cart = await Cart.findOne(
+      buildShopCartFilter(shopId, branchId, req.user.id, { sessionId }),
+    );
     if (!cart) {
       return res.status(404).json({
         success: false,
@@ -642,7 +737,7 @@ const addCartItem = async (req, res) => {
       });
     }
 
-    assertCartAccess(cart, shopId, req.user.id);
+    assertCartAccess(cart, shopId, branchId, req.user.id);
 
     if (cart.status !== 'pending') {
       return res.status(400).json({
@@ -688,6 +783,7 @@ const addCartItem = async (req, res) => {
             _id: `${cart._id}:${productId}`,
             user: cart.user,
             shopId: cart.shopId,
+            branchId: cart.branchId,
             sessionId: cart.sessionId,
             cartNumber: cart.cartNumber,
             product: productId,
@@ -703,6 +799,7 @@ const addCartItem = async (req, res) => {
       success: true,
       sessionId: cart.sessionId,
       cartNumber: cart.cartNumber,
+      branchId: cart.branchId,
       status: cart.status,
       data: responseItem,
       message: isUpdate ? 'Cart item updated' : 'Cart item added',
@@ -710,6 +807,7 @@ const addCartItem = async (req, res) => {
   } catch (error) {
     if (
       error.message === 'Cart session not found for this shop' ||
+      error.message === 'Cart session not found for this branch' ||
       error.message === 'Cart session not found for this user' ||
       error.message === 'Cart data shop mismatch'
     ) {
@@ -721,8 +819,9 @@ const addCartItem = async (req, res) => {
 
 const updateCartSessionStatus = async (req, res) => {
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
     const { sessionId } = req.params;
 
@@ -751,7 +850,7 @@ const updateCartSessionStatus = async (req, res) => {
     }
 
     const cart = await Cart.findOneAndUpdate(
-      buildShopCartFilter(shopId, req.user.id, { sessionId }),
+      buildShopCartFilter(shopId, branchId, req.user.id, { sessionId }),
       { $set: { status: statusNormalized } },
       { returnDocument: 'after', runValidators: true },
     );
@@ -766,6 +865,7 @@ const updateCartSessionStatus = async (req, res) => {
       success: true,
       sessionId,
       cartNumber: cart.cartNumber,
+      branchId: cart.branchId,
       status: cart.status,
       data: items,
       message: 'Cart session status updated',
@@ -773,6 +873,7 @@ const updateCartSessionStatus = async (req, res) => {
   } catch (error) {
     if (
       error.message === 'Cart session not found for this shop' ||
+      error.message === 'Cart session not found for this branch' ||
       error.message === 'Cart session not found for this user' ||
       error.message === 'Cart data shop mismatch'
     ) {
@@ -785,8 +886,9 @@ const updateCartSessionStatus = async (req, res) => {
 /** Checkout added cart: finalize unit costs, discount flags, and set status to proceed. */
 const checkoutCartSession = async (req, res) => {
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
     const { sessionId } = req.params;
 
@@ -795,7 +897,7 @@ const checkoutCartSession = async (req, res) => {
     }
 
     const cart = await Cart.findOne(
-      buildShopCartFilter(shopId, req.user.id, { sessionId, status: 'added' }),
+      buildShopCartFilter(shopId, branchId, req.user.id, { sessionId, status: 'added' }),
     );
 
     if (!cart) {
@@ -807,6 +909,7 @@ const checkoutCartSession = async (req, res) => {
 
     await proceedCartSession(cart, {
       shopId,
+      branchId,
       userId: req.user.id,
       discount: req.body?.discount,
       isDiscount: req.body?.isDiscount,
@@ -819,6 +922,7 @@ const checkoutCartSession = async (req, res) => {
       success: true,
       sessionId: cart.sessionId,
       cartNumber: cart.cartNumber,
+      branchId: cart.branchId,
       status: cart.status,
       isDiscount: cart.isDiscount,
       isDiscountPercentage: cart.isDiscountPercentage,
@@ -835,6 +939,7 @@ const checkoutCartSession = async (req, res) => {
     }
     if (
       error.message === 'Cart session not found for this shop' ||
+      error.message === 'Cart session not found for this branch' ||
       error.message === 'Cart session not found for this user' ||
       error.message === 'Cart data shop mismatch'
     ) {
@@ -847,8 +952,9 @@ const checkoutCartSession = async (req, res) => {
 
 const updateCartSessionItem = async (req, res) => {
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
     const { sessionId } = req.params;
 
@@ -869,12 +975,14 @@ const updateCartSessionItem = async (req, res) => {
       });
     }
 
-    const cart = await Cart.findOne(buildShopCartFilter(shopId, req.user.id, { sessionId }));
+    const cart = await Cart.findOne(
+      buildShopCartFilter(shopId, branchId, req.user.id, { sessionId }),
+    );
     if (!cart) {
       return res.status(404).json({ success: false, message: 'Cart session not found' });
     }
 
-    assertCartAccess(cart, shopId, req.user.id);
+    assertCartAccess(cart, shopId, branchId, req.user.id);
 
     const itemIndex = cart.items.findIndex((item) => String(item.productId) === String(productId));
     if (itemIndex < 0) {
@@ -898,6 +1006,7 @@ const updateCartSessionItem = async (req, res) => {
       success: true,
       sessionId,
       cartNumber: cart.cartNumber,
+      branchId: cart.branchId,
       totalPrice: cart.totalPrice,
       data: items,
       message: 'Cart item updated',
@@ -905,6 +1014,7 @@ const updateCartSessionItem = async (req, res) => {
   } catch (error) {
     if (
       error.message === 'Cart session not found for this shop' ||
+      error.message === 'Cart session not found for this branch' ||
       error.message === 'Cart session not found for this user' ||
       error.message === 'Cart data shop mismatch'
     ) {
@@ -914,8 +1024,8 @@ const updateCartSessionItem = async (req, res) => {
   }
 };
 
-async function removeItemFromCart(cart, productId, shopId, userId) {
-  assertCartAccess(cart, shopId, userId);
+async function removeItemFromCart(cart, productId, shopId, branchId, userId) {
+  assertCartAccess(cart, shopId, branchId, userId);
 
   const nextItems = cart.items.filter((item) => String(item.productId) !== String(productId));
 
@@ -925,7 +1035,7 @@ async function removeItemFromCart(cart, productId, shopId, userId) {
 
   if (nextItems.length === 0) {
     const deleted = await Cart.findOneAndDelete(
-      buildShopCartFilter(shopId, userId, { sessionId: cart.sessionId }),
+      buildShopCartFilter(shopId, branchId, userId, { sessionId: cart.sessionId }),
     );
     if (!deleted) {
       return { found: false };
@@ -935,6 +1045,7 @@ async function removeItemFromCart(cart, productId, shopId, userId) {
       found: true,
       sessionId: cart.sessionId,
       cartNumber: cart.cartNumber,
+      branchId: cart.branchId,
       cartDeleted: true,
       totalPrice: 0,
       data: [],
@@ -952,6 +1063,7 @@ async function removeItemFromCart(cart, productId, shopId, userId) {
     found: true,
     sessionId: cart.sessionId,
     cartNumber: cart.cartNumber,
+    branchId: cart.branchId,
     cartDeleted: false,
     totalPrice: cart.totalPrice,
     data: items,
@@ -961,8 +1073,9 @@ async function removeItemFromCart(cart, productId, shopId, userId) {
 
 const removeCartSessionItem = async (req, res) => {
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
     const { sessionId, productId } = req.params;
 
@@ -974,12 +1087,14 @@ const removeCartSessionItem = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Valid product id is required' });
     }
 
-    const cart = await Cart.findOne(buildShopCartFilter(shopId, req.user.id, { sessionId }));
+    const cart = await Cart.findOne(
+      buildShopCartFilter(shopId, branchId, req.user.id, { sessionId }),
+    );
     if (!cart) {
       return res.status(404).json({ success: false, message: 'Cart session not found' });
     }
 
-    const result = await removeItemFromCart(cart, productId, shopId, req.user.id);
+    const result = await removeItemFromCart(cart, productId, shopId, branchId, req.user.id);
     if (!result.found) {
       return res.status(404).json({ success: false, message: 'Cart item not found' });
     }
@@ -988,6 +1103,7 @@ const removeCartSessionItem = async (req, res) => {
       success: true,
       sessionId: result.sessionId,
       cartNumber: result.cartNumber,
+      branchId: result.branchId,
       cartDeleted: result.cartDeleted,
       totalPrice: result.totalPrice,
       data: result.data,
@@ -996,6 +1112,7 @@ const removeCartSessionItem = async (req, res) => {
   } catch (error) {
     if (
       error.message === 'Cart session not found for this shop' ||
+      error.message === 'Cart session not found for this branch' ||
       error.message === 'Cart session not found for this user' ||
       error.message === 'Cart data shop mismatch'
     ) {
@@ -1007,8 +1124,9 @@ const removeCartSessionItem = async (req, res) => {
 
 const deleteCartSession = async (req, res) => {
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
     const { sessionId } = req.params;
 
@@ -1017,7 +1135,7 @@ const deleteCartSession = async (req, res) => {
     }
 
     const cart = await Cart.findOneAndDelete(
-      buildShopCartFilter(shopId, req.user.id, { sessionId }),
+      buildShopCartFilter(shopId, branchId, req.user.id, { sessionId }),
     );
 
     if (!cart) {
@@ -1028,6 +1146,7 @@ const deleteCartSession = async (req, res) => {
       success: true,
       sessionId,
       cartNumber: cart.cartNumber,
+      branchId: cart.branchId,
       message: 'Cart session deleted',
     });
   } catch (error) {
