@@ -27,7 +27,7 @@ export const createCategory_Service = createAsyncThunk(
         '/api/categories',
         {
           name: payload.name.trim(),
-          description: payload.description.trim(),
+          description: (payload.description ?? '').trim(),
           colorCode: payload.colorCode.trim().toUpperCase(),
         },
       );
@@ -59,7 +59,7 @@ export const updateCategory_Service = createAsyncThunk(
         `/api/categories/${encodeURIComponent(payload.id)}/update`,
         {
           name: payload.name.trim(),
-          description: payload.description.trim(),
+          description: (payload.description ?? '').trim(),
           colorCode: payload.colorCode.trim().toUpperCase(),
         },
       );

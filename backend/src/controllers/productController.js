@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const Product = require('../models/product');
 const Category = require('../models/category');
+const Branch = require('../models/branch');
+const BranchStock = require('../models/branchStock');
 const User = require('../models/user');
 const { publicImagePath, unlinkProductImageIfLocal } = require('../middleware/uploadProductImage');
 
@@ -48,13 +50,48 @@ function getRequestShopId(req) {
   return req.user?.shopId ? String(req.user.shopId).trim().toUpperCase() : '';
 }
 
+function getRequestBranchId(req) {
+  return req.user?.branchId ? String(req.user.branchId).trim().toUpperCase() : '';
+}
+
 function applyServiceTypeFields(updates) {
   updates.type = 'service';
   updates.isInventoryAvailable = false;
   updates.amount = null;
-  updates.qty = null;
   updates.barcode = null;
   updates.cost = null;
+}
+
+/**
+ * Creates BranchStock for every shop branch (active + inactive).
+ * Logged-in branch gets openingQty; all other branches get 0.
+ */
+async function createBranchStockForProduct({ shopId, productId, currentBranchId, qty }) {
+  const branches = await Branch.find({ shopId }).select('branchId').lean();
+  if (!branches.length) {
+    return { error: 'No branches found for this shop' };
+  }
+
+  const current = String(currentBranchId).trim().toUpperCase();
+  const hasCurrent = branches.some(
+    (b) => String(b.branchId).trim().toUpperCase() === current,
+  );
+  if (!hasCurrent) {
+    return { error: 'Logged-in branch not found for this shop' };
+  }
+
+  const docs = branches.map((b) => {
+    const branchId = String(b.branchId).trim().toUpperCase();
+    return {
+      shopId,
+      branchId,
+      productId,
+      qty: branchId === current ? qty : 0,
+    };
+  });
+
+  await BranchStock.insertMany(docs);
+  return { error: null, currentQty: qty };
 }
 
 function parseBooleanInput(value, fallback = false) {
@@ -143,38 +180,130 @@ function applyInventoryUpdates(updates, existing, body) {
 
   const effectiveInventory = updates.isInventoryAvailable ?? existing.isInventoryAvailable;
   const qtyInput = body.qty !== undefined ? body.qty : body.productQty;
+  const qtyProvided = qtyInput !== undefined;
 
   if (!effectiveInventory) {
-    updates.qty = null;
-    return null;
+    return {
+      error: null,
+      inventoryEnabled: false,
+      qty: null,
+      qtyProvided: false,
+    };
   }
 
   if (inventoryToggled && nextInventoryAvailable) {
-    const resolved = resolveQtyFields({
-      isInventoryAvailable: true,
-      qty: qtyInput !== undefined ? qtyInput : existing.qty,
-      requireQty: true,
-    });
-    if (resolved.error) {
-      return resolved.error;
-    }
-    updates.qty = resolved.qty;
-    return null;
-  }
-
-  if (qtyInput !== undefined) {
     const resolved = resolveQtyFields({
       isInventoryAvailable: true,
       qty: qtyInput,
       requireQty: true,
     });
     if (resolved.error) {
-      return resolved.error;
+      return { error: resolved.error };
     }
-    updates.qty = resolved.qty;
+    return {
+      error: null,
+      inventoryEnabled: true,
+      qty: resolved.qty,
+      qtyProvided: true,
+    };
   }
 
-  return null;
+  if (qtyProvided) {
+    const resolved = resolveQtyFields({
+      isInventoryAvailable: true,
+      qty: qtyInput,
+      requireQty: true,
+    });
+    if (resolved.error) {
+      return { error: resolved.error };
+    }
+    return {
+      error: null,
+      inventoryEnabled: true,
+      qty: resolved.qty,
+      qtyProvided: true,
+    };
+  }
+
+  return {
+    error: null,
+    inventoryEnabled: true,
+    qty: null,
+    qtyProvided: false,
+  };
+}
+
+/**
+ * Inventory ON:
+ * - Update logged-in branch qty when provided
+ * - Create missing branch rows (current needs qty; others get 0)
+ * Inventory managed off is handled by deleteBranchStockForProduct.
+ */
+async function syncBranchStockOnUpdate({
+  shopId,
+  productId,
+  currentBranchId,
+  qty,
+  qtyProvided,
+}) {
+  const branches = await Branch.find({ shopId }).select('branchId').lean();
+  if (!branches.length) {
+    return { error: 'No branches found for this shop' };
+  }
+
+  const current = String(currentBranchId).trim().toUpperCase();
+  const hasCurrent = branches.some(
+    (b) => String(b.branchId).trim().toUpperCase() === current,
+  );
+  if (!hasCurrent) {
+    return { error: 'Logged-in branch not found for this shop' };
+  }
+
+  const existingStocks = await BranchStock.find({ shopId, productId })
+    .select('branchId qty')
+    .lean();
+  const byBranch = new Map(
+    existingStocks.map((s) => [String(s.branchId).trim().toUpperCase(), s]),
+  );
+
+  const currentExisting = byBranch.get(current);
+  if (!currentExisting && !qtyProvided) {
+    return { error: 'Quantity is required when inventory is enabled' };
+  }
+
+  const toCreate = [];
+  let currentQty = qtyProvided ? qty : Number(currentExisting?.qty) || 0;
+
+  for (const branch of branches) {
+    const branchId = String(branch.branchId).trim().toUpperCase();
+    const existing = byBranch.get(branchId);
+
+    if (branchId === current) {
+      if (qtyProvided) {
+        if (existing) {
+          await BranchStock.updateOne(
+            { shopId, branchId, productId },
+            { $set: { qty } },
+          );
+        } else {
+          toCreate.push({ shopId, branchId, productId, qty });
+        }
+        currentQty = qty;
+      }
+    } else if (!existing) {
+      toCreate.push({ shopId, branchId, productId, qty: 0 });
+    }
+  }
+
+  if (toCreate.length) {
+    await BranchStock.insertMany(toCreate);
+  }
+
+  return { error: null, currentQty };
+}
+
+async function deleteBranchStockForProduct(shopId, productId) {
+  await BranchStock.deleteMany({ shopId, productId });
 }
 
 
@@ -240,13 +369,14 @@ const createProduct = async (req, res) => {
       createdBy: req.user.id,
     };
 
+    let openingStockQty = null;
+
     if (productType === 'service') {
       Object.assign(productFields, {
         amount: null,
         cost: null,
         isInventoryAvailable: false,
         barcode: null,
-        qty: null,
       });
     } else {
       if (amount === undefined || amount === null || amount === '') {
@@ -278,7 +408,17 @@ const createProduct = async (req, res) => {
         return res.status(400).json({ message: qtyFields.error, success: false });
       }
       productFields.isInventoryAvailable = qtyFields.isInventoryAvailable;
-      productFields.qty = qtyFields.qty;
+
+      if (qtyFields.isInventoryAvailable) {
+        const branchId = getRequestBranchId(req);
+        if (!branchId) {
+          return res.status(400).json({
+            message: 'Branch id is required to create inventory stock',
+            success: false,
+          });
+        }
+        openingStockQty = qtyFields.qty;
+      }
 
       const barcodeError = await assignBarcodeToProductFields(productFields, shopId, barcode);
       if (barcodeError) {
@@ -289,13 +429,32 @@ const createProduct = async (req, res) => {
 
     const product = await Product.create(productFields);
 
+    if (productFields.isInventoryAvailable) {
+      const branchId = getRequestBranchId(req);
+      const stockResult = await createBranchStockForProduct({
+        shopId,
+        productId: product._id,
+        currentBranchId: branchId,
+        qty: openingStockQty,
+      });
+
+      if (stockResult.error) {
+        await Product.deleteOne({ _id: product._id, shopId });
+        rollbackUploadedFile(req);
+        return res.status(400).json({ message: stockResult.error, success: false });
+      }
+    }
+
     const populated = await Product.findById(product._id)
       .populate('createdBy', 'name email role')
       .populate('categoryId', 'name description colorCode');
 
+    const data = populated?.toObject ? populated.toObject() : populated;
+    data.qty = productFields.isInventoryAvailable ? openingStockQty : null;
+
     res.status(201).json({
       success: true,
-      data: populated,
+      data,
     });
   } catch (error) {
     rollbackUploadedFile(req);
@@ -316,15 +475,58 @@ const getProducts = async (req, res) => {
       return res.status(400).json({ message: 'Shop id is required', success: false });
     }
 
+    const branchId = getRequestBranchId(req);
+
     const products = await Product.find({ shopId })
       .populate('createdBy', 'name email role')
       .populate('categoryId', 'name description colorCode')
       .sort({ createdAt: -1 });
 
+    const productDocs = products.map((p) => (p.toObject ? p.toObject() : p));
+
+    if (!branchId) {
+      const data = productDocs.map((product) => ({
+        ...product,
+        qty: null,
+      }));
+      return res.json({
+        success: true,
+        count: data.length,
+        data,
+      });
+    }
+
+    const productIds = productDocs
+      .filter((p) => p.isInventoryAvailable)
+      .map((p) => p._id);
+
+    const stocks = productIds.length
+      ? await BranchStock.find({
+          shopId,
+          branchId,
+          productId: { $in: productIds },
+        })
+          .select('productId qty')
+          .lean()
+      : [];
+
+    const qtyByProductId = new Map(
+      stocks.map((s) => [String(s.productId), Number(s.qty) || 0]),
+    );
+
+    const data = productDocs.map((product) => ({
+      ...product,
+      qty: product.isInventoryAvailable
+        ? (qtyByProductId.has(String(product._id))
+            ? qtyByProductId.get(String(product._id))
+            : 0)
+        : null,
+    }));
+
     res.json({
       success: true,
-      count: products.length,
-      data: products,
+      count: data.length,
+      data,
     });
   } catch (error) {
     res.status(500).json({ message: error.message, success: false });
@@ -389,8 +591,19 @@ const updateProduct = async (req, res) => {
       });
     }
 
+    let stockPlan = {
+      inventoryEnabled: Boolean(existing.isInventoryAvailable),
+      qty: null,
+      qtyProvided: false,
+    };
+
     if (nextType === 'service') {
       applyServiceTypeFields(updates);
+      stockPlan = {
+        inventoryEnabled: false,
+        qty: null,
+        qtyProvided: false,
+      };
     } else {
       updates.type = 'product';
 
@@ -430,28 +643,84 @@ const updateProduct = async (req, res) => {
         }
       }
 
-      const inventoryError = applyInventoryUpdates(updates, existing, req.body);
-      if (inventoryError) {
-        return res.status(400).json({ message: inventoryError, success: false });
+      const inventoryResult = applyInventoryUpdates(updates, existing, req.body);
+      if (inventoryResult.error) {
+        return res.status(400).json({ message: inventoryResult.error, success: false });
       }
+      stockPlan = inventoryResult;
     }
+
+    const inventoryTouched =
+      nextType === 'service' ||
+      req.body.isInventoryAvailable !== undefined ||
+      req.body.qty !== undefined ||
+      req.body.productQty !== undefined;
 
     applyProductImageUpdate(req, existing, updates);
 
-    if (Object.keys(updates).length === 0) {
+    if (Object.keys(updates).length === 0 && !inventoryTouched) {
       return res.status(400).json({ message: 'No fields to update', success: false });
     }
 
-    Object.assign(existing, updates);
-    await existing.save();
+    if (stockPlan.inventoryEnabled && inventoryTouched) {
+      const branchId = getRequestBranchId(req);
+      if (!branchId) {
+        return res.status(400).json({
+          message: 'Branch id is required to manage inventory stock',
+          success: false,
+        });
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      Object.assign(existing, updates);
+      await existing.save();
+    }
+
+    let responseQty = null;
+
+    if (inventoryTouched) {
+      if (!stockPlan.inventoryEnabled) {
+        await deleteBranchStockForProduct(shopId, existing._id);
+        responseQty = null;
+      } else {
+        const branchId = getRequestBranchId(req);
+        const stockResult = await syncBranchStockOnUpdate({
+          shopId,
+          productId: existing._id,
+          currentBranchId: branchId,
+          qty: stockPlan.qty,
+          qtyProvided: stockPlan.qtyProvided,
+        });
+        if (stockResult.error) {
+          return res.status(400).json({ message: stockResult.error, success: false });
+        }
+        responseQty = stockResult.currentQty;
+      }
+    } else if (existing.isInventoryAvailable) {
+      const branchId = getRequestBranchId(req);
+      if (branchId) {
+        const stock = await BranchStock.findOne({
+          shopId,
+          productId: existing._id,
+          branchId,
+        })
+          .select('qty')
+          .lean();
+        responseQty = stock?.qty ?? null;
+      }
+    }
 
     const product = await Product.findById(existing._id)
       .populate('createdBy', 'name email role')
       .populate('categoryId', 'name description colorCode');
 
+    const data = product?.toObject ? product.toObject() : product;
+    data.qty = responseQty;
+
     res.json({
       success: true,
-      data: product,
+      data,
     });
   } catch (error) {
     rollbackUploadedFile(req);
@@ -484,6 +753,8 @@ const deleteProduct = async (req, res) => {
     if (!product) {
       return res.status(404).json({ message: 'Product not found', success: false });
     }
+
+    await deleteBranchStockForProduct(shopId, product._id);
 
     if (product.image) {
       unlinkProductImageIfLocal(product.image);

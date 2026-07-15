@@ -78,7 +78,7 @@ function buildProductFormData(
     formData.append('isInventoryAvailable', String(payload.isInventoryAvailable));
   }
   appendOptionalField(formData, 'barcode', payload.barcode?.trim() || null);
-  if (hasNumericValue(payload.qty)) {
+  if (payload.isInventoryAvailable === true && hasNumericValue(payload.qty)) {
     formData.append('qty', String(payload.qty));
   }
 
@@ -107,7 +107,9 @@ function buildProductJsonBody(payload: ProductBodyFields) {
     if (trimmed) body.barcode = trimmed;
     else body.barcode = null;
   }
-  if (hasNumericValue(payload.qty)) body.qty = payload.qty;
+  if (payload.isInventoryAvailable === true && hasNumericValue(payload.qty)) {
+    body.qty = payload.qty;
+  }
 
   return body;
 }

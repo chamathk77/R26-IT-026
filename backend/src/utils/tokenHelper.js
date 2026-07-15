@@ -18,19 +18,22 @@ async function createAndSaveLoginToken(userId, expiresIn = '7d', claims = {}) {
 }
 
 /**
- * Trial / work token includes shopId + branchId (onboarding branch during trial).
- * @param {string} userId
- * @param {object} shop - shop document (needs shopId, trailEndDate, etc.)
- * @param {string} branchId - assigned branch for this session
+ * Trial token always includes shopId; branchId only when provided (single-branch / after select).
  */
-async function createAndSaveTrialToken(userId, shop, branchId) {
+async function createAndSaveTrialToken(userId, shop, branchId = null) {
   const seconds = getTokenExpiresInSeconds(shop);
-  const token = generateToken(userId, seconds, {
-    shopId: shop.shopId,
-    branchId,
-  });
+  const claims = { shopId: shop.shopId };
+  if (branchId) {
+    claims.branchId = branchId;
+  }
+  const token = generateToken(userId, seconds, claims);
   await saveUserToken(userId, token);
-  return { token, tokenExpiresInSeconds: seconds, shopId: shop.shopId, branchId };
+  return {
+    token,
+    tokenExpiresInSeconds: seconds,
+    shopId: shop.shopId,
+    branchId: branchId ?? null,
+  };
 }
 
 module.exports = {

@@ -5,6 +5,7 @@ const {
   sendOtp,
   verifyOtp,
   login,
+  selectBranch,
   logout,
 } = require('../controllers/authController');
 
@@ -14,6 +15,7 @@ router.post('/signupOnboarding', signupOnboarding);
 router.post('/send-otp', sendOtp);  
 router.post('/verify-otp', verifyOtp);
 router.post('/login', login);
+router.post('/select-branch', protect, selectBranch);
 router.post('/logout', protect, logout);
 
 module.exports = router;

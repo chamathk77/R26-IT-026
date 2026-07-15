@@ -47,11 +47,24 @@ export interface LoginShop {
   [key: string]: unknown;
 }
 
+export interface LoginBranch {
+  branchId: string;
+  branchName: string;
+  address?: string;
+  phone?: string;
+  isMainBranch?: boolean;
+}
+
 export interface LoginResponse {
   success: boolean;
   message: string;
   token: string;
   tokenExpiresInSeconds?: number;
+  shopId?: string | null;
+  branchId?: string | null;
+  /** false = one branch already in token; true = must call select-branch */
+  needsBranchSelection: boolean;
+  branches?: LoginBranch[];
   showTrialPrompt?: boolean;
   trialExpired?: boolean;
   user: LoginUser;

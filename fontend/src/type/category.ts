@@ -9,7 +9,7 @@ export interface Category {
   _id: string;
   shopId?: string;
   name: string;
-  description: string;
+  description?: string;
   colorCode: string;
   createdBy?: CategoryCreatedBy | string;
   createdByName?: string;
@@ -19,7 +19,7 @@ export interface Category {
 
 export interface CreateCategoryRequest {
   name: string;
-  description: string;
+  description?: string;
   colorCode: string;
 }
 
@@ -31,7 +31,7 @@ export interface CreateCategoryResponse {
 export interface UpdateCategoryPayload {
   id: string;
   name: string;
-  description: string;
+  description?: string;
   colorCode: string;
 }
 
@@ -54,5 +54,6 @@ export interface GetCategoryByIdResponse {
 export interface DeleteCategoryResponse {
   success: boolean;
   message?: string;
-  id: string;
+  id?: string;
+  count?: number;
 }

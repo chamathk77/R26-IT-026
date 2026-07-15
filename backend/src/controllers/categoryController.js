@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Category = require('../models/category');
+const Product = require('../models/product');
 const User = require('../models/user');
 
 const CATEGORY_CREATOR_ROLES = ['admin', 'owner'];
@@ -55,9 +56,6 @@ const createCategory = async (req, res) => {
     if (name === undefined || String(name).trim() === '') {
       return res.status(400).json({ message: 'Name is required', success: false });
     }
-    if (description === undefined || String(description).trim() === '') {
-      return res.status(400).json({ message: 'Description is required', success: false });
-    }
     if (colorCode === undefined || String(colorCode).trim() === '') {
       return res.status(400).json({ message: 'Color code is required', success: false });
     }
@@ -70,7 +68,10 @@ const createCategory = async (req, res) => {
     const category = await Category.create({
       shopId,
       name: String(name).trim(),
-      description: String(description).trim(),
+      description:
+        description === undefined || description === null
+          ? ''
+          : String(description).trim(),
       colorCode: String(colorCode).trim().toUpperCase(),
       createdBy: req.user.id,
       createdByName: String(user.name).trim(),
@@ -159,11 +160,8 @@ const updateCategory = async (req, res) => {
     }
 
     if (description !== undefined) {
-      const descriptionTrimmed = String(description).trim();
-      if (descriptionTrimmed === '') {
-        return res.status(400).json({ message: 'Description cannot be empty', success: false });
-      }
-      updates.description = descriptionTrimmed;
+      updates.description =
+        description === null ? '' : String(description).trim();
     }
 
     if (colorCode !== undefined) {
@@ -219,6 +217,20 @@ const deleteCategory = async (req, res) => {
     }
 
     const { shopId } = managerContext;
+
+    const productsUsingCategory = await Product.countDocuments({
+      shopId,
+      categoryId: id,
+    });
+    if (productsUsingCategory > 0) {
+      return res.status(400).json({
+        message:
+          'Cannot delete category while products are assigned to it. Remove or reassign those products first.',
+        success: false,
+        count: productsUsingCategory,
+      });
+    }
+
     const category = await Category.findOneAndDelete({ _id: id, shopId });
     if (!category) {
       return res.status(404).json({ message: 'Category not found', success: false });

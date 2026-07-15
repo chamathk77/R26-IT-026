@@ -31,6 +31,55 @@ function normalizeBranchId(branchId) {
   return String(branchId ?? '').trim().toUpperCase();
 }
 
+/**
+ * Login branch context from Branch collection:
+ * - 0 active → error
+ * - 1 active → embed that branchId in token
+ * - multiple → shopId-only session token; client must select a branch next
+ */
+async function resolveLoginBranchContext(shopId) {
+  const normalizedShopId = normalizeShopId(shopId);
+  const branches = await Branch.find({ shopId: normalizedShopId, isActive: true })
+    .select('branchId branchName address phone isMainBranch isActive')
+    .sort({ isMainBranch: -1, createdAt: 1 })
+    .lean();
+
+  if (!branches.length) {
+    return {
+      error: {
+        status: 400,
+        body: {
+          success: false,
+          message: 'No active branch found for this shop.',
+          code: 'SHOP_BRANCH_REQUIRED',
+        },
+      },
+    };
+  }
+
+  const mapped = branches.map((b) => ({
+    branchId: normalizeBranchId(b.branchId),
+    branchName: b.branchName,
+    address: b.address ?? '',
+    phone: b.phone ?? '',
+    isMainBranch: Boolean(b.isMainBranch),
+  }));
+
+  if (mapped.length === 1) {
+    return {
+      branchId: mapped[0].branchId,
+      needsBranchSelection: false,
+      branches: mapped,
+    };
+  }
+
+  return {
+    branchId: null,
+    needsBranchSelection: true,
+    branches: mapped,
+  };
+}
+
 function generateSixDigitOtp() {
   return Math.floor(100000 + Math.random() * 900000);
 }
@@ -340,24 +389,35 @@ const login = async (req, res) => {
     let token;
     let tokenExpiresInSeconds = 7 * 24 * 60 * 60;
     let branchId = null;
+    let needsBranchSelection = false;
+    let branches = [];
+
+    if (!user.shopId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Shop is required to create a login session.',
+        code: 'SHOP_REQUIRED',
+      });
+    }
+
+    const shopId = normalizeShopId(user.shopId);
+    const branchResolved = await resolveLoginBranchContext(shopId);
+    if (branchResolved.error) {
+      return res
+        .status(branchResolved.error.status)
+        .json(branchResolved.error.body);
+    }
+
+    branchId = branchResolved.branchId;
+    needsBranchSelection = branchResolved.needsBranchSelection;
+    branches = branchResolved.branches;
+
+    const tokenClaims = { shopId };
+    if (branchId) {
+      tokenClaims.branchId = branchId;
+    }
 
     if (shopLean && isActiveTrial(shopLean)) {
-      const allowed = Array.isArray(user.allowedBranchIds)
-        ? user.allowedBranchIds
-            .map((id) => String(id ?? '').trim().toUpperCase())
-            .filter(Boolean)
-        : [];
-
-      if (!allowed.length) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'No branch assigned to this user. Complete onboarding branch setup first.',
-          code: 'SHOP_BRANCH_REQUIRED',
-        });
-      }
-
-      branchId = allowed[0];
       const trialToken = await createAndSaveTrialToken(
         user._id,
         shopLean,
@@ -366,9 +426,7 @@ const login = async (req, res) => {
       token = trialToken.token;
       tokenExpiresInSeconds = trialToken.tokenExpiresInSeconds;
     } else {
-      token = await createAndSaveLoginToken(user._id, '7d', {
-        shopId: user.shopId || undefined,
-      });
+      token = await createAndSaveLoginToken(user._id, '7d', tokenClaims);
     }
 
     const showTrialPrompt = shouldShowTrialPrompt(user, shopLean);
@@ -377,10 +435,15 @@ const login = async (req, res) => {
       success: true,
       message: trialExpired
         ? 'Login successful. Your trial has ended. Please subscribe to continue.'
-        : 'Login successful',
+        : needsBranchSelection
+          ? 'Login successful. Please select a branch to continue.'
+          : 'Login successful',
       token,
       tokenExpiresInSeconds,
+      shopId,
       branchId,
+      needsBranchSelection,
+      branches: needsBranchSelection ? branches : undefined,
       showTrialPrompt,
       trialExpired,
       user: formatUserForLogin(user),
@@ -388,6 +451,111 @@ const login = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const selectBranch = async (req, res) => {
+  try {
+    const shopId = normalizeShopId(req.user?.shopId || '');
+    if (!shopId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Shop id is required',
+        code: 'SHOP_REQUIRED',
+      });
+    }
+
+    const branchId = normalizeBranchId(req.body?.branchId);
+    if (!branchId) {
+      return res.status(400).json({
+        success: false,
+        message: 'branchId is required',
+        code: 'BRANCH_ID_REQUIRED',
+      });
+    }
+
+    const user = await User.findById(req.user.id)
+      .select('shopId allowedBranchIds')
+      .lean();
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'User not found' });
+    }
+
+    if (normalizeShopId(user.shopId) !== shopId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized for this shop',
+      });
+    }
+
+    const branch = await Branch.findOne({
+      shopId,
+      branchId,
+      isActive: true,
+    })
+      .select('branchId branchName address phone isMainBranch')
+      .lean();
+
+    if (!branch) {
+      return res.status(404).json({
+        success: false,
+        message: 'Branch not found or inactive for this shop',
+        code: 'BRANCH_NOT_FOUND',
+      });
+    }
+
+    const allowed = Array.isArray(user.allowedBranchIds)
+      ? user.allowedBranchIds.map(normalizeBranchId).filter(Boolean)
+      : [];
+
+    // If allowedBranchIds is set, enforce access; empty means not restricted yet (owner onboarding)
+    if (allowed.length > 0 && !allowed.includes(branchId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not allowed to access this branch',
+        code: 'BRANCH_ACCESS_FORBIDDEN',
+      });
+    }
+
+    const shop = await ShopsData.findOne({ shopId });
+    if (!shop) {
+      return res.status(404).json({ success: false, message: 'Shop not found' });
+    }
+
+    // Replacing stored token invalidates the previous session token
+    let token;
+    let tokenExpiresInSeconds = 7 * 24 * 60 * 60;
+
+    if (isActiveTrial(shop)) {
+      const trialToken = await createAndSaveTrialToken(req.user.id, shop, branchId);
+      token = trialToken.token;
+      tokenExpiresInSeconds = trialToken.tokenExpiresInSeconds;
+    } else {
+      token = await createAndSaveLoginToken(req.user.id, '7d', {
+        shopId,
+        branchId,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Branch selected successfully',
+      token,
+      tokenExpiresInSeconds,
+      shopId,
+      branchId,
+      needsBranchSelection: false,
+      branch: {
+        branchId: branch.branchId,
+        branchName: branch.branchName,
+        address: branch.address ?? '',
+        phone: branch.phone ?? '',
+        isMainBranch: Boolean(branch.isMainBranch),
+      },
+    });
+  } catch (error) {
+    console.log('error in selectBranch', error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -409,5 +577,6 @@ module.exports = {
   sendOtp: sendOtpOnboarding,
   verifyOtp,
   login,
+  selectBranch,
   logout,
 };

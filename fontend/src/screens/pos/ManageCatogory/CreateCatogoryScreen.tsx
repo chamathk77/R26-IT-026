@@ -226,11 +226,11 @@ export default function CreateCatogoryScreen({ navigation, route }: Props) {
   }, [isEdit, initialSnapshot, name, description, selectedColor]);
 
   const canSave = useMemo(() => {
-    const valid = name.trim().length > 0 && description.trim().length > 0;
+    const valid = name.trim().length > 0;
     if (!valid) return false;
     if (isEdit) return isDirty && !loadingDetail;
     return true;
-  }, [name, description, isEdit, isDirty, loadingDetail]);
+  }, [name, isEdit, isDirty, loadingDetail]);
 
   const onSave = async () => {
     if (!canSave || saving) return;
@@ -326,7 +326,7 @@ export default function CreateCatogoryScreen({ navigation, route }: Props) {
               </View>
             </View>
             <Text style={[styles.subtitle, { color: paperTheme.colors.onSurfaceVariant }]}>
-              Name, description, and a color for POS grouping
+              Name and a color for POS grouping (description optional)
             </Text>
           </View>
         </View>
@@ -381,7 +381,7 @@ export default function CreateCatogoryScreen({ navigation, route }: Props) {
                 />
 
                 <Text style={[inventoryUi.fieldLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  Description
+                  Description (optional)
                 </Text>
                 <TextInput
                   value={description}

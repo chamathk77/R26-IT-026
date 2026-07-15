@@ -662,7 +662,7 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
                       Track inventory
                     </Text>
                     <Text style={[styles.inventoryHint, { color: paperTheme.colors.onSurfaceVariant }]}>
-                      Enable quantity tracking for stock levels
+                      Enable stock tracking for this branch
                     </Text>
                   </View>
                   <View
@@ -693,7 +693,7 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
                 {isInventoryAvailable ? (
                   <>
                     <Text style={[inventoryUi.fieldLabel, { color: paperTheme.colors.onSurfaceVariant, marginTop: 14 }]}>
-                      Quantity
+                      Stock quantity (this branch)
                     </Text>
                     <TextInput
                       value={qty}
@@ -710,6 +710,14 @@ function ProductFormContent({ navigation, mode, initial }: ProductFormContentPro
                         },
                       ]}
                     />
+                    <Text
+                      style={[
+                        styles.inventoryHint,
+                        { color: paperTheme.colors.onSurfaceVariant },
+                      ]}
+                    >
+                      Stock is tracked per branch. Other branches start at 0.
+                    </Text>
                   </>
                 ) : null}
 

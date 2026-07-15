@@ -190,7 +190,7 @@ export default function ManageCatogoryScreen({ navigation }: Props) {
       show_Alert(
         'error',
         'Delete category?',
-        `Are you sure you want to delete "${item.name}"? This cannot be undone.`,
+        `Are you sure you want to delete "${item.name}"? This cannot be undone. If any products use this category, delete will be blocked.`,
         2,
         false,
         'Delete',
