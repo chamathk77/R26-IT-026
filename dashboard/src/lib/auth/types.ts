@@ -1,13 +1,15 @@
-export type DashboardRole = 'admin' | 'staff';
+export type InternalRole = 'internalAdmin' | 'internalStaff';
 
 export interface DashboardUser {
   _id: string;
   name: string;
   email: string;
   phone: string;
-  role: DashboardRole;
+  role: InternalRole;
+  isInternalUser: boolean;
   note?: string;
-  isActive?: boolean;
+  shopId?: string;
+  isFirsttimeLogin?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

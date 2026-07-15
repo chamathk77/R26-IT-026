@@ -11,7 +11,6 @@ export interface CreateShopOnboardingRequest {
 export interface CreateShopOnboardingResponse {
   success: boolean;
   shopId: string;
-  branchId: string;
   onboardStep: string;
   message: string;
 }

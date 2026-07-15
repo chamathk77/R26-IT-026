@@ -1,5 +1,6 @@
 const User = require('../models/user');
 const ShopsData = require('../models/shopsData');
+const Branch = require('../models/branch');
 const bcrypt = require('bcryptjs');
 const generateToken = require('../utils/generateToken');
 const { createAndSaveLoginToken, createAndSaveTrialToken, clearUserToken } = require('../utils/tokenHelper');
@@ -24,6 +25,10 @@ function normalizeShopId(shopId) {
 
 function isValidShopIdFormat(shopId) {
   return /^SI\d{6}$/.test(shopId);
+}
+
+function normalizeBranchId(branchId) {
+  return String(branchId ?? '').trim().toUpperCase();
 }
 
 function generateSixDigitOtp() {
@@ -92,6 +97,29 @@ const signupOnboarding = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    const shopBranch =
+      (await Branch.findOne({
+        shopId: normalizedShopId,
+        isMainBranch: true,
+        isActive: true,
+      })
+        .select('branchId')
+        .lean()) ||
+      (await Branch.findOne({ shopId: normalizedShopId, isActive: true })
+        .select('branchId')
+        .sort({ createdAt: 1 })
+        .lean());
+
+    if (!shopBranch?.branchId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No branch found for this shop. Complete shop branch setup first.',
+        code: 'SHOP_BRANCH_REQUIRED',
+      });
+    }
+
+    const allowedBranchIds = [normalizeBranchId(shopBranch.branchId)];
+
     const user = await User.create({
       name: name.trim(),
       email: emailLower,
@@ -99,6 +127,7 @@ const signupOnboarding = async (req, res) => {
       password: hashedPassword,
       role: roleNormalized,
       shopId: normalizedShopId,
+      allowedBranchIds,
     });
 
     await ShopsData.updateOne(
@@ -109,6 +138,7 @@ const signupOnboarding = async (req, res) => {
     res.status(201).json({
       success: true,
       shopId: user.shopId,
+      allowedBranchIds: user.allowedBranchIds,
       message: 'Account created. Please log in.',
     });
   } catch (error) {

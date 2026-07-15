@@ -1,6 +1,6 @@
 const ShopsData = require('../models/shopsData');
-const Branch = require('../models/branch');
 const User = require('../models/user');
+const Branch = require('../models/branch');
 const Payments = require('../models/payments');
 const mongoose = require('mongoose');
 const { addDays } = require('../utils/trialHelper');
@@ -135,25 +135,19 @@ const createShopOnboarding = async (req, res) => {
       onboardStep: 'shopRegistered',
     });
 
-    let branch;
-    try {
-      branch = await Branch.create({
-        shopId: shop.shopId,
-        branchName: String(shopName).trim(),
-        address: String(address).trim(),
-        phone: ownerMobileTrimmed,
-        isMainBranch: true,
-        isActive: true,
-      });
-    } catch (branchError) {
-      await ShopsData.deleteOne({ _id: shop._id });
-      throw branchError;
-    }
+    const defaultBranch = await Branch.create({
+      shopId: shop.shopId,
+      branchName: String(shopName).trim(),
+      address: String(address).trim(),
+      phone: ownerMobileTrimmed,
+      isMainBranch: true,
+      isActive: true,
+    });
 
     res.status(201).json({
       success: true,
       shopId: shop.shopId,
-      branchId: branch.branchId,
+      branchId: defaultBranch.branchId,
       onboardStep: shop.onboardStep,
       message: 'Shop onboarding saved',
     });
@@ -202,7 +196,10 @@ function resolveMaxUsers(isAdditionalUsersAdded, numAdditionalUsers) {
 }
 
 function shopMobileUserFilter(shopId) {
-  return { shopId };
+  return {
+    shopId,
+    isInternalUser: { $ne: true },
+  };
 }
 
 async function getShopMobileUserCount(shopId) {
@@ -1580,17 +1577,13 @@ const removeOnboardingData = async (req, res) => {
       });
     }
 
-    const [userDeleteResult, branchDeleteResult] = await Promise.all([
-      User.deleteMany({ shopId: normalizedShopId }),
-      Branch.deleteMany({ shopId: normalizedShopId }),
-    ]);
+    const userDeleteResult = await User.deleteMany({ shopId: normalizedShopId });
     await ShopsData.deleteOne({ shopId: normalizedShopId });
 
     res.status(200).json({
       success: true,
       shopId: normalizedShopId,
       removedUsers: userDeleteResult.deletedCount,
-      removedBranches: branchDeleteResult.deletedCount,
       message: 'Onboarding data removed successfully',
     });
   } catch (error) {
