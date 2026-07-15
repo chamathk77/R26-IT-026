@@ -1,6 +1,7 @@
 const Payments = require("../models/payments");
 const ShopsData = require("../models/shopsData");
 const User = require("../models/user");
+const Branch = require("../models/branch");
 const {
   generateUpFrontReceiptNumber,
   formatPaymentRecord,
@@ -20,6 +21,62 @@ const {
   finishTrialManually,
 } = require("../utils/trialHelper");
 const { sendSms } = require("../services/smsService");
+
+function normalizeBranchId(branchId) {
+  return String(branchId ?? "")
+    .trim()
+    .toUpperCase();
+}
+
+/**
+ * During trial only the onboarding branch is allowed — take first from user.allowedBranchIds
+ * and verify it belongs to the shop.
+ */
+async function resolveTrialBranchIdForUser(user, shopId) {
+  const allowed = Array.isArray(user.allowedBranchIds)
+    ? user.allowedBranchIds.map(normalizeBranchId).filter(Boolean)
+    : [];
+
+  if (!allowed.length) {
+    return {
+      error: {
+        status: 400,
+        body: {
+          success: false,
+          message:
+            "No branch assigned to this user. Complete onboarding branch setup first.",
+          code: "SHOP_BRANCH_REQUIRED",
+        },
+      },
+    };
+  }
+
+  const branchId = allowed[0];
+  const branch = await Branch.findOne({
+    shopId,
+    branchId,
+    isActive: true,
+  })
+    .select("branchId shopId isMainBranch isActive")
+    .lean();
+
+  if (!branch) {
+    return {
+      error: {
+        status: 400,
+        body: {
+          success: false,
+          message:
+            "Assigned branch was not found or is inactive for this shop.",
+          code: "SHOP_BRANCH_INVALID",
+          branchId,
+        },
+      },
+    };
+  }
+
+  return { branchId: branch.branchId };
+}
 
 function formatTrialEndDateTime(date) {
   return new Date(date).toLocaleString("en-LK", {
@@ -69,6 +126,7 @@ function buildTrialResponse(
     alreadyActive = false,
     upFrontPayment = null,
     subscriptionPayment = null,
+    branchId = null,
   },
 ) {
   return {
@@ -76,6 +134,7 @@ function buildTrialResponse(
     message,
     alreadyActive,
     shopId: shop.shopId,
+    branchId: branchId ?? null,
     status: shop.status,
     isTrailStared: shop.isTrailStared,
     isTrailCompleted: shop.isTrailCompleted,
@@ -199,7 +258,9 @@ const startTrail = async (req, res) => {
       });
     }
     // check if user exists
-    const user = await User.findById(req.user.id).select("shopId role").lean();
+    const user = await User.findById(req.user.id)
+      .select("shopId role allowedBranchIds")
+      .lean();
     if (!user) {
       return res
         .status(401)
@@ -226,6 +287,15 @@ const startTrail = async (req, res) => {
         .status(404)
         .json({ success: false, message: "Shop not found" });
     }
+
+    // Trial uses only the onboarding branch (first allowedBranchIds entry)
+    const branchResolved = await resolveTrialBranchIdForUser(user, shopId);
+    if (branchResolved.error) {
+      return res
+        .status(branchResolved.error.status)
+        .json(branchResolved.error.body);
+    }
+    const { branchId } = branchResolved;
 
     // Trial expiration is handled by trial cron — only read current shop state here
     if (isTrialEnded(shop)) {
@@ -288,6 +358,7 @@ const startTrail = async (req, res) => {
     const { token, tokenExpiresInSeconds } = await createAndSaveTrialToken(
       req.user.id,
       shop,
+      branchId,
     );
 
     await User.findByIdAndUpdate(req.user.id, { isFirsttimeLogin: false });
@@ -309,6 +380,7 @@ const startTrail = async (req, res) => {
         tokenExpiresInSeconds,
         alreadyActive,
         upFrontPayment: upFrontInvoice,
+        branchId,
       }),
     );
   } catch (error) {

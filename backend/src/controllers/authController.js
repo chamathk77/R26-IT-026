@@ -339,13 +339,36 @@ const login = async (req, res) => {
 
     let token;
     let tokenExpiresInSeconds = 7 * 24 * 60 * 60;
+    let branchId = null;
 
     if (shopLean && isActiveTrial(shopLean)) {
-      const trialToken = await createAndSaveTrialToken(user._id, shopLean);
+      const allowed = Array.isArray(user.allowedBranchIds)
+        ? user.allowedBranchIds
+            .map((id) => String(id ?? '').trim().toUpperCase())
+            .filter(Boolean)
+        : [];
+
+      if (!allowed.length) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'No branch assigned to this user. Complete onboarding branch setup first.',
+          code: 'SHOP_BRANCH_REQUIRED',
+        });
+      }
+
+      branchId = allowed[0];
+      const trialToken = await createAndSaveTrialToken(
+        user._id,
+        shopLean,
+        branchId,
+      );
       token = trialToken.token;
       tokenExpiresInSeconds = trialToken.tokenExpiresInSeconds;
     } else {
-      token = await createAndSaveLoginToken(user._id);
+      token = await createAndSaveLoginToken(user._id, '7d', {
+        shopId: user.shopId || undefined,
+      });
     }
 
     const showTrialPrompt = shouldShowTrialPrompt(user, shopLean);
@@ -357,6 +380,7 @@ const login = async (req, res) => {
         : 'Login successful',
       token,
       tokenExpiresInSeconds,
+      branchId,
       showTrialPrompt,
       trialExpired,
       user: formatUserForLogin(user),

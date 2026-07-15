@@ -11,17 +11,26 @@ async function clearUserToken(userId) {
   await User.findByIdAndUpdate(userId, { token: null });
 }
 
-async function createAndSaveLoginToken(userId, expiresIn = '7d') {
-  const token = generateToken(userId, expiresIn);
+async function createAndSaveLoginToken(userId, expiresIn = '7d', claims = {}) {
+  const token = generateToken(userId, expiresIn, claims);
   await saveUserToken(userId, token);
   return token;
 }
 
-async function createAndSaveTrialToken(userId, shop) {
+/**
+ * Trial / work token includes shopId + branchId (onboarding branch during trial).
+ * @param {string} userId
+ * @param {object} shop - shop document (needs shopId, trailEndDate, etc.)
+ * @param {string} branchId - assigned branch for this session
+ */
+async function createAndSaveTrialToken(userId, shop, branchId) {
   const seconds = getTokenExpiresInSeconds(shop);
-  const token = generateToken(userId, seconds);
+  const token = generateToken(userId, seconds, {
+    shopId: shop.shopId,
+    branchId,
+  });
   await saveUserToken(userId, token);
-  return { token, tokenExpiresInSeconds: seconds };
+  return { token, tokenExpiresInSeconds: seconds, shopId: shop.shopId, branchId };
 }
 
 module.exports = {

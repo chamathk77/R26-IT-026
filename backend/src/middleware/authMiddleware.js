@@ -88,6 +88,13 @@ function createProtect() {
 
     req.user = { id: decoded.id };
 
+    if (decoded.shopId) {
+      req.user.shopId = String(decoded.shopId).trim().toUpperCase();
+    }
+    if (decoded.branchId) {
+      req.user.branchId = String(decoded.branchId).trim().toUpperCase();
+    }
+
     try {
       const sessionUser = await User.findById(decoded.id)
         .select('shopId')
