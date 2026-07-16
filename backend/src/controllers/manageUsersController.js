@@ -1,5 +1,6 @@
 const User = require('../models/user');
 const ShopsData = require('../models/shopsData');
+const Branch = require('../models/branch');
 const bcrypt = require('bcryptjs');
 
 const OWNER_CREATABLE_ROLES = ['staff', 'admin'];
@@ -12,12 +13,80 @@ function isValidShopIdFormat(shopId) {
   return /^SI\d{6}$/.test(shopId);
 }
 
+function normalizeBranchId(branchId) {
+  return String(branchId ?? '').trim().toUpperCase();
+}
+
 function shopMobileUserFilter(shopId) {
   return { shopId };
 }
 
 async function getShopMobileUserCount(shopId) {
   return User.countDocuments(shopMobileUserFilter(shopId));
+}
+
+function normalizeAllowedBranchIds(input) {
+  if (Array.isArray(input)) {
+    return [...new Set(input.map(normalizeBranchId).filter(Boolean))];
+  }
+
+  if (typeof input === 'string') {
+    return [...new Set(input.split(',').map(normalizeBranchId).filter(Boolean))];
+  }
+
+  return [];
+}
+
+async function getActiveBranchesForShop(shopId) {
+  return Branch.find({ shopId, isActive: true })
+    .select('branchId branchName address phone isMainBranch isActive')
+    .sort({ isMainBranch: -1, createdAt: 1 })
+    .lean();
+}
+
+function mapBranch(branch) {
+  return {
+    branchId: normalizeBranchId(branch.branchId),
+    branchName: branch.branchName,
+    address: branch.address ?? '',
+    phone: branch.phone ?? '',
+    isMainBranch: Boolean(branch.isMainBranch),
+    isActive: Boolean(branch.isActive),
+  };
+}
+
+async function resolveAllowedBranchIds(shopId, requestedAllowedBranchIds) {
+  const activeBranches = await getActiveBranchesForShop(shopId);
+  const activeBranchIds = activeBranches.map((branch) => normalizeBranchId(branch.branchId));
+
+  if (!activeBranchIds.length) {
+    return {
+      error: {
+        status: 400,
+        message: 'No active branch found for this shop.',
+        code: 'SHOP_BRANCH_REQUIRED',
+      },
+    };
+  }
+
+  const normalizedRequested = normalizeAllowedBranchIds(requestedAllowedBranchIds);
+  const invalidBranchIds = normalizedRequested.filter((branchId) => !activeBranchIds.includes(branchId));
+
+  if (invalidBranchIds.length) {
+    return {
+      error: {
+        status: 400,
+        message: 'Some selected branches are invalid or inactive for this shop',
+        code: 'INVALID_ALLOWED_BRANCH_IDS',
+        invalidBranchIds,
+      },
+    };
+  }
+
+  return {
+    allowedBranchIds: normalizedRequested,
+    activeBranches,
+  };
 }
 
 async function getOwnerAccessContext(userId) {
@@ -47,6 +116,7 @@ function normalizeOwnerCreatePayload(body) {
         : '';
   const role = body?.role != null ? String(body.role).trim().toLowerCase() : '';
   const password = body?.password != null ? String(body.password) : '';
+  const allowedBranchIds = normalizeAllowedBranchIds(body?.allowedBranchIds);
 
   return {
     shopId,
@@ -55,6 +125,7 @@ function normalizeOwnerCreatePayload(body) {
     phoneNumber: phoneNumberRaw,
     role,
     password,
+    allowedBranchIds,
   };
 }
 
@@ -67,6 +138,7 @@ const createShopUser = async (req, res) => {
       phoneNumber: phoneTrimmed,
       role: roleNormalized,
       password,
+      allowedBranchIds: requestedAllowedBranchIds,
     } = normalizeOwnerCreatePayload(req.body);
 
     if (!shopId?.trim()) {
@@ -102,6 +174,19 @@ const createShopUser = async (req, res) => {
     const shop = await ShopsData.findOne({ shopId: normalizedShopId }).lean();
     if (!shop) {
       return res.status(404).json({ success: false, message: 'Shop not found' });
+    }
+
+    const allowedBranchesResult = await resolveAllowedBranchIds(
+      normalizedShopId,
+      requestedAllowedBranchIds,
+    );
+    if (allowedBranchesResult.error) {
+      return res.status(allowedBranchesResult.error.status).json({
+        success: false,
+        message: allowedBranchesResult.error.message,
+        code: allowedBranchesResult.error.code,
+        invalidBranchIds: allowedBranchesResult.error.invalidBranchIds,
+      });
     }
 
     const maxUsers = shop.maxUsers ?? 3;
@@ -145,6 +230,7 @@ const createShopUser = async (req, res) => {
       password: hashedPassword,
       role: roleNormalized,
       shopId: normalizedShopId,
+      allowedBranchIds: allowedBranchesResult.allowedBranchIds,
     });
 
     return res.status(201).json({
@@ -154,6 +240,7 @@ const createShopUser = async (req, res) => {
       email: user.email,
       phoneNumber: user.phone,
       role: user.role,
+      allowedBranchIds: user.allowedBranchIds,
       message: 'Account created successfully',
       maxUsers,
       currentUsers: currentUserCount + 1,
@@ -182,7 +269,7 @@ const getShopUsers = async (req, res) => {
     const { ownerShopId } = ownerAccess;
 
     const users = await User.find(shopMobileUserFilter(ownerShopId))
-      .select('name email phone role shopId createdAt updatedAt')
+      .select('name email phone role shopId allowedBranchIds createdAt updatedAt')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -196,6 +283,7 @@ const getShopUsers = async (req, res) => {
         phoneNumber: user.phone,
         role: user.role,
         shopId: user.shopId,
+        allowedBranchIds: Array.isArray(user.allowedBranchIds) ? user.allowedBranchIds : [],
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
       })),
@@ -245,6 +333,7 @@ const updateShopUser = async (req, res) => {
           : '';
     const role = req.body?.role != null ? String(req.body.role).trim().toLowerCase() : '';
     const password = req.body?.password != null ? String(req.body.password) : '';
+    const requestedAllowedBranchIds = normalizeAllowedBranchIds(req.body?.allowedBranchIds);
 
     if (!name || !email || !phoneNumber || !role) {
       return res.status(400).json({
@@ -256,6 +345,19 @@ const updateShopUser = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Role must be admin or staff',
+      });
+    }
+
+    const allowedBranchesResult = await resolveAllowedBranchIds(
+      ownerShopId,
+      requestedAllowedBranchIds,
+    );
+    if (allowedBranchesResult.error) {
+      return res.status(allowedBranchesResult.error.status).json({
+        success: false,
+        message: allowedBranchesResult.error.message,
+        code: allowedBranchesResult.error.code,
+        invalidBranchIds: allowedBranchesResult.error.invalidBranchIds,
       });
     }
 
@@ -275,6 +377,7 @@ const updateShopUser = async (req, res) => {
     user.email = email;
     user.phone = phoneNumber;
     user.role = role;
+    user.allowedBranchIds = allowedBranchesResult.allowedBranchIds;
     if (password) {
       user.password = await bcrypt.hash(password, 10);
     }
@@ -289,6 +392,7 @@ const updateShopUser = async (req, res) => {
         phoneNumber: user.phone,
         role: user.role,
         shopId: user.shopId,
+        allowedBranchIds: user.allowedBranchIds,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
       },
@@ -350,9 +454,48 @@ const deleteShopUser = async (req, res) => {
   }
 };
 
+const getLoggedUserBranches = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('shopId allowedBranchIds role').lean();
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Not authorized, user not found' });
+    }
+
+    const shopId = normalizeShopId(user.shopId);
+    if (!shopId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account is not linked to a shop',
+      });
+    }
+
+    const activeBranches = await getActiveBranchesForShop(shopId);
+    const allowedBranchIds = normalizeAllowedBranchIds(user.allowedBranchIds);
+
+    const branches =
+      user.role === 'owner' && allowedBranchIds.length === 0
+        ? activeBranches.map(mapBranch)
+        : activeBranches
+            .filter((branch) => allowedBranchIds.includes(normalizeBranchId(branch.branchId)))
+            .map(mapBranch);
+
+    return res.status(200).json({
+      success: true,
+      shopId,
+      allowedBranchIds,
+      count: branches.length,
+      data: branches,
+      message: 'Logged user branches loaded successfully',
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   createShopUser,
   getShopUsers,
   updateShopUser,
   deleteShopUser,
+  getLoggedUserBranches,
 };

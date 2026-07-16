@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -27,10 +28,11 @@ import { useCommonAlert } from '../../../../../hooks/useCommonAlert';
 import {
   createShopUser_Service,
   deleteShopUser_Service,
+  fetchLoggedUserBranches_Service,
   fetchShopUsers_Service,
   updateShopUser_Service,
 } from '../../../../../services/ManageUsersService';
-import { ManageUserRole } from '../../../../../type/manageUser';
+import { ManageUserBranch, ManageUserRole } from '../../../../../type/manageUser';
 import {
   getApiErrorMessage,
   handleSessionExpiredApiError,
@@ -52,6 +54,7 @@ function FormField({
   secureTextEntry,
   showToggle,
   onToggleSecure,
+  editable = true,
   paperTheme,
   resolvedTheme,
 }: {
@@ -64,6 +67,7 @@ function FormField({
   secureTextEntry?: boolean;
   showToggle?: boolean;
   onToggleSecure?: () => void;
+  editable?: boolean;
   paperTheme: ReturnType<typeof useTheme>['paperTheme'];
   resolvedTheme: 'light' | 'dark';
 }) {
@@ -90,10 +94,11 @@ function FormField({
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
           secureTextEntry={secureTextEntry}
+          editable={editable}
           style={[styles.input, { color: paperTheme.colors.onSurface }]}
         />
         {showToggle ? (
-          <TouchableOpacity onPress={onToggleSecure} hitSlop={12}>
+          <TouchableOpacity onPress={onToggleSecure} hitSlop={12} disabled={!editable}>
             <Ionicons
               name={secureTextEntry ? 'eye-off-outline' : 'eye-outline'}
               size={20}
@@ -127,11 +132,15 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
     () => users.find((user) => user._id === editingUserId),
     [users, editingUserId],
   );
+  const isOwnerUser = existingUser?.role === 'owner';
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [role, setRole] = useState<ManageUserRole>('staff');
+  const [availableBranches, setAvailableBranches] = useState<ManageUserBranch[]>([]);
+  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -139,6 +148,7 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(!isEditing);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -154,6 +164,7 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
       setEmail('');
       setPhoneNumber('');
       setRole('staff');
+      setSelectedBranchIds([]);
       setPassword('');
       setConfirmPassword('');
       setInitialLoaded(true);
@@ -167,6 +178,9 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
       setPhoneNumber(existingUser.phoneNumber);
       setRole(
         existingUser.role === 'admin' ? 'admin' : 'staff',
+      );
+      setSelectedBranchIds(
+        Array.isArray(existingUser.allowedBranchIds) ? existingUser.allowedBranchIds : [],
       );
       setPassword('');
       setConfirmPassword('');
@@ -190,11 +204,73 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
     }
   }, [existingUser, isEditing, navigation, show_Alert, users.length]);
 
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSubscription = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardHeight(event.endCoordinates.height);
+    });
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadBranches = async () => {
+      setBranchesLoading(true);
+      try {
+        const response = await dispatch(fetchLoggedUserBranches_Service()).unwrap();
+        if (!isMounted) return;
+
+        const branches = Array.isArray(response.data) ? response.data : [];
+        setAvailableBranches(branches);
+
+        if (!isEditing && branches.length === 1) {
+          setSelectedBranchIds([branches[0].branchId]);
+        }
+      } catch (error: unknown) {
+        if (!isMounted) return;
+
+        const handled = await handleSessionExpiredApiError(error, show_Alert);
+        if (handled) return;
+
+        show_Alert(
+          'error',
+          'Load failed',
+          getApiErrorMessage(error, 'Could not load branches. Please try again.'),
+          1,
+          false,
+          'OK',
+          () => {},
+        );
+      } finally {
+        if (isMounted) {
+          setBranchesLoading(false);
+        }
+      }
+    };
+
+    void loadBranches();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [dispatch, isEditing, show_Alert]);
+
   const validateForm = useCallback((): string | null => {
     if (!name.trim()) return 'Name is required.';
     if (!email.trim()) return 'Email is required.';
     if (!phoneNumber.trim()) return 'Phone number is required.';
     if (!role) return 'Role is required.';
+    if (!selectedBranchIds.length) return 'Select at least one branch.';
 
     if (!isEditing) {
       if (!password.trim() || !confirmPassword.trim()) {
@@ -214,9 +290,20 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
     }
 
     return null;
-  }, [confirmPassword, email, isEditing, name, password, phoneNumber, role]);
+  }, [confirmPassword, email, isEditing, name, password, phoneNumber, role, selectedBranchIds]);
+
+  const toggleBranchSelection = useCallback((branchId: string) => {
+    setSelectedBranchIds((prev) =>
+      prev.includes(branchId) ? prev.filter((id) => id !== branchId) : [...prev, branchId],
+    );
+  }, []);
 
   const handleSave = useCallback(async () => {
+    if (isOwnerUser) {
+      show_Alert('error', 'Owner account', 'Owner account cannot be updated here.', 1, false, 'OK');
+      return;
+    }
+
     const validationError = validateForm();
     if (validationError) {
       show_Alert('error', 'Validation', validationError, 1, false, 'OK', () => {});
@@ -239,6 +326,7 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
             phoneNumber: phoneNumber.trim(),
             role,
             password: password.trim() || undefined,
+            allowedBranchIds: selectedBranchIds,
           }),
         ).unwrap();
 
@@ -260,6 +348,7 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
             phoneNumber: phoneNumber.trim(),
             role,
             password,
+            allowedBranchIds: selectedBranchIds,
           }),
         ).unwrap();
 
@@ -297,13 +386,19 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
     password,
     phoneNumber,
     role,
+    selectedBranchIds,
     shopId,
     show_Alert,
     validateForm,
+    isOwnerUser,
   ]);
 
   const handleDelete = useCallback(() => {
     if (!editingUserId || !existingUser) return;
+    if (existingUser.role === 'owner') {
+      show_Alert('error', 'Owner account', 'Owner account cannot be deleted here.', 1, false, 'OK');
+      return;
+    }
 
     show_Alert(
       'error',
@@ -381,12 +476,17 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
 
         <KeyboardAvoidingView
           style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           <ScrollView
-            contentContainerStyle={styles.scroll}
+            contentContainerStyle={[
+              styles.scroll,
+              { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 24 : 80 },
+            ]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            bounces={false}
+            scrollIndicatorInsets={{ bottom: keyboardHeight > 0 ? keyboardHeight : 0 }}
           >
             <View
               style={[
@@ -406,7 +506,9 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
                 {isEditing ? 'Update shop user' : 'Create shop user'}
               </Text>
               <Text style={[styles.heroSub, { color: paperTheme.colors.onPrimaryContainer }]}>
-                {isEditing
+                {isOwnerUser
+                  ? 'Owner account is visible here, but it cannot be edited or deleted from this screen.'
+                  : isEditing
                   ? 'Change details or set a new password without the old one.'
                   : 'Add an admin or staff member for your shop.'}
               </Text>
@@ -417,6 +519,7 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
               value={name}
               onChangeText={setName}
               placeholder="Enter full name"
+              editable={!isOwnerUser}
               paperTheme={paperTheme}
               resolvedTheme={resolvedTheme}
             />
@@ -426,6 +529,7 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
               onChangeText={setPhoneNumber}
               placeholder="07XXXXXXXX"
               keyboardType="phone-pad"
+              editable={!isOwnerUser}
               paperTheme={paperTheme}
               resolvedTheme={resolvedTheme}
             />
@@ -436,6 +540,7 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
               placeholder="user@example.com"
               keyboardType="email-address"
               autoCapitalize="none"
+              editable={!isOwnerUser}
               paperTheme={paperTheme}
               resolvedTheme={resolvedTheme}
             />
@@ -443,65 +548,181 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
             <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
               ROLE
             </Text>
-            <View style={styles.roleRow}>
-              {ROLE_OPTIONS.map((option) => {
-                const active = role === option;
-                return (
-                  <TouchableOpacity
-                    key={option}
-                    style={[
-                      styles.roleChip,
-                      {
-                        backgroundColor: active
-                          ? paperTheme.colors.primary
-                          : paperTheme.colors.surface,
-                        borderColor: active
-                          ? paperTheme.colors.primary
-                          : paperTheme.colors.outlineVariant,
-                      },
-                      cardShadow(resolvedTheme),
-                    ]}
-                    onPress={() => setRole(option)}
-                  >
-                    <Text
+            {isOwnerUser ? (
+              <View
+                style={[
+                  styles.ownerRoleCard,
+                  {
+                    backgroundColor: paperTheme.colors.surface,
+                    borderColor: paperTheme.colors.outlineVariant,
+                  },
+                  cardShadow(resolvedTheme),
+                ]}
+              >
+                <Text style={[styles.ownerRoleText, { color: paperTheme.colors.onSurface }]}>
+                  Owner
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.roleRow}>
+                {ROLE_OPTIONS.map((option) => {
+                  const active = role === option;
+                  return (
+                    <TouchableOpacity
+                      key={option}
                       style={[
-                        styles.roleChipText,
+                        styles.roleChip,
                         {
-                          color: active
-                            ? paperTheme.colors.onPrimary
-                            : paperTheme.colors.onSurface,
+                          backgroundColor: active
+                            ? paperTheme.colors.primary
+                            : paperTheme.colors.surface,
+                          borderColor: active
+                            ? paperTheme.colors.primary
+                            : paperTheme.colors.outlineVariant,
                         },
+                        cardShadow(resolvedTheme),
                       ]}
+                      onPress={() => {
+                        if (!isOwnerUser) setRole(option);
+                      }}
+                      disabled={isOwnerUser}
                     >
-                      {option.charAt(0).toUpperCase() + option.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+                      <Text
+                        style={[
+                          styles.roleChipText,
+                          {
+                            color: active
+                              ? paperTheme.colors.onPrimary
+                              : paperTheme.colors.onSurface,
+                          },
+                        ]}
+                      >
+                        {option.charAt(0).toUpperCase() + option.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+
+            <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
+              BRANCH ACCESS
+            </Text>
+            <View style={styles.branchSection}>
+              {branchesLoading ? (
+                <View style={styles.branchLoadingRow}>
+                  <ActivityIndicator size="small" color={paperTheme.colors.primary} />
+                  <Text style={[styles.branchHint, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    Loading branches...
+                  </Text>
+                </View>
+              ) : availableBranches.length === 0 ? (
+                <Text style={[styles.branchHint, { color: paperTheme.colors.error }]}>
+                  No branch available for this account.
+                </Text>
+              ) : (
+                <>
+                  <Text style={[styles.branchHint, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    {availableBranches.length === 1
+                      ? 'Single branch detected and selected automatically.'
+                      : 'Select one or more branches for this user.'}
+                  </Text>
+                  <View style={styles.branchList}>
+                    {availableBranches.map((branch) => {
+                      const active = selectedBranchIds.includes(branch.branchId);
+                      return (
+                        <TouchableOpacity
+                          key={branch.branchId}
+                          style={[
+                            styles.branchChip,
+                            {
+                              backgroundColor: active
+                                ? paperTheme.colors.primary
+                                : paperTheme.colors.surface,
+                              borderColor: active
+                                ? paperTheme.colors.primary
+                                : paperTheme.colors.outlineVariant,
+                              opacity: isOwnerUser ? 0.8 : 1,
+                            },
+                            cardShadow(resolvedTheme),
+                          ]}
+                          onPress={() => {
+                            if (!isOwnerUser && availableBranches.length > 1) {
+                              toggleBranchSelection(branch.branchId);
+                            }
+                          }}
+                          disabled={isOwnerUser || availableBranches.length === 1}
+                        >
+                          <View style={styles.branchChipHeader}>
+                            <Text
+                              style={[
+                                styles.branchChipTitle,
+                                {
+                                  color: active
+                                    ? paperTheme.colors.onPrimary
+                                    : paperTheme.colors.onSurface,
+                                },
+                              ]}
+                            >
+                              {branch.branchName}
+                            </Text>
+                            {active ? (
+                              <Ionicons
+                                name="checkmark-circle"
+                                size={18}
+                                color={paperTheme.colors.onPrimary}
+                              />
+                            ) : null}
+                          </View>
+                          <Text
+                            style={[
+                              styles.branchChipMeta,
+                              {
+                                color: active
+                                  ? paperTheme.colors.onPrimary
+                                  : paperTheme.colors.onSurfaceVariant,
+                              },
+                            ]}
+                          >
+                            {branch.branchId}
+                            {branch.isMainBranch ? ' • Main branch' : ''}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
             </View>
 
-            <FormField
-              label={isEditing ? 'NEW PASSWORD (OPTIONAL)' : 'PASSWORD'}
-              value={password}
-              onChangeText={setPassword}
-              placeholder={isEditing ? 'Leave blank to keep current' : 'Min. 6 characters'}
-              secureTextEntry={!showPassword}
-              showToggle
-              onToggleSecure={() => setShowPassword((prev) => !prev)}
-              paperTheme={paperTheme}
-              resolvedTheme={resolvedTheme}
-            />
-            <FormField
-              label={isEditing ? 'CONFIRM NEW PASSWORD' : 'CONFIRM PASSWORD'}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              placeholder="Re-enter password"
-              secureTextEntry={!showConfirmPassword}
-              showToggle
-              onToggleSecure={() => setShowConfirmPassword((prev) => !prev)}
-              paperTheme={paperTheme}
-              resolvedTheme={resolvedTheme}
-            />
+            {!isOwnerUser ? (
+              <>
+                <FormField
+                  label={isEditing ? 'NEW PASSWORD (OPTIONAL)' : 'PASSWORD'}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder={isEditing ? 'Leave blank to keep current' : 'Min. 6 characters'}
+                  secureTextEntry={!showPassword}
+                  showToggle
+                  onToggleSecure={() => setShowPassword((prev) => !prev)}
+                  editable={!isOwnerUser}
+                  paperTheme={paperTheme}
+                  resolvedTheme={resolvedTheme}
+                />
+                <FormField
+                  label={isEditing ? 'CONFIRM NEW PASSWORD' : 'CONFIRM PASSWORD'}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Re-enter password"
+                  secureTextEntry={!showConfirmPassword}
+                  showToggle
+                  onToggleSecure={() => setShowConfirmPassword((prev) => !prev)}
+                  editable={!isOwnerUser}
+                  paperTheme={paperTheme}
+                  resolvedTheme={resolvedTheme}
+                />
+              </>
+            ) : null}
 
             <TouchableOpacity
               style={[
@@ -512,7 +733,7 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
                 },
               ]}
               onPress={() => void handleSave()}
-              disabled={saving || deleting}
+              disabled={saving || deleting || isOwnerUser || branchesLoading}
             >
               {saving ? (
                 <ActivityIndicator color={paperTheme.colors.onPrimary} />
@@ -523,7 +744,7 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
               )}
             </TouchableOpacity>
 
-            {isEditing ? (
+            {isEditing && !isOwnerUser ? (
               <TouchableOpacity
                 style={[
                   styles.deleteBtn,
@@ -578,8 +799,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   flex: { flex: 1 },
   scroll: {
+    flexGrow: 1,
     paddingHorizontal: 16,
-    paddingBottom: 40,
   },
   loaderWrap: {
     flex: 1,
@@ -631,6 +852,55 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     marginBottom: 18,
+  },
+  branchSection: {
+    marginBottom: 18,
+  },
+  branchLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  branchHint: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    marginBottom: 10,
+  },
+  branchList: {
+    gap: 10,
+  },
+  branchChip: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  branchChipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  branchChipTitle: {
+    flex: 1,
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
+  },
+  branchChipMeta: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  ownerRoleCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 18,
+  },
+  ownerRoleText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
   },
   roleChip: {
     flex: 1,

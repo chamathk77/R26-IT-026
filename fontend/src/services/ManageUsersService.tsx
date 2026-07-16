@@ -7,6 +7,7 @@ import {
   CreateShopUserRequest,
   CreateShopUserResponse,
   DeleteShopUserResponse,
+  GetLoggedUserBranchesResponse,
   GetShopUsersResponse,
   UpdateShopUserRequest,
   UpdateShopUserResponse,
@@ -39,6 +40,33 @@ export const fetchShopUsers_Service = createAsyncThunk(
       const apiError = toApiErrorResponse(error);
       console.log('error in fetchShopUsers_Service', apiError);
       return rejectWithValue(apiError);
+    }
+  },
+);
+
+export const fetchLoggedUserBranches_Service = createAsyncThunk(
+  'manageUsers/fetchLoggedUserBranches',
+  async (_void, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.get<GetLoggedUserBranchesResponse>(
+        '/api/manage-users/logged-user/branches',
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: response.data?.message || 'Could not load branches',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
     }
   },
 );
@@ -79,7 +107,7 @@ export const updateShopUser_Service = createAsyncThunk(
       await ensureInternetConnection();
 
       const { userId, password, ...fields } = payload;
-      const body: Record<string, string> = { ...fields };
+      const body: Record<string, string | string[]> = { ...fields };
       if (password?.trim()) {
         body.password = password;
       }

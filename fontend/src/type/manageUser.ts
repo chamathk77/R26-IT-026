@@ -1,5 +1,14 @@
 export type ManageUserRole = 'admin' | 'staff';
 
+export interface ManageUserBranch {
+  branchId: string;
+  branchName: string;
+  address?: string;
+  phone?: string;
+  isMainBranch?: boolean;
+  isActive?: boolean;
+}
+
 export interface ShopUser {
   _id: string;
   name: string;
@@ -7,6 +16,7 @@ export interface ShopUser {
   phoneNumber: string;
   role: string;
   shopId: string;
+  allowedBranchIds: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -25,6 +35,7 @@ export interface CreateShopUserRequest {
   phoneNumber: string;
   role: ManageUserRole;
   password: string;
+  allowedBranchIds: string[];
 }
 
 export interface CreateShopUserResponse {
@@ -34,6 +45,7 @@ export interface CreateShopUserResponse {
   email: string;
   phoneNumber: string;
   role: string;
+  allowedBranchIds?: string[];
   message: string;
   maxUsers?: number;
   currentUsers?: number;
@@ -47,6 +59,7 @@ export interface UpdateShopUserRequest {
   phoneNumber: string;
   role: ManageUserRole;
   password?: string;
+  allowedBranchIds: string[];
 }
 
 export interface UpdateShopUserResponse {
@@ -58,5 +71,14 @@ export interface UpdateShopUserResponse {
 export interface DeleteShopUserResponse {
   success: boolean;
   id: string;
+  message: string;
+}
+
+export interface GetLoggedUserBranchesResponse {
+  success: boolean;
+  shopId: string;
+  allowedBranchIds: string[];
+  count: number;
+  data: ManageUserBranch[];
   message: string;
 }

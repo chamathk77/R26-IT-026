@@ -132,6 +132,14 @@ function UserCard({
               {user.phoneNumber}
             </Text>
           </View>
+          <View style={styles.detailRow}>
+            <Ionicons name="git-branch-outline" size={16} color={paperTheme.colors.onSurfaceVariant} />
+            <Text style={[styles.detailText, { color: paperTheme.colors.onSurface }]}>
+              {user.allowedBranchIds?.length
+                ? `${user.allowedBranchIds.length} branch${user.allowedBranchIds.length > 1 ? 'es' : ''} assigned`
+                : 'No branch assigned'}
+            </Text>
+          </View>
 
           {!isOwner ? (
             <TouchableOpacity
@@ -343,7 +351,7 @@ export default function ManageAccountScreen({ navigation }: Props) {
       </View>
 
       <Text style={[styles.caption, { color: paperTheme.colors.onSurfaceVariant }]}>
-        Tap a user to expand details. Swipe left on admin or staff to delete.
+        Tap a user to expand details. Owner is read-only. Swipe left on admin or staff to delete.
       </Text>
     </View>
   );
