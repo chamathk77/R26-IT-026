@@ -116,10 +116,9 @@ cartSchema.pre('validate', function normalizeCartFields() {
 
 // One session per user per branch within a shop.
 cartSchema.index({ shopId: 1, branchId: 1, user: 1, sessionId: 1 }, { unique: true });
-// Cart #1, #2, ... unique per shop + branch.
-cartSchema.index({ shopId: 1, branchId: 1, cartNumber: 1 }, { unique: true });
+// Cart #1, #2, ... unique per shop across all branches.
+cartSchema.index({ shopId: 1, cartNumber: 1 }, { unique: true });
 cartSchema.index({ shopId: 1, branchId: 1, user: 1, status: 1 });
-
 const Cart = mongoose.model('Cart', cartSchema);
 
 Cart.CART_STATUSES = CART_STATUSES;

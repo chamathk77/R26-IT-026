@@ -683,7 +683,7 @@ export default function ProductsScreen({ navigation }: Props) {
           message={slideToastMessage}
           onDismiss={hideSlideToast}
           paperTheme={paperTheme}
-          durationMs={2000}
+          durationMs={700}
         />
 
         <View style={styles.headerBlock}>

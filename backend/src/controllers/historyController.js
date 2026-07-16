@@ -4,6 +4,8 @@ const History = require("../models/history");
 const SalePerson = require("../models/salePerson");
 const User = require("../models/user");
 const Product = require("../models/product");
+const BranchStock = require("../models/branchStock");
+const Branch = require("../models/branch");
 const ShopsData = require("../models/shopsData");
 const { sendSms } = require("../services/smsService");
 const {
@@ -18,6 +20,10 @@ function normalizeShopId(value) {
   return value ? String(value).trim().toUpperCase() : "";
 }
 
+function normalizeBranchId(value) {
+  return value ? String(value).trim().toUpperCase() : "";
+}
+
 function requireShopId(req, res) {
   const shopId = normalizeShopId(req.user?.shopId);
   if (!shopId) {
@@ -25,6 +31,19 @@ function requireShopId(req, res) {
     return null;
   }
   return shopId;
+}
+
+function requireShopAndBranchId(req, res) {
+  const shopId = requireShopId(req, res);
+  if (!shopId) return null;
+
+  const branchId = normalizeBranchId(req.user?.branchId);
+  if (!branchId) {
+    res.status(400).json({ success: false, message: "Branch id is required" });
+    return null;
+  }
+
+  return { shopId, branchId };
 }
 
 function roundMoney(value) {
@@ -195,6 +214,7 @@ function mapHistoryRecord(record) {
   return {
     _id: record._id,
     shopId: record.shopId,
+    branchId: record.branchId,
     cartId: record.cartId,
     cartNumber: record.cartNumber,
     orderId: record.orderId,
@@ -227,8 +247,11 @@ function mapHistoryRecord(record) {
   };
 }
 
-function buildHistoryListFilter(req, shopId) {
-  const filter = { shopId };
+function buildHistoryListFilter(req, shopId, branchId) {
+  const filter = {
+    shopId,
+    branchId,
+  };
 
   const scopeRaw = req.query?.scope;
   const scope =
@@ -346,8 +369,9 @@ async function resolveOptionalSalesPersonId(salesPersonIdRaw, shopId) {
 
 const createHistory = async (req, res) => {
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
     const {
       sessionId,
@@ -380,6 +404,7 @@ const createHistory = async (req, res) => {
 
     const cart = await Cart.findOne({
       shopId,
+      branchId,
       user: req.user.id,
       sessionId,
       status: "proceed",
@@ -402,6 +427,7 @@ const createHistory = async (req, res) => {
 
     const existingHistory = await History.findOne({
       shopId,
+      branchId,
       cartId: cart.sessionId,
     }).lean();
     if (existingHistory) {
@@ -430,6 +456,7 @@ const createHistory = async (req, res) => {
 
     const history = await History.create({
       shopId,
+      branchId: cart.branchId || branchId,
       cartId: cart.sessionId,
       cartNumber: cart.cartNumber,
       orderId,
@@ -516,10 +543,11 @@ const createHistory = async (req, res) => {
 
 const getHistory = async (req, res) => {
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
-    const listQuery = buildHistoryListFilter(req, shopId);
+    const listQuery = buildHistoryListFilter(req, shopId, branchId);
     if (listQuery.error) {
       return res.status(400).json({ success: false, message: listQuery.error });
     }
@@ -541,6 +569,8 @@ const getHistory = async (req, res) => {
     res.status(200).json({
       success: true,
       scope,
+      shopId,
+      branchId,
       data: records.map(mapHistoryRecord),
       pagination: {
         page,
@@ -587,21 +617,85 @@ function mapSalesStats(rows) {
   };
 }
 
-const getTodayStats = async (req, res) => {
+/**
+ * Today (or from/to) total sales + order count for the logged-in user's
+ * current branch only, and only orders submitted by that user.
+ */
+const totalSalesBranch_loggedUser_Dashboard = async (req, res) => {
+  try {
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
+
+    const { start, end } = getStatsDateRange(req.query);
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+
+    const rows = await History.aggregate([
+      {
+        $match: {
+          shopId,
+          branchId,
+          submittedUserId: userId,
+          checkOutTime: { $gte: start, $lt: end },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalSales: { $sum: "$totalAmount" },
+          orderCount: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const stats = mapSalesStats(rows);
+
+    return res.status(200).json({
+      success: true,
+      shopId,
+      branchId,
+      data: {
+        totalSales: stats.totalSales,
+        orderCount: stats.orderCount,
+      },
+      message: "Branch logged-user dashboard sales loaded",
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Owner only: shop-wide sales across all branches + per-branch breakdown.
+ */
+const getAllSalesSummary_forDashboard = async (req, res) => {
   try {
     const shopId = requireShopId(req, res);
     if (!shopId) return;
 
+    const user = await User.findById(req.user.id).select("role shopId").lean();
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authorized, user not found",
+      });
+    }
+    if (user.role !== "owner") {
+      return res.status(403).json({
+        success: false,
+        message: "Only owner can view all-branches sales summary",
+      });
+    }
+
     const { start, end } = getStatsDateRange(req.query);
-    const userId = new mongoose.Types.ObjectId(req.user.id);
     const dateFilter = {
       shopId,
       checkOutTime: { $gte: start, $lt: end },
     };
 
-    const [mineRows, allRows] = await Promise.all([
+    const [overallRows, perBranchRows] = await Promise.all([
       History.aggregate([
-        { $match: { ...dateFilter, submittedUserId: userId } },
+        { $match: dateFilter },
         {
           $group: {
             _id: null,
@@ -614,32 +708,79 @@ const getTodayStats = async (req, res) => {
         { $match: dateFilter },
         {
           $group: {
-            _id: null,
+            _id: "$branchId",
             totalSales: { $sum: "$totalAmount" },
             orderCount: { $sum: 1 },
           },
         },
+        { $sort: { _id: 1 } },
       ]),
     ]);
 
-    res.status(200).json({
+    const overall = mapSalesStats(overallRows);
+
+    const branches = await Branch.find({ shopId })
+      .select("branchId branchName isMainBranch isActive")
+      .lean();
+
+    const salesByBranchId = new Map(
+      perBranchRows.map((row) => [
+        String(row._id ?? "").trim().toUpperCase(),
+        {
+          totalSales: roundMoney(row.totalSales ?? 0),
+          orderCount: row.orderCount ?? 0,
+        },
+      ]),
+    );
+
+    const branchesSummary = branches.map((branch) => {
+      const id = String(branch.branchId).trim().toUpperCase();
+      const sales = salesByBranchId.get(id) ?? { totalSales: 0, orderCount: 0 };
+      return {
+        branchId: id,
+        branchName: branch.branchName,
+        isMainBranch: Boolean(branch.isMainBranch),
+        isActive: Boolean(branch.isActive),
+        totalSales: sales.totalSales,
+        orderCount: sales.orderCount,
+      };
+    });
+
+    // Include any branchIds that have sales but no Branch document (edge case).
+    for (const [branchId, sales] of salesByBranchId.entries()) {
+      if (!branchId) continue;
+      if (branchesSummary.some((b) => b.branchId === branchId)) continue;
+      branchesSummary.push({
+        branchId,
+        branchName: null,
+        isMainBranch: false,
+        isActive: false,
+        totalSales: sales.totalSales,
+        orderCount: sales.orderCount,
+      });
+    }
+
+    return res.status(200).json({
       success: true,
+      shopId,
       data: {
-        mine: mapSalesStats(mineRows),
-        all: mapSalesStats(allRows),
+        totalSales: overall.totalSales,
+        orderCount: overall.orderCount,
+        branches: branchesSummary,
       },
-      message: "Today sales stats loaded",
+      message: "All-branches sales summary loaded",
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
 const reversedSalesData = async (req, res) => {
   const session = await mongoose.startSession();
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
     const historyId = req.params?.id ?? req.body?.id ?? req.body?.historyId;
     if (!historyId || !mongoose.Types.ObjectId.isValid(String(historyId))) {
@@ -666,6 +807,7 @@ const reversedSalesData = async (req, res) => {
       const history = await History.findOne({
         _id: historyId,
         shopId,
+        branchId,
       }).session(session);
 
       if (!history) {
@@ -680,6 +822,7 @@ const reversedSalesData = async (req, res) => {
         throw new Error("HISTORY_ALREADY_REVERSED");
       }
 
+      const historyBranchId = normalizeBranchId(history.branchId) || branchId;
       const itemEntries = Array.isArray(history.items) ? history.items : [];
       for (const item of itemEntries) {
         if (!item?.productId) continue;
@@ -695,9 +838,22 @@ const reversedSalesData = async (req, res) => {
         const restoreQty = Number(item.qty) || 0;
         if (restoreQty <= 0) continue;
 
-        const currentQty = Number(product.qty) || 0;
-        product.qty = currentQty + restoreQty;
-        await product.save({ session });
+        await BranchStock.findOneAndUpdate(
+          {
+            shopId,
+            branchId: historyBranchId,
+            productId: item.productId,
+          },
+          {
+            $inc: { qty: restoreQty },
+            $setOnInsert: {
+              shopId,
+              branchId: historyBranchId,
+              productId: item.productId,
+            },
+          },
+          { upsert: true, session, returnDocument: "after" },
+        );
       }
 
       await removeCustomerData(
@@ -750,8 +906,9 @@ const reversedSalesData = async (req, res) => {
 
 const resendBillSms = async (req, res) => {
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -772,7 +929,7 @@ const resendBillSms = async (req, res) => {
       });
     }
 
-    const history = await History.findOne({ _id: id, shopId });
+    const history = await History.findOne({ _id: id, shopId, branchId });
     if (!history) {
       return res.status(404).json({ success: false, message: 'History record not found' });
     }
@@ -830,7 +987,8 @@ const resendBillSms = async (req, res) => {
 module.exports = {
   createHistory,
   getHistory,
-  getTodayStats,
+  totalSalesBranch_loggedUser_Dashboard,
+  getAllSalesSummary_forDashboard,
   reversedSalesData,
   resendBillSms,
 };

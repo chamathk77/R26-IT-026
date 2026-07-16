@@ -1473,7 +1473,7 @@ export default function CartScreen({ navigation }: Props) {
           onDismiss={hideSlideToast}
           paperTheme={paperTheme}
           tone={slideToastTone}
-          durationMs={2200}
+          durationMs={250}
         />
 
         <View style={styles.titleRow}>

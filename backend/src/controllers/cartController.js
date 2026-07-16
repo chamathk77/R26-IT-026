@@ -422,33 +422,21 @@ async function proceedCartSession(cart, options = {}) {
   return cart;
 }
 
-async function getNextCartNumber(shopId, branchId) {
+async function getNextCartNumber(shopId) {
   const normalizedShopId = normalizeShopId(shopId);
-  const normalizedBranchId = normalizeBranchId(branchId);
   if (!normalizedShopId) {
     throw new Error('Shop id is required');
   }
-  if (!normalizedBranchId) {
-    throw new Error('Branch id is required');
-  }
 
-  const latest = await Cart.findOne({
-    shopId: normalizedShopId,
-    branchId: normalizedBranchId,
-  })
+  const latest = await Cart.findOne({ shopId: normalizedShopId })
     .sort({ cartNumber: -1 })
     .select('cartNumber')
     .lean();
 
   let candidate = (latest?.cartNumber ?? 0) + 1;
 
-  while (
-    await Cart.exists({
-      shopId: normalizedShopId,
-      branchId: normalizedBranchId,
-      cartNumber: candidate,
-    })
-  ) {
+  // Cart numbers are unique across all branches in the same shop.
+  while (await Cart.exists({ shopId: normalizedShopId, cartNumber: candidate })) {
     candidate += 1;
   }
 
@@ -468,7 +456,7 @@ async function createPendingCart({ shopId, branchId, userId, sessionId }) {
   const MAX_ATTEMPTS = 5;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-    const cartNumber = await getNextCartNumber(normalizedShopId, normalizedBranchId);
+    const cartNumber = await getNextCartNumber(normalizedShopId);
 
     try {
       return await Cart.create({
@@ -500,7 +488,7 @@ async function createPendingCart({ shopId, branchId, userId, sessionId }) {
     }
   }
 
-  throw new Error('Could not assign a unique cart number for this branch');
+  throw new Error('Could not assign a unique cart number for this shop');
 }
 
 async function buildProductPriceMap(productIds, shopId) {
@@ -604,7 +592,7 @@ const createCartSession = async (req, res) => {
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
-        message: 'This cart number already exists for your branch. Please retry.',
+        message: 'This cart number already exists for your shop. Please retry.',
       });
     }
     res.status(500).json({ success: false, message: error.message });

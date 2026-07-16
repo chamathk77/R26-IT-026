@@ -25,6 +25,9 @@ export default function SlideToast({
   const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(SLIDE_OFFSET)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  const isBrief = durationMs <= 500;
+  const enterDuration = isBrief ? 100 : 180;
+  const exitDuration = isBrief ? 80 : 220;
 
   useEffect(() => {
     if (!message) return;
@@ -33,15 +36,21 @@ export default function SlideToast({
     opacity.setValue(0);
 
     Animated.parallel([
-      Animated.spring(translateY, {
-        toValue: 0,
-        useNativeDriver: true,
-        speed: 18,
-        bounciness: 6,
-      }),
+      isBrief
+        ? Animated.timing(translateY, {
+            toValue: 0,
+            duration: enterDuration,
+            useNativeDriver: true,
+          })
+        : Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            speed: 18,
+            bounciness: 6,
+          }),
       Animated.timing(opacity, {
         toValue: 1,
-        duration: 180,
+        duration: enterDuration,
         useNativeDriver: true,
       }),
     ]).start();
@@ -50,12 +59,12 @@ export default function SlideToast({
       Animated.parallel([
         Animated.timing(translateY, {
           toValue: SLIDE_OFFSET,
-          duration: 220,
+          duration: exitDuration,
           useNativeDriver: true,
         }),
         Animated.timing(opacity, {
           toValue: 0,
-          duration: 180,
+          duration: exitDuration,
           useNativeDriver: true,
         }),
       ]).start(({ finished }) => {
@@ -64,7 +73,7 @@ export default function SlideToast({
     }, durationMs);
 
     return () => clearTimeout(hideTimer);
-  }, [durationMs, message, onDismiss, opacity, translateY]);
+  }, [durationMs, enterDuration, exitDuration, isBrief, message, onDismiss, opacity, translateY]);
 
   if (!message) return null;
 

@@ -272,6 +272,9 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
           () => {},
         );
       } catch (error: unknown) {
+        setResendModalVisible(false);
+        setResendingBill(false);
+
         const handled = await handleSessionExpiredApiError(error, show_Alert);
         if (handled) return;
 

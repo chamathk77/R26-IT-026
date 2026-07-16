@@ -1,5 +1,13 @@
 import React, { useCallback, useState } from 'react';
-import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  RefreshControl,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -12,22 +20,35 @@ import { useTheme } from '../../context/ThemeContext';
 import { navigationRef } from '../../navigation/RootNavigation';
 import { useCommonAlert } from '../../hooks/useCommonAlert';
 import CommonAlert from '../../components/CommonAlert';
-import { fetchTodayHomeStats_Service } from '../../services/HomeStatsService';
-import { TodayHomeStats } from '../../type/dashboard';
+import {
+  fetchAllSalesSummaryDashboard_Service,
+  fetchBranchLoggedUserDashboard_Service,
+} from '../../services/HomeStatsService';
+import { AllSalesSummaryDashboard, TodaySalesStats } from '../../type/dashboard';
+import {
+  getApiErrorMessage,
+  handleSessionExpiredApiError,
+} from '../../utils/apiErrorAlert';
 
 type Props = BottomTabScreenProps<MainBottomTabParamList, 'Home'>;
 
-const EMPTY_TODAY_STATS: TodayHomeStats = {
-  mine: { totalSales: 0, orderCount: 0 },
-  all: { totalSales: 0, orderCount: 0 },
+const EMPTY_USER_STATS: TodaySalesStats = { totalSales: 0, orderCount: 0 };
+const EMPTY_ALL_SUMMARY: AllSalesSummaryDashboard = {
+  totalSales: 0,
+  orderCount: 0,
+  branches: [],
 };
 
 function formatCurrency(value: number): string {
-  return `$${value.toFixed(2)}`;
+  return `Rs. ${value.toLocaleString('en-LK')}`;
 }
 
 function isOwnerOrAdmin(role?: string): boolean {
   return role === 'owner' || role === 'admin';
+}
+
+function isOwner(role?: string): boolean {
+  return role === 'owner';
 }
 
 export default function HomeScreen(_props: Props) {
@@ -36,54 +57,95 @@ export default function HomeScreen(_props: Props) {
   const userRole = useSelector((state: RootState) => state.AuthReducer.Login.userData?.role);
   const showManageButtons = isOwnerOrAdmin(userRole);
   const showManageEmployees = isOwnerOrAdmin(userRole);
-  const [todayStats, setTodayStats] = useState<TodayHomeStats>(EMPTY_TODAY_STATS);
+  const showOwnerSummary = isOwner(userRole);
+
+  const [userStats, setUserStats] = useState<TodaySalesStats>(EMPTY_USER_STATS);
+  const [allSummary, setAllSummary] = useState<AllSalesSummaryDashboard>(EMPTY_ALL_SUMMARY);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [statsError, setStatsError] = useState<string | null>(null);
 
   const surface = paperTheme.colors.surface;
   const primary = paperTheme.colors.primary;
 
+  const loadDashboardStats = useCallback(
+    async (options?: { silent?: boolean }) => {
+      const silent = Boolean(options?.silent);
+      if (!silent) {
+        setStatsLoading(true);
+      }
+      setStatsError(null);
+
+      try {
+        const branchUserStats = await fetchBranchLoggedUserDashboard_Service();
+        setUserStats({
+          totalSales: branchUserStats.totalSales,
+          orderCount: branchUserStats.orderCount,
+        });
+
+        if (showOwnerSummary) {
+          const summary = await fetchAllSalesSummaryDashboard_Service();
+          setAllSummary(summary);
+        } else {
+          setAllSummary(EMPTY_ALL_SUMMARY);
+        }
+      } catch (error: unknown) {
+        const handled = await handleSessionExpiredApiError(error, show_Alert);
+        if (handled) return;
+
+        setUserStats(EMPTY_USER_STATS);
+        setAllSummary(EMPTY_ALL_SUMMARY);
+        const message = getApiErrorMessage(error, 'Could not load today sales stats');
+        setStatsError(message);
+
+        setTimeout(() => {
+          show_Alert(
+            'error',
+            'Load failed',
+            message,
+            2,
+            false,
+            'Retry',
+            () => {
+              void loadDashboardStats();
+            },
+            'Cancel',
+            () => {},
+          );
+        }, 150);
+      } finally {
+        if (!silent) {
+          setStatsLoading(false);
+        }
+      }
+    },
+    [showOwnerSummary, show_Alert],
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadDashboardStats({ silent: true });
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadDashboardStats]);
+
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-
-      const loadTodayStats = async () => {
-        setStatsLoading(true);
-        setStatsError(null);
-
-        try {
-          const stats = await fetchTodayHomeStats_Service();
-          if (!active) return;
-          setTodayStats(stats);
-        } catch (error: unknown) {
-          if (!active) return;
-          setTodayStats(EMPTY_TODAY_STATS);
-          setStatsError(error instanceof Error ? error.message : 'Could not load today sales stats');
-        } finally {
-          if (active) {
-            setStatsLoading(false);
-          }
-        }
-      };
-
-      void loadTodayStats();
-
-      return () => {
-        active = false;
-      };
-    }, []),
+      void loadDashboardStats();
+    }, [loadDashboardStats]),
   );
 
   const confirmLogout = () => {
-   show_Alert
-   ('error', 'Error', 'Are you sure you want to log out?', 2, true, 'OK', () => {
-    if (navigationRef.isReady()) {
-      navigationRef.reset({
-        index: 0,
-        routes: [{ name: 'OnboardingScreen' }],
-      });
-    }
-   });
+    show_Alert('error', 'Error', 'Are you sure you want to log out?', 2, true, 'OK', () => {
+      if (navigationRef.isReady()) {
+        navigationRef.reset({
+          index: 0,
+          routes: [{ name: 'OnboardingScreen' }],
+        });
+      }
+    });
   };
 
   const showNotificationsComingSoon = () => {
@@ -111,6 +173,14 @@ export default function HomeScreen(_props: Props) {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={primary}
+              colors={[primary]}
+            />
+          }
         >
           <View style={styles.headerRow}>
             <View style={{ flex: 1 }}>
@@ -164,7 +234,7 @@ export default function HomeScreen(_props: Props) {
                   Your sales today
                 </Text>
                 <Text style={[styles.statValue, { color: paperTheme.colors.onPrimary }]}>
-                  {statsLoading ? '—' : formatCurrency(todayStats.mine.totalSales)}
+                  {statsLoading && !refreshing ? '—' : formatCurrency(userStats.totalSales)}
                 </Text>
               </View>
               <View style={[styles.statCard, { backgroundColor: surface }]}>
@@ -173,36 +243,38 @@ export default function HomeScreen(_props: Props) {
                   Your orders today
                 </Text>
                 <Text style={[styles.statValue, { color: paperTheme.colors.onSurface }]}>
-                  {statsLoading ? '—' : todayStats.mine.orderCount}
+                  {statsLoading && !refreshing ? '—' : userStats.orderCount}
                 </Text>
               </View>
             </View>
 
-            <View style={styles.statsRow}>
-              <View
-                style={[
-                  styles.statCard,
-                  { backgroundColor: paperTheme.colors.tertiaryContainer },
-                ]}
-              >
-                <Ionicons name="trending-up-outline" size={22} color={paperTheme.colors.tertiary} />
-                <Text style={[styles.statLabel, { color: paperTheme.colors.onTertiaryContainer }]}>
-                  Total sales today
-                </Text>
-                <Text style={[styles.statValue, { color: paperTheme.colors.onTertiaryContainer }]}>
-                  {statsLoading ? '—' : formatCurrency(todayStats.all.totalSales)}
-                </Text>
+            {showOwnerSummary ? (
+              <View style={styles.statsRow}>
+                <View
+                  style={[
+                    styles.statCard,
+                    { backgroundColor: paperTheme.colors.tertiaryContainer },
+                  ]}
+                >
+                  <Ionicons name="trending-up-outline" size={22} color={paperTheme.colors.tertiary} />
+                  <Text style={[styles.statLabel, { color: paperTheme.colors.onTertiaryContainer }]}>
+                    All branches sales
+                  </Text>
+                  <Text style={[styles.statValue, { color: paperTheme.colors.onTertiaryContainer }]}>
+                    {statsLoading && !refreshing ? '—' : formatCurrency(allSummary.totalSales)}
+                  </Text>
+                </View>
+                <View style={[styles.statCard, { backgroundColor: surface }]}>
+                  <Ionicons name="layers-outline" size={22} color={primary} />
+                  <Text style={[styles.statLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    All branches orders
+                  </Text>
+                  <Text style={[styles.statValue, { color: paperTheme.colors.onSurface }]}>
+                    {statsLoading && !refreshing ? '—' : allSummary.orderCount}
+                  </Text>
+                </View>
               </View>
-              <View style={[styles.statCard, { backgroundColor: surface }]}>
-                <Ionicons name="layers-outline" size={22} color={primary} />
-                <Text style={[styles.statLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  Total orders today
-                </Text>
-                <Text style={[styles.statValue, { color: paperTheme.colors.onSurface }]}>
-                  {statsLoading ? '—' : todayStats.all.orderCount}
-                </Text>
-              </View>
-            </View>
+            ) : null}
           </View>
 
           {showManageButtons ? (
@@ -238,24 +310,24 @@ export default function HomeScreen(_props: Props) {
           ) : null}
 
           {showManageEmployees ? (
-              <TouchableOpacity
-                style={[styles.manageEmployeesBtn, { backgroundColor: paperTheme.colors.secondaryContainer }]}
-                onPress={() => {
-                  if (navigationRef.isReady()) {
-                    navigationRef.navigate('ManageEmployees');
-                  }
-                }}
+            <TouchableOpacity
+              style={[styles.manageEmployeesBtn, { backgroundColor: paperTheme.colors.secondaryContainer }]}
+              onPress={() => {
+                if (navigationRef.isReady()) {
+                  navigationRef.navigate('ManageEmployees');
+                }
+              }}
+            >
+              <Ionicons name="people-outline" size={18} color={paperTheme.colors.onSecondaryContainer} />
+              <Text
+                style={[
+                  styles.manageEmployeesBtnText,
+                  { color: paperTheme.colors.onSecondaryContainer },
+                ]}
               >
-                <Ionicons name="people-outline" size={18} color={paperTheme.colors.onSecondaryContainer} />
-                <Text
-                  style={[
-                    styles.manageEmployeesBtnText,
-                    { color: paperTheme.colors.onSecondaryContainer },
-                  ]}
-                >
-                  Manage Employees
-                </Text>
-              </TouchableOpacity>
+                Manage Employees
+              </Text>
+            </TouchableOpacity>
           ) : null}
 
           <View style={{ height: 24 }} />
