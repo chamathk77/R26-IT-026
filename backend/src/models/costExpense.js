@@ -1,8 +1,17 @@
 const mongoose = require('mongoose');
 
+const BRANCH_ID_PATTERN = /^B\d{5}$/;
+
 const costExpenseSchema = new mongoose.Schema(
   {
     shopId: {
+      type: String,
+      required: true,
+      trim: true,
+      uppercase: true,
+      index: true,
+    },
+    branchId: {
       type: String,
       required: true,
       trim: true,
@@ -74,6 +83,13 @@ costExpenseSchema.pre('validate', function normalizeCostExpenseFields() {
     this.shopId = String(this.shopId).trim().toUpperCase();
   }
 
+  if (this.branchId) {
+    this.branchId = String(this.branchId).trim().toUpperCase();
+    if (!BRANCH_ID_PATTERN.test(this.branchId)) {
+      throw new Error('branchId must match format B00001');
+    }
+  }
+
   if (!this.purchaseDate) {
     this.purchaseDate = new Date();
   }
@@ -91,8 +107,8 @@ costExpenseSchema.pre('validate', function normalizeCostExpenseFields() {
   }
 });
 
-costExpenseSchema.index({ shopId: 1, purchaseDate: -1 });
-costExpenseSchema.index({ shopId: 1, categoryId: 1 });
+costExpenseSchema.index({ shopId: 1, branchId: 1, purchaseDate: -1 });
+costExpenseSchema.index({ shopId: 1, branchId: 1, categoryId: 1 });
 costExpenseSchema.index({ shopId: 1, expenseId: 1 }, { unique: true });
 
 module.exports = mongoose.model('CostExpense', costExpenseSchema);

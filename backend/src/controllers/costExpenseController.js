@@ -248,9 +248,19 @@ function parsePagination(query) {
   return { page, limit, skip };
 }
 
-async function buildCostHistoryFilter(req, shopId) {
-  const filter = { shopId };
-  const appliedFilters = {};
+function normalizeBranchId(value) {
+  return value ? String(value).trim().toUpperCase() : '';
+}
+
+function getRequestBranchId(req) {
+  return normalizeBranchId(req.user?.branchId);
+}
+
+async function buildCostHistoryFilter(req, shopId, branchId) {
+  const filter = { shopId, branchId: normalizeBranchId(branchId) };
+  const appliedFilters = {
+    branchId: normalizeBranchId(branchId),
+  };
 
   const startDate = parseFilterDate(req.query?.startDate);
   if (startDate === undefined) {
@@ -332,8 +342,8 @@ function applyExpenseImageUpdate(req, existing, updates) {
   }
 }
 
-async function getCostExpenseManagerContext(userId) {
-  const user = await User.findById(userId).select('role shopId name').lean();
+async function getCostExpenseManagerContext(req) {
+  const user = await User.findById(req.user.id).select('role shopId name').lean();
   if (!user) {
     return { error: { status: 401, message: 'Not authorized, user not found' } };
   }
@@ -346,7 +356,19 @@ async function getCostExpenseManagerContext(userId) {
   if (!shopId) {
     return { error: { status: 400, message: 'Shop id is required' } };
   }
-  return { shopId, user };
+
+  const branchId = getRequestBranchId(req);
+  if (!branchId) {
+    return {
+      error: {
+        status: 400,
+        message: 'Branch id is required. Please select a branch first.',
+        code: 'BRANCH_REQUIRED',
+      },
+    };
+  }
+
+  return { shopId, branchId, user };
 }
 
 async function resolveShopCategory(categoryId, shopId) {
@@ -412,14 +434,17 @@ function resolveQtyForExpense(isProduct, qty, requireQty = false) {
 
 const createCostExpense = async (req, res) => {
   try {
-    const managerContext = await getCostExpenseManagerContext(req.user.id);
+    const managerContext = await getCostExpenseManagerContext(req);
     if (managerContext.error) {
-      return res
-        .status(managerContext.error.status)
-        .json({ message: managerContext.error.message, success: false });
+      rollbackUploadedFile(req);
+      return res.status(managerContext.error.status).json({
+        message: managerContext.error.message,
+        success: false,
+        code: managerContext.error.code,
+      });
     }
 
-    const { shopId } = managerContext;
+    const { shopId, branchId } = managerContext;
     const {
       expenseName,
       categoryId,
@@ -482,6 +507,7 @@ const createCostExpense = async (req, res) => {
 
     const costExpense = await CostExpense.create({
       shopId,
+      branchId,
       expenseId,
       expenseName: String(expenseName).trim(),
       categoryId: categoryResult.category._id,
@@ -513,16 +539,16 @@ const createCostExpense = async (req, res) => {
 
 // const getCostExpenses = async (req, res) => {
 //   try {
-//     const managerContext = await getCostExpenseManagerContext(req.user.id);
+//     const managerContext = await getCostExpenseManagerContext(req);
 //     if (managerContext.error) {
 //       return res
 //         .status(managerContext.error.status)
-//         .json({ message: managerContext.error.message, success: false });
+//         .json({ message: managerContext.error.message, success: false, code: managerContext.error.code });
 //     }
 
-//     const { shopId } = managerContext;
+//     const { shopId, branchId } = managerContext;
 
-//     const costExpenses = await CostExpense.find({ shopId })
+//     const costExpenses = await CostExpense.find({ shopId, branchId })
 //       .populate('createdBy', 'name email role')
 //       .populate('categoryId', 'name colorCode')
 //       .sort({ purchaseDate: -1, createdAt: -1 });
@@ -535,15 +561,17 @@ const createCostExpense = async (req, res) => {
 
 const getCostHistory = async (req, res) => {
   try {
-    const managerContext = await getCostExpenseManagerContext(req.user.id);
+    const managerContext = await getCostExpenseManagerContext(req);
     if (managerContext.error) {
-      return res
-        .status(managerContext.error.status)
-        .json({ message: managerContext.error.message, success: false });
+      return res.status(managerContext.error.status).json({
+        message: managerContext.error.message,
+        success: false,
+        code: managerContext.error.code,
+      });
     }
 
-    const { shopId } = managerContext;
-    const historyFilter = await buildCostHistoryFilter(req, shopId);
+    const { shopId, branchId } = managerContext;
+    const historyFilter = await buildCostHistoryFilter(req, shopId, branchId);
     if (historyFilter.error) {
       return res.status(400).json({ message: historyFilter.error, success: false });
     }
@@ -591,16 +619,18 @@ const getCostExpenseById = async (req, res) => {
       return invalidIdResponse(res);
     }
 
-    const managerContext = await getCostExpenseManagerContext(req.user.id);
+    const managerContext = await getCostExpenseManagerContext(req);
     if (managerContext.error) {
-      return res
-        .status(managerContext.error.status)
-        .json({ message: managerContext.error.message, success: false });
+      return res.status(managerContext.error.status).json({
+        message: managerContext.error.message,
+        success: false,
+        code: managerContext.error.code,
+      });
     }
 
-    const { shopId } = managerContext;
+    const { shopId, branchId } = managerContext;
 
-    const costExpense = await CostExpense.findOne({ _id: id, shopId })
+    const costExpense = await CostExpense.findOne({ _id: id, shopId, branchId })
       .populate('createdBy', 'name email role')
       .populate('updatedBy', 'name email role')
       .populate('categoryId', 'name colorCode');
@@ -623,16 +653,18 @@ const updateCostExpense = async (req, res) => {
       return invalidIdResponse(res);
     }
 
-    const managerContext = await getCostExpenseManagerContext(req.user.id);
+    const managerContext = await getCostExpenseManagerContext(req);
     if (managerContext.error) {
       rollbackUploadedFile(req);
-      return res
-        .status(managerContext.error.status)
-        .json({ message: managerContext.error.message, success: false });
+      return res.status(managerContext.error.status).json({
+        message: managerContext.error.message,
+        success: false,
+        code: managerContext.error.code,
+      });
     }
 
-    const { shopId } = managerContext;
-    const existing = await CostExpense.findOne({ _id: id, shopId });
+    const { shopId, branchId } = managerContext;
+    const existing = await CostExpense.findOne({ _id: id, shopId, branchId });
     if (!existing) {
       rollbackUploadedFile(req);
       return res.status(404).json({ message: 'Cost expense not found', success: false });
@@ -726,10 +758,14 @@ const updateCostExpense = async (req, res) => {
 
     updates.updatedBy = req.user.id;
 
-    const costExpense = await CostExpense.findOneAndUpdate({ _id: id, shopId }, updates, {
-      returnDocument: 'after',
-      runValidators: true,
-    })
+    const costExpense = await CostExpense.findOneAndUpdate(
+      { _id: id, shopId, branchId },
+      updates,
+      {
+        returnDocument: 'after',
+        runValidators: true,
+      },
+    )
       .populate('createdBy', 'name email role')
       .populate('updatedBy', 'name email role')
       .populate('categoryId', 'name colorCode');
@@ -748,15 +784,17 @@ const deleteCostExpense = async (req, res) => {
       return invalidIdResponse(res);
     }
 
-    const managerContext = await getCostExpenseManagerContext(req.user.id);
+    const managerContext = await getCostExpenseManagerContext(req);
     if (managerContext.error) {
-      return res
-        .status(managerContext.error.status)
-        .json({ message: managerContext.error.message, success: false });
+      return res.status(managerContext.error.status).json({
+        message: managerContext.error.message,
+        success: false,
+        code: managerContext.error.code,
+      });
     }
 
-    const { shopId } = managerContext;
-    const costExpense = await CostExpense.findOneAndDelete({ _id: id, shopId });
+    const { shopId, branchId } = managerContext;
+    const costExpense = await CostExpense.findOneAndDelete({ _id: id, shopId, branchId });
     if (!costExpense) {
       return res.status(404).json({ message: 'Cost expense not found', success: false });
     }
@@ -778,18 +816,21 @@ const deleteCostExpense = async (req, res) => {
 
 const costOverview = async (req, res) => {
   try {
-    const managerContext = await getCostExpenseManagerContext(req.user.id);
+    const managerContext = await getCostExpenseManagerContext(req);
     if (managerContext.error) {
-      return res
-        .status(managerContext.error.status)
-        .json({ message: managerContext.error.message, success: false });
+      return res.status(managerContext.error.status).json({
+        message: managerContext.error.message,
+        success: false,
+        code: managerContext.error.code,
+      });
     }
 
-    const { shopId } = managerContext;
+    const { shopId, branchId } = managerContext;
     const { monthStart, monthEnd } = getCurrentMonthRange();
 
     const records = await CostExpense.find({
       shopId,
+      branchId,
       purchaseDate: { $gte: monthStart, $lte: monthEnd },
     })
       .select('categoryId categoryName amount')
@@ -802,6 +843,7 @@ const costOverview = async (req, res) => {
       success: true,
       data: {
         shopId,
+        branchId,
         monthStart: monthStart.toISOString(),
         monthEnd: monthEnd.toISOString(),
         ...summary,
@@ -814,11 +856,13 @@ const costOverview = async (req, res) => {
 
 const costSummary = async (req, res) => {
   try {
-    const managerContext = await getCostExpenseManagerContext(req.user.id);
+    const managerContext = await getCostExpenseManagerContext(req);
     if (managerContext.error) {
-      return res
-        .status(managerContext.error.status)
-        .json({ message: managerContext.error.message, success: false });
+      return res.status(managerContext.error.status).json({
+        message: managerContext.error.message,
+        success: false,
+        code: managerContext.error.code,
+      });
     }
 
     const dateRange = resolveSummaryDateRange(req.query);
@@ -826,11 +870,12 @@ const costSummary = async (req, res) => {
       return res.status(400).json({ message: dateRange.error, success: false });
     }
 
-    const { shopId } = managerContext;
+    const { shopId, branchId } = managerContext;
     const { rangeStart, rangeEnd, filterType, period, appliedFilters } = dateRange;
 
     const records = await CostExpense.find({
       shopId,
+      branchId,
       purchaseDate: { $gte: rangeStart, $lte: rangeEnd },
     })
       .select('categoryId categoryName amount purchaseDate')
@@ -843,6 +888,7 @@ const costSummary = async (req, res) => {
       success: true,
       data: {
         shopId,
+        branchId,
         filterType,
         period: period ?? null,
         startDate: rangeStart.toISOString(),
