@@ -13,7 +13,7 @@ import { useCommonAlert } from '../../../../hooks/useCommonAlert';
 import { fetchKpiSummary_Service } from '../../../../services/KpiService';
 import { AppDispatch, RootState } from '../../../../store/store';
 import { resetKpiSummary } from '../../../../store/reducers/KpiReducer';
-import { KpiSalesPersonSummary } from '../../../../type/kpi';
+import { KpiSalesPersonSummary, KpiUnassignedOrder } from '../../../../type/kpi';
 import { RootStackParamList } from '../../../../navigation/RootStackParamsList';
 import {
   getApiErrorMessage,
@@ -219,6 +219,68 @@ function SalesPersonCard({
   );
 }
 
+function UnassignedOrderCard({
+  order,
+  paperTheme,
+  resolvedTheme,
+  onPress,
+}: {
+  order: KpiUnassignedOrder;
+  paperTheme: ReturnType<typeof useTheme>['paperTheme'];
+  resolvedTheme: 'light' | 'dark';
+  onPress: () => void;
+}) {
+  const accent = paperTheme.colors.tertiary;
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={onPress}
+      style={[
+        summaryTabStyles.unassignedOrderCard,
+        {
+          backgroundColor: paperTheme.colors.surface,
+          borderColor: paperTheme.colors.outlineVariant,
+        },
+        kpiCardShadow(resolvedTheme),
+      ]}
+    >
+      <View style={summaryTabStyles.unassignedOrderRow}>
+        <View
+          style={[
+            summaryTabStyles.unassignedOrderIcon,
+            { backgroundColor: `${accent}18` },
+          ]}
+        >
+          <Ionicons name="receipt-outline" size={18} color={accent} />
+        </View>
+
+        <View style={summaryTabStyles.personBody}>
+          <Text
+            style={[summaryTabStyles.unassignedOrderId, { color: paperTheme.colors.onSurface }]}
+            numberOfLines={1}
+          >
+            {order.orderId}
+          </Text>
+          <Text
+            style={[summaryTabStyles.personMeta, { color: paperTheme.colors.onSurfaceVariant }]}
+            numberOfLines={1}
+          >
+            {formatDisplayDate(order.checkOutTime.slice(0, 10))} · Tap to assign
+          </Text>
+        </View>
+
+        <View style={summaryTabStyles.unassignedOrderTrailing}>
+          <Text style={[summaryTabStyles.unassignedOrderAmount, { color: paperTheme.colors.onSurface }]}>
+            {formatKpiAmount(order.totalAmount)}
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color={paperTheme.colors.onSurfaceVariant} />
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 export default function SummaryTabScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { paperTheme, resolvedTheme } = useTheme();
@@ -319,7 +381,6 @@ export default function SummaryTabScreen() {
   const salesPersons = data?.salesPersons ?? [];
   const unassignedSales = data?.unassignedSales;
   const showResults = Boolean(data) && hasActiveFilter;
-  const accentUnassigned = resolvedTheme === 'dark' ? '#fbbf24' : '#d97706';
 
   return (
     <>
@@ -580,106 +641,36 @@ export default function SummaryTabScreen() {
             </View>
 
             {(unassignedSales?.count ?? 0) > 0 ? (
-              <View
-                style={[
-                  summaryTabStyles.unassignedSection,
-                  {
-                    backgroundColor:
-                      resolvedTheme === 'dark' ? '#1c1917' : `${accentUnassigned}08`,
-                    borderColor: `${accentUnassigned}44`,
-                  },
-                  kpiCardShadow(resolvedTheme),
-                ]}
-              >
-                <View style={summaryTabStyles.unassignedSectionHeader}>
-                  <View
+              <View style={summaryTabStyles.unassignedSection}>
+                <View style={summaryTabStyles.teamSectionHeader}>
+                  <Text
+                    style={[summaryTabStyles.teamSectionTitle, { color: paperTheme.colors.onSurface }]}
+                  >
+                    Unassigned sales
+                  </Text>
+                  <Text
                     style={[
-                      summaryTabStyles.unassignedSectionIcon,
-                      { backgroundColor: `${accentUnassigned}22` },
+                      summaryTabStyles.teamSectionSub,
+                      { color: paperTheme.colors.onSurfaceVariant },
                     ]}
                   >
-                    <Ionicons name="help-buoy-outline" size={22} color={accentUnassigned} />
-                  </View>
-                  <View style={summaryTabStyles.teamSectionTitleBlock}>
-                    <Text
-                      style={[summaryTabStyles.teamSectionTitle, { color: paperTheme.colors.onSurface }]}
-                    >
-                      Unassigned sales
-                    </Text>
-                    <Text
-                      style={[
-                        summaryTabStyles.teamSectionSub,
-                        { color: paperTheme.colors.onSurfaceVariant },
-                      ]}
-                    >
-                      {unassignedSales?.count} order{(unassignedSales?.count ?? 0) === 1 ? '' : 's'} ·{' '}
-                      {formatKpiAmount(unassignedSales?.totalSalesAmount ?? 0)} total
-                    </Text>
-                  </View>
+                    {unassignedSales?.count} order{(unassignedSales?.count ?? 0) === 1 ? '' : 's'} ·{' '}
+                    {formatKpiAmount(unassignedSales?.totalSalesAmount ?? 0)} total · tap to assign
+                  </Text>
                 </View>
 
                 {(unassignedSales?.orders ?? []).map((order) => (
-                  <TouchableOpacity
+                  <UnassignedOrderCard
                     key={`${order.orderId}-${order.checkOutTime}`}
-                    activeOpacity={0.85}
+                    order={order}
+                    paperTheme={paperTheme}
+                    resolvedTheme={resolvedTheme}
                     onPress={() =>
                       navigation.navigate('KpiUnassignedOrderDetail', {
                         orderId: order.orderId,
                       })
                     }
-                    style={[
-                      summaryTabStyles.unassignedOrderCard,
-                      {
-                        backgroundColor: resolvedTheme === 'dark' ? '#422006' : '#fffbeb',
-                        borderColor: accentUnassigned,
-                      },
-                      kpiCardShadow(resolvedTheme),
-                    ]}
-                  >
-                    <View style={summaryTabStyles.unassignedOrderTop}>
-                      <View
-                        style={[
-                          summaryTabStyles.unassignedOrderIcon,
-                          { backgroundColor: `${accentUnassigned}22` },
-                        ]}
-                      >
-                        <Ionicons name="receipt-outline" size={20} color={accentUnassigned} />
-                      </View>
-                      <View style={{ flex: 1, gap: 3 }}>
-                        <Text
-                          style={[
-                            summaryTabStyles.unassignedOrderId,
-                            { color: resolvedTheme === 'dark' ? '#fef3c7' : '#92400e' },
-                          ]}
-                        >
-                          {order.orderId}
-                        </Text>
-                        <Text
-                          style={[
-                            summaryTabStyles.personMeta,
-                            { color: resolvedTheme === 'dark' ? '#fcd34d' : '#b45309' },
-                          ]}
-                        >
-                          {formatDisplayDate(order.checkOutTime.slice(0, 10))} · Tap to assign
-                        </Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                        <Text
-                          style={[
-                            summaryTabStyles.unassignedOrderAmount,
-                            { color: accentUnassigned },
-                          ]}
-                        >
-                          {formatKpiAmount(order.totalAmount)}
-                        </Text>
-                        <Ionicons
-                          name="chevron-forward"
-                          size={16}
-                          color={resolvedTheme === 'dark' ? '#fcd34d' : '#b45309'}
-                        />
-                      </View>
-                    </View>
-                  </TouchableOpacity>
+                  />
                 ))}
               </View>
             ) : null}

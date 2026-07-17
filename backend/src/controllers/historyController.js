@@ -345,7 +345,7 @@ function buildHistoryListFilter(req, shopId, branchId) {
   return { filter, scope };
 }
 
-async function resolveOptionalSalesPersonId(salesPersonIdRaw, shopId) {
+async function resolveOptionalSalesPersonId(salesPersonIdRaw, shopId, branchId) {
   if (
     salesPersonIdRaw === undefined ||
     salesPersonIdRaw === null ||
@@ -359,9 +359,13 @@ async function resolveOptionalSalesPersonId(salesPersonIdRaw, shopId) {
     return { error: "Invalid sales person id" };
   }
 
-  const salePerson = await SalePerson.findOne({ _id: salesPersonId, shopId }).lean();
+  const salePerson = await SalePerson.findOne({
+    _id: salesPersonId,
+    shopId,
+    allowedBranchIds: normalizeBranchId(branchId),
+  }).lean();
   if (!salePerson) {
-    return { error: "Sales person not found for this shop" };
+    return { error: "Sales person not found for this shop and branch" };
   }
 
   return { salesPersonId: salePerson._id };
@@ -443,7 +447,11 @@ const createHistory = async (req, res) => {
       .lean();
     const submittedUserName = submittedUser?.name?.trim() || "User";
 
-    const salesPersonResult = await resolveOptionalSalesPersonId(salesPersonIdRaw, shopId);
+    const salesPersonResult = await resolveOptionalSalesPersonId(
+      salesPersonIdRaw,
+      shopId,
+      branchId,
+    );
     if (salesPersonResult.error) {
       return res.status(400).json({ success: false, message: salesPersonResult.error });
     }

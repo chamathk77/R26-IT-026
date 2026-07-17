@@ -55,7 +55,11 @@ function mapBranch(branch) {
   };
 }
 
-async function resolveAllowedBranchIds(shopId, requestedAllowedBranchIds) {
+async function resolveAllowedBranchIds(
+  shopId,
+  requestedAllowedBranchIds,
+  { requireAtLeastOne = false } = {},
+) {
   const activeBranches = await getActiveBranchesForShop(shopId);
   const activeBranchIds = activeBranches.map((branch) => normalizeBranchId(branch.branchId));
 
@@ -70,6 +74,17 @@ async function resolveAllowedBranchIds(shopId, requestedAllowedBranchIds) {
   }
 
   const normalizedRequested = normalizeAllowedBranchIds(requestedAllowedBranchIds);
+
+  if (requireAtLeastOne && !normalizedRequested.length) {
+    return {
+      error: {
+        status: 400,
+        message: 'Select at least one branch for this user.',
+        code: 'ALLOWED_BRANCH_IDS_REQUIRED',
+      },
+    };
+  }
+
   const invalidBranchIds = normalizedRequested.filter((branchId) => !activeBranchIds.includes(branchId));
 
   if (invalidBranchIds.length) {
@@ -179,6 +194,7 @@ const createShopUser = async (req, res) => {
     const allowedBranchesResult = await resolveAllowedBranchIds(
       normalizedShopId,
       requestedAllowedBranchIds,
+      { requireAtLeastOne: true },
     );
     if (allowedBranchesResult.error) {
       return res.status(allowedBranchesResult.error.status).json({
@@ -351,6 +367,7 @@ const updateShopUser = async (req, res) => {
     const allowedBranchesResult = await resolveAllowedBranchIds(
       ownerShopId,
       requestedAllowedBranchIds,
+      { requireAtLeastOne: true },
     );
     if (allowedBranchesResult.error) {
       return res.status(allowedBranchesResult.error.status).json({

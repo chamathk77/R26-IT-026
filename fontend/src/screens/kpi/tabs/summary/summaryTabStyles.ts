@@ -168,10 +168,6 @@ export const summaryTabStyles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 2,
   },
-  teamSectionTitleBlock: {
-    flex: 1,
-    gap: 2,
-  },
   teamSectionTitle: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 16,
@@ -272,37 +268,22 @@ export const summaryTabStyles = StyleSheet.create({
     fontSize: 13,
   },
   unassignedSection: {
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 14,
     gap: 12,
-    overflow: 'hidden',
+    marginTop: 4,
   },
-  unassignedSectionHeader: {
+  unassignedOrderCard: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
+  },
+  unassignedOrderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  unassignedSectionIcon: {
+  unassignedOrderIcon: {
     width: 40,
     height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  unassignedOrderCard: {
-    borderRadius: 14,
-    borderWidth: 1.5,
-    padding: 12,
-  },
-  unassignedOrderTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  unassignedOrderIcon: {
-    width: 42,
-    height: 42,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -311,30 +292,14 @@ export const summaryTabStyles = StyleSheet.create({
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 15,
   },
+  unassignedOrderTrailing: {
+    alignItems: 'flex-end',
+    gap: 4,
+    minWidth: 72,
+  },
   unassignedOrderAmount: {
     fontFamily: fonts.PoppinsBold,
     fontSize: 15,
-  },
-  unassignedCard: {
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
-    gap: 10,
-  },
-  orderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  orderId: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 13,
-  },
-  orderAmount: {
-    fontFamily: fonts.PoppinsBold,
-    fontSize: 13,
+    letterSpacing: -0.2,
   },
 });

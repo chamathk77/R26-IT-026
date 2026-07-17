@@ -15,13 +15,36 @@ function normalizeShopId(value) {
   return value ? String(value).trim().toUpperCase() : '';
 }
 
-function requireShopId(req, res) {
+function normalizeBranchId(value) {
+  return value ? String(value).trim().toUpperCase() : '';
+}
+
+function requireShopAndBranchId(req, res) {
   const shopId = normalizeShopId(req.user?.shopId);
   if (!shopId) {
     res.status(400).json({ success: false, message: 'Shop id is required' });
     return null;
   }
-  return shopId;
+
+  const branchId = normalizeBranchId(req.user?.branchId);
+  if (!branchId) {
+    res.status(400).json({
+      success: false,
+      message: 'Branch id is required. Please select a branch first.',
+      code: 'BRANCH_REQUIRED',
+    });
+    return null;
+  }
+
+  return { shopId, branchId };
+}
+
+function buildAnalyticsBranchFilter(shopId, branchId, extra = {}) {
+  return {
+    shopId,
+    branchId: normalizeBranchId(branchId),
+    ...extra,
+  };
 }
 
 function roundMoney(value) {
@@ -197,13 +220,12 @@ function resolveAnalyticsDateRange(query) {
   };
 }
 
-async function aggregateCostTotals(shopId, rangeStart, rangeEnd) {
+async function aggregateCostTotals(shopId, branchId, rangeStart, rangeEnd) {
   const result = await CostExpense.aggregate([
     {
-      $match: {
-        shopId,
+      $match: buildAnalyticsBranchFilter(shopId, branchId, {
         purchaseDate: { $gte: rangeStart, $lte: rangeEnd },
-      },
+      }),
     },
     {
       $group: {
@@ -220,14 +242,13 @@ async function aggregateCostTotals(shopId, rangeStart, rangeEnd) {
   };
 }
 
-async function aggregateSalesTotals(shopId, rangeStart, rangeEnd) {
+async function aggregateSalesTotals(shopId, branchId, rangeStart, rangeEnd) {
   const result = await History.aggregate([
     {
-      $match: {
-        shopId,
+      $match: buildAnalyticsBranchFilter(shopId, branchId, {
         status: 'submited',
         checkOutTime: { $gte: rangeStart, $lte: rangeEnd },
-      },
+      }),
     },
     {
       $group: {
@@ -246,8 +267,9 @@ async function aggregateSalesTotals(shopId, rangeStart, rangeEnd) {
 
 const getAnalyticsOverview = async (req, res) => {
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
     const rangeResult = resolveAnalyticsDateRange(req.query);
     if (rangeResult.error) {
@@ -257,14 +279,16 @@ const getAnalyticsOverview = async (req, res) => {
     const { rangeStart, rangeEnd, appliedFilters } = rangeResult;
 
     const [costs, sales] = await Promise.all([
-      aggregateCostTotals(shopId, rangeStart, rangeEnd),
-      aggregateSalesTotals(shopId, rangeStart, rangeEnd),
+      aggregateCostTotals(shopId, branchId, rangeStart, rangeEnd),
+      aggregateSalesTotals(shopId, branchId, rangeStart, rangeEnd),
     ]);
 
     const profit = calculateProfitMetrics(sales.totalAmount, costs.totalAmount);
 
     return res.status(200).json({
       success: true,
+      shopId,
+      branchId,
       data: {
         filters: appliedFilters,
         rangeStart: rangeStart.toISOString(),
