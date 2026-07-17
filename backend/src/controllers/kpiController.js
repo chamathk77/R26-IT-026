@@ -6,25 +6,41 @@ const KPI_PERIOD_KEYS = new Set(['current_month', 'this_month', 'last_month', 'l
 const ORDER_ID_MIN_LENGTH = 6;
 const SUBMITTED_HISTORY_STATUS = 'submited';
 
-function buildKpiSubmittedHistoryFilter(shopId, extra = {}) {
+function normalizeShopId(value) {
+  return value ? String(value).trim().toUpperCase() : '';
+}
+
+function normalizeBranchId(value) {
+  return value ? String(value).trim().toUpperCase() : '';
+}
+
+function buildKpiSubmittedHistoryFilter(shopId, branchId, extra = {}) {
   return {
     shopId,
+    branchId: normalizeBranchId(branchId),
     status: SUBMITTED_HISTORY_STATUS,
     ...extra,
   };
 }
 
-function normalizeShopId(value) {
-  return value ? String(value).trim().toUpperCase() : '';
-}
-
-function requireShopId(req, res) {
+function requireShopAndBranchId(req, res) {
   const shopId = normalizeShopId(req.user?.shopId);
   if (!shopId) {
     res.status(400).json({ success: false, message: 'Shop id is required' });
     return null;
   }
-  return shopId;
+
+  const branchId = normalizeBranchId(req.user?.branchId);
+  if (!branchId) {
+    res.status(400).json({
+      success: false,
+      message: 'Branch id is required. Please select a branch first.',
+      code: 'BRANCH_REQUIRED',
+    });
+    return null;
+  }
+
+  return { shopId, branchId };
 }
 
 function roundMoney(value) {
@@ -196,6 +212,7 @@ function mapHistoryRecord(record) {
   return {
     _id: record._id,
     shopId: record.shopId,
+    branchId: record.branchId ?? '',
     cartId: record.cartId,
     cartNumber: record.cartNumber,
     orderId: record.orderId,
@@ -227,7 +244,7 @@ function mapHistoryRecord(record) {
   };
 }
 
-async function resolveOptionalSalesPersonId(salesPersonIdRaw, shopId) {
+async function resolveOptionalSalesPersonId(salesPersonIdRaw, shopId, branchId) {
   if (
     salesPersonIdRaw === undefined ||
     salesPersonIdRaw === null ||
@@ -241,15 +258,19 @@ async function resolveOptionalSalesPersonId(salesPersonIdRaw, shopId) {
     return { error: 'Invalid sales person id' };
   }
 
-  const salePerson = await SalePerson.findOne({ _id: salesPersonId, shopId }).lean();
+  const salePerson = await SalePerson.findOne({
+    _id: salesPersonId,
+    shopId,
+    allowedBranchIds: normalizeBranchId(branchId),
+  }).lean();
   if (!salePerson) {
-    return { error: 'Sales person not found for this shop' };
+    return { error: 'Sales person not found for this shop and branch' };
   }
 
   return { salesPersonId: salePerson._id };
 }
 
-async function resolveRequiredSalesPersonId(salesPersonIdRaw, shopId) {
+async function resolveRequiredSalesPersonId(salesPersonIdRaw, shopId, branchId) {
   if (
     salesPersonIdRaw === undefined ||
     salesPersonIdRaw === null ||
@@ -258,7 +279,7 @@ async function resolveRequiredSalesPersonId(salesPersonIdRaw, shopId) {
     return { error: 'Sales person id is required' };
   }
 
-  return resolveOptionalSalesPersonId(salesPersonIdRaw, shopId);
+  return resolveOptionalSalesPersonId(salesPersonIdRaw, shopId, branchId);
 }
 
 function parsePagination(query) {
@@ -272,18 +293,18 @@ function parsePagination(query) {
   return { page, limit, skip };
 }
 
-async function findShopHistoryByOrderId(shopId, orderIdRaw) {
+async function findShopHistoryByOrderId(shopId, branchId, orderIdRaw) {
   const orderId = normalizeOrderId(orderIdRaw);
   if (!orderId || orderId.length < ORDER_ID_MIN_LENGTH) {
     return { error: 'Valid order id is required' };
   }
 
   const history = await History.findOne(
-    buildKpiSubmittedHistoryFilter(shopId, { orderId }),
+    buildKpiSubmittedHistoryFilter(shopId, branchId, { orderId }),
   ).lean();
   if (!history) {
     return {
-      error: 'Submitted history record not found for this order id',
+      error: 'Submitted history record not found for this order id and branch',
       status: 404,
     };
   }
@@ -293,16 +314,19 @@ async function findShopHistoryByOrderId(shopId, orderIdRaw) {
 
 const getKpiHistoryByOrderId = async (req, res) => {
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
-    const lookup = await findShopHistoryByOrderId(shopId, req.params?.orderId);
+    const lookup = await findShopHistoryByOrderId(shopId, branchId, req.params?.orderId);
     if (lookup.error) {
       return res.status(lookup.status ?? 400).json({ success: false, message: lookup.error });
     }
 
     return res.status(200).json({
       success: true,
+      shopId,
+      branchId,
       data: mapHistoryRecord(lookup.history),
       message: 'History record loaded',
     });
@@ -313,10 +337,11 @@ const getKpiHistoryByOrderId = async (req, res) => {
 
 const assignKpiHistorySalesPerson = async (req, res) => {
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
-    const lookup = await findShopHistoryByOrderId(shopId, req.params?.orderId);
+    const lookup = await findShopHistoryByOrderId(shopId, branchId, req.params?.orderId);
     if (lookup.error) {
       return res.status(lookup.status ?? 400).json({ success: false, message: lookup.error });
     }
@@ -333,13 +358,14 @@ const assignKpiHistorySalesPerson = async (req, res) => {
     const salesPersonResult = await resolveRequiredSalesPersonId(
       req.body?.salesPersonId,
       shopId,
+      branchId,
     );
     if (salesPersonResult.error) {
       return res.status(400).json({ success: false, message: salesPersonResult.error });
     }
 
     const updated = await History.findOneAndUpdate(
-      { _id: history._id, shopId },
+      { _id: history._id, shopId, branchId },
       { $set: { salesPersonId: salesPersonResult.salesPersonId } },
       { returnDocument: 'after' },
     ).lean();
@@ -350,6 +376,8 @@ const assignKpiHistorySalesPerson = async (req, res) => {
 
     return res.status(200).json({
       success: true,
+      shopId,
+      branchId,
       data: mapHistoryRecord(updated),
       message: 'Sales person assigned to history record',
     });
@@ -360,8 +388,9 @@ const assignKpiHistorySalesPerson = async (req, res) => {
 
 const getKpiSummary = async (req, res) => {
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
     const rangeResult = resolveKpiDateRange(req.query);
     if (rangeResult.error) {
@@ -371,16 +400,16 @@ const getKpiSummary = async (req, res) => {
     const { rangeStart, rangeEnd, appliedFilters } = rangeResult;
 
     const records = await History.find(
-      buildKpiSubmittedHistoryFilter(shopId, {
+      buildKpiSubmittedHistoryFilter(shopId, branchId, {
         checkOutTime: { $gte: rangeStart, $lte: rangeEnd },
       }),
     )
-      .select('salesPersonId totalAmount orderId checkOutTime')
+      .select('salesPersonId totalAmount orderId checkOutTime branchId')
       .sort({ checkOutTime: -1 })
       .lean();
 
-    const salePersons = await SalePerson.find({ shopId })
-      .select('_id salePersonId firstName lastName position')
+    const salePersons = await SalePerson.find({ shopId, allowedBranchIds: branchId })
+      .select('_id salePersonId firstName lastName position allowedBranchIds')
       .lean();
     const salePersonById = new Map(salePersons.map((person) => [String(person._id), person]));
 
@@ -423,6 +452,8 @@ const getKpiSummary = async (req, res) => {
 
     return res.status(200).json({
       success: true,
+      shopId,
+      branchId,
       data: {
         filters: appliedFilters,
         rangeStart: rangeStart.toISOString(),
@@ -449,10 +480,15 @@ const getKpiSummary = async (req, res) => {
 
 const getKpiHistorySummary = async (req, res) => {
   try {
-    const shopId = requireShopId(req, res);
-    if (!shopId) return;
+    const context = requireShopAndBranchId(req, res);
+    if (!context) return;
+    const { shopId, branchId } = context;
 
-    const salesPersonResult = await resolveRequiredSalesPersonId(req.query?.salesPersonId, shopId);
+    const salesPersonResult = await resolveRequiredSalesPersonId(
+      req.query?.salesPersonId,
+      shopId,
+      branchId,
+    );
     if (salesPersonResult.error) {
       return res.status(400).json({ success: false, message: salesPersonResult.error });
     }
@@ -490,7 +526,7 @@ const getKpiHistorySummary = async (req, res) => {
     }
 
     const { page, limit, skip } = parsePagination(req.query);
-    const filter = buildKpiSubmittedHistoryFilter(shopId, {
+    const filter = buildKpiSubmittedHistoryFilter(shopId, branchId, {
       salesPersonId: salesPersonResult.salesPersonId,
       checkOutTime: { $gte: rangeStart, $lte: rangeEnd },
     });
@@ -502,8 +538,12 @@ const getKpiHistorySummary = async (req, res) => {
         .skip(skip)
         .limit(limit)
         .lean(),
-      SalePerson.findOne({ _id: salesPersonResult.salesPersonId, shopId })
-        .select('_id salePersonId firstName lastName position')
+      SalePerson.findOne({
+        _id: salesPersonResult.salesPersonId,
+        shopId,
+        allowedBranchIds: branchId,
+      })
+        .select('_id salePersonId firstName lastName position allowedBranchIds')
         .lean(),
       History.aggregate([
         { $match: filter },
@@ -516,6 +556,8 @@ const getKpiHistorySummary = async (req, res) => {
 
     return res.status(200).json({
       success: true,
+      shopId,
+      branchId,
       count: records.length,
       total,
       filters: {
@@ -525,6 +567,7 @@ const getKpiHistorySummary = async (req, res) => {
         salesPersonName: getSalePersonFullName(salePerson?.firstName, salePerson?.lastName),
         salePersonId: salePerson?.salePersonId ?? null,
         position: salePerson?.position ?? '',
+        branchId,
       },
       summary: {
         orderCount: total,

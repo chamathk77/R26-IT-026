@@ -161,23 +161,12 @@ export const summaryTabStyles = StyleSheet.create({
     fontSize: 12,
   },
   teamSection: {
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 14,
     gap: 12,
-    overflow: 'hidden',
+    marginTop: 4,
   },
   teamSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  teamSectionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 2,
   },
   teamSectionTitleBlock: {
     flex: 1,
@@ -189,17 +178,13 @@ export const summaryTabStyles = StyleSheet.create({
   },
   teamSectionSub: {
     fontFamily: fonts.PoppinsRegular,
-    fontSize: 12,
+    fontSize: 13,
+    lineHeight: 18,
   },
   personCard: {
     borderRadius: 16,
-    borderWidth: 1.5,
-    padding: 0,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-  },
-  personAccentBar: {
-    height: 4,
-    width: '100%',
   },
   personCardInner: {
     padding: 14,
@@ -207,81 +192,84 @@ export const summaryTabStyles = StyleSheet.create({
   },
   personTopRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
+    alignItems: 'center',
+    gap: 10,
   },
-  rankBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    borderWidth: 1.5,
+  personRankBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rankText: {
+  personRankText: {
     fontFamily: fonts.PoppinsBold,
-    fontSize: 15,
+    fontSize: 13,
   },
   personAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  personAvatarText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 13,
   },
   personBody: {
     flex: 1,
-    gap: 3,
+    gap: 2,
     minWidth: 0,
   },
   personName: {
     fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 16,
+    fontSize: 15,
   },
   personMeta: {
     fontFamily: fonts.PoppinsRegular,
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 16,
   },
-  personAmountPanel: {
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+  personAmountBlock: {
     alignItems: 'flex-end',
     gap: 2,
-    minWidth: 108,
-  },
-  personAmountLabel: {
-    fontFamily: fonts.PoppinsMedium,
-    fontSize: 10,
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
+    minWidth: 88,
   },
   personAmount: {
     fontFamily: fonts.PoppinsBold,
     fontSize: 15,
     letterSpacing: -0.2,
   },
-  personStatsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  personStatPill: {
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    gap: 4,
-  },
-  personStatLabel: {
-    fontFamily: fonts.PoppinsMedium,
+  personAmountLabel: {
+    fontFamily: fonts.PoppinsRegular,
     fontSize: 11,
   },
+  personStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 12,
+  },
+  personStatItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  personStatDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 28,
+    marginHorizontal: 8,
+  },
+  personStatLabel: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 11,
+    marginLeft: 'auto',
+  },
   personStatValue: {
-    fontFamily: fonts.PoppinsBold,
-    fontSize: 14,
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 13,
   },
   unassignedSection: {
     borderRadius: 18,

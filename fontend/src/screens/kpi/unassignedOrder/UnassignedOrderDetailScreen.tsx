@@ -27,7 +27,7 @@ import {
   assignKpiHistorySalesPerson_Service,
   fetchKpiHistoryByOrderId_Service,
 } from '../../../services/KpiService';
-import { fetchSalePersons_Service } from '../../../services/SalePersonService';
+import { fetchSalePersonsForLoggedUserBranch_Service } from '../../../services/SalePersonService';
 import {
   resetKpiAssignSalesPerson,
   resetKpiHistoryDetail,
@@ -85,7 +85,7 @@ export default function UnassignedOrderDetailScreen({ navigation, route }: Props
   const {
     loading: salePersonsLoading,
     items: salePersons,
-  } = useSelector((state: RootState) => state.SalePersonReducer.list);
+  } = useSelector((state: RootState) => state.SalePersonReducer.branchList);
 
   const [pickerVisible, setPickerVisible] = useState(false);
   const [selectedSalesPersonId, setSelectedSalesPersonId] = useState<string | null>(null);
@@ -117,7 +117,7 @@ export default function UnassignedOrderDetailScreen({ navigation, route }: Props
 
   const loadSalePersons = useCallback(async () => {
     try {
-      await dispatch(fetchSalePersons_Service()).unwrap();
+      await dispatch(fetchSalePersonsForLoggedUserBranch_Service()).unwrap();
     } catch (err: unknown) {
       const handled = await handleSessionExpiredApiError(err, show_Alert);
       if (handled) return;
@@ -125,7 +125,7 @@ export default function UnassignedOrderDetailScreen({ navigation, route }: Props
       show_Alert(
         'error',
         'Load failed',
-        getApiErrorMessage(err, 'Could not load sales persons. Please try again.'),
+        getApiErrorMessage(err, 'Could not load sales persons for this branch. Please try again.'),
         1,
         false,
         'OK',
@@ -517,7 +517,7 @@ export default function UnassignedOrderDetailScreen({ navigation, route }: Props
               Assign sales person
             </Text>
             <Text style={[pickerStyles.sub, { color: paperTheme.colors.onSurfaceVariant }]}>
-              Choose who assisted this sale for {orderId}.
+              Choose who assisted this sale for {orderId}. Only employees assigned to this branch are shown.
             </Text>
 
             {salePersonsLoading ? (
@@ -530,7 +530,7 @@ export default function UnassignedOrderDetailScreen({ navigation, route }: Props
             ) : salePersons.length === 0 ? (
               <View style={pickerStyles.modalLoading}>
                 <Text style={{ color: paperTheme.colors.onSurfaceVariant, fontFamily: fonts.PoppinsRegular }}>
-                  No sales persons found. Add sales persons in settings first.
+                  No sales persons found for this branch. Add employees in Manage Employees first.
                 </Text>
               </View>
             ) : (

@@ -16,7 +16,7 @@ import { formatDisplayDate } from '../../../../components/DatePickerField/DatePi
 import { useTheme } from '../../../../context/ThemeContext';
 import { useCommonAlert } from '../../../../hooks/useCommonAlert';
 import { fetchKpiHistorySummary_Service } from '../../../../services/KpiService';
-import { fetchSalePersons_Service } from '../../../../services/SalePersonService';
+import { fetchSalePersonsForLoggedUserBranch_Service } from '../../../../services/SalePersonService';
 import { resetKpiHistorySummary } from '../../../../store/reducers/KpiReducer';
 import { AppDispatch, RootState } from '../../../../store/store';
 import { KpiHistoryRecord } from '../../../../type/kpi';
@@ -112,7 +112,10 @@ export default function HistorySummaryTabScreen() {
   const dispatch = useDispatch<AppDispatch>();
   const { alertConfig, visible, hideAlert, show_Alert } = useCommonAlert();
 
-  const salePersons = useSelector((state: RootState) => state.SalePersonReducer.list.items);
+  const salePersons = useSelector((state: RootState) => state.SalePersonReducer.branchList.items);
+  const salePersonsLoading = useSelector(
+    (state: RootState) => state.SalePersonReducer.branchList.loading,
+  );
   const {
     items,
     loading,
@@ -148,7 +151,7 @@ export default function HistorySummaryTabScreen() {
 
   const loadSalePersons = useCallback(async () => {
     try {
-      await dispatch(fetchSalePersons_Service()).unwrap();
+      await dispatch(fetchSalePersonsForLoggedUserBranch_Service()).unwrap();
     } catch (error: unknown) {
       await handleSessionExpiredApiError(error, show_Alert);
     }
@@ -225,7 +228,9 @@ export default function HistorySummaryTabScreen() {
       show_Alert(
         'error',
         'Sales person required',
-        'Please select a sales person before loading history.',
+        salePersons.length === 0 && !salePersonsLoading
+          ? 'No sales persons are assigned to this branch. Add employees in Manage Employees first.'
+          : 'Please select a sales person before loading history.',
         1,
         false,
         'OK',
@@ -235,7 +240,7 @@ export default function HistorySummaryTabScreen() {
     }
 
     void loadHistorySummary(draftFilters, 1, false);
-  }, [draftFilters, loadHistorySummary, showSlideToast, show_Alert]);
+  }, [draftFilters, loadHistorySummary, salePersons.length, salePersonsLoading, showSlideToast, show_Alert]);
 
   const handleLoadMore = useCallback(() => {
     if (!pagination?.hasNextPage || loadingMore || loading) return;
