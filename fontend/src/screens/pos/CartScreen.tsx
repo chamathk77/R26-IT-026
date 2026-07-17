@@ -34,7 +34,7 @@ import {
 } from '../../services/CartService';
 import { createHistory_Service } from '../../services/HistoryService';
 import { fetchProducts_Service } from '../../services/ProductService';
-import { fetchSalePersons_Service } from '../../services/SalePersonService';
+import { fetchSalePersonsForLoggedUserBranch_Service } from '../../services/SalePersonService';
 import { clearCartTabSelection, setCartTabSelection } from '../../store/reducers/CartReducer';
 import { AppDispatch, RootState, store } from '../../store/store';
 import { CartOrderItem, CartSessionSummary } from '../../type/cart';
@@ -47,7 +47,7 @@ import SlideToast from '../../components/SlideToast/SlideToast';
 import CheckoutPaymentModal from '../../components/CheckoutPaymentModal/CheckoutPaymentModal';
 import CommonAlert from '../../components/CommonAlert/CommonAlert';
 import { useCommonAlert } from '../../hooks/useCommonAlert';
-import { handleSessionExpiredApiError } from '../../utils/apiErrorAlert';
+import { getApiErrorMessage, handleSessionExpiredApiError } from '../../utils/apiErrorAlert';
 import { cardShadow } from '../settings/shared/settingsDetailStyles';
 import { softShadow } from './ManageInventory/inventoryUiStyles';
 import { CheckoutPaymentMethod, isValidCheckoutPhone, sanitizeCheckoutPhone } from '../../type/checkoutPayment';
@@ -363,10 +363,10 @@ export default function CartScreen({ navigation }: Props) {
   );
   const { items: products } = useSelector((state: RootState) => state.ProductReducer.list);
   const salePersons = useSelector(
-    (state: RootState) => state.SalePersonReducer?.list?.items ?? [],
+    (state: RootState) => state.SalePersonReducer?.branchList?.items ?? [],
   );
   const salePersonsLoading = useSelector(
-    (state: RootState) => state.SalePersonReducer?.list?.loading ?? false,
+    (state: RootState) => state.SalePersonReducer?.branchList?.loading ?? false,
   );
   const shopId = useSelector(
     (state: RootState) =>
@@ -556,16 +556,14 @@ export default function CartScreen({ navigation }: Props) {
     if (!shopId) return;
 
     try {
-      const response = await dispatch(fetchSalePersons_Service()).unwrap();
-      console.log('response in loadSalePersons', response);
+      await dispatch(fetchSalePersonsForLoggedUserBranch_Service()).unwrap();
     } catch (error: unknown) {
       const handled = await handleSessionExpiredApiError(error, show_Alert);
       if (handled) return;
-      console.log('error in loadSalePersons', error);
       show_Alert(
         'error',
         'Load failed',
-        'Could not load sales persons. Please try again.',
+        getApiErrorMessage(error, 'Could not load sales persons for this branch. Please try again.'),
         2,
         false,
         'Retry',

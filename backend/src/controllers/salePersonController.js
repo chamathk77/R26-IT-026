@@ -194,6 +194,67 @@ function salePersonHasBranchAccess(record, branchId) {
   return allowedBranchIds.includes(branchId);
 }
 
+async function getLoggedUserShopBranchContext(req) {
+  let shopId = req.user?.shopId ? String(req.user.shopId).trim().toUpperCase() : '';
+  const branchId = getRequestBranchId(req);
+
+  if (!shopId) {
+    const user = await User.findById(req.user.id).select('shopId').lean();
+    shopId = user?.shopId ? String(user.shopId).trim().toUpperCase() : '';
+  }
+
+  if (!shopId) {
+    return {
+      error: {
+        status: 403,
+        message: 'Your account is not linked to a shop',
+        code: 'SHOP_ID_REQUIRED',
+      },
+    };
+  }
+
+  if (!branchId) {
+    return {
+      error: {
+        status: 400,
+        message: 'Branch id is required. Please select a branch.',
+        code: 'BRANCH_ID_REQUIRED',
+      },
+    };
+  }
+
+  return { shopId, branchId };
+}
+
+const getSalePersonsForLoggedUserBranch = async (req, res) => {
+  try {
+    const context = await getLoggedUserShopBranchContext(req);
+    if (context.error) {
+      return sendAccessError(res, context.error);
+    }
+
+    const { shopId, branchId } = context;
+
+    const salePersons = await SalePerson.find({
+      shopId,
+      allowedBranchIds: branchId,
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.json({
+      success: true,
+      shopId,
+      branchId,
+      count: salePersons.length,
+      data: salePersons.map(mapSalePersonRecord),
+      message: 'Sales persons for logged user branch loaded successfully',
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message, success: false });
+  }
+};
+
 const createSalePerson = async (req, res) => {
   try {
     const access = await getSalePersonAccessContext(req.user.id);
@@ -460,6 +521,7 @@ const deleteSalePerson = async (req, res) => {
 module.exports = {
   createSalePerson,
   getSalePersons,
+  getSalePersonsForLoggedUserBranch,
   getSalePersonById,
   updateSalePerson,
   deleteSalePerson,

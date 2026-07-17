@@ -17,6 +17,15 @@ export interface GetSalePersonsResponse {
   data: SalePerson[];
 }
 
+export interface GetSalePersonsForLoggedUserBranchResponse {
+  success: boolean;
+  shopId: string;
+  branchId: string;
+  count: number;
+  data: SalePerson[];
+  message: string;
+}
+
 export interface GetSalePersonByIdResponse {
   success: boolean;
   data: SalePerson;

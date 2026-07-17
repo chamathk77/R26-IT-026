@@ -9,6 +9,7 @@ import {
   DeleteSalePersonResponse,
   GetSalePersonByIdResponse,
   GetSalePersonsResponse,
+  GetSalePersonsForLoggedUserBranchResponse,
   UpdateSalePersonPayload,
   UpdateSalePersonResponse,
 } from '../type/salePerson';
@@ -141,6 +142,33 @@ export const fetchSalePersons_Service = createAsyncThunk(
       const apiError = toApiErrorResponse(error);
       console.log('error in fetchSalePersons_Service', apiError);
       return rejectWithValue(apiError);
+    }
+  },
+);
+
+export const fetchSalePersonsForLoggedUserBranch_Service = createAsyncThunk(
+  'salePerson/fetchForLoggedUserBranch',
+  async (_void, { rejectWithValue }) => {
+    try {
+      await ensureInternetConnection();
+
+      const response = await apiClient.get<GetSalePersonsForLoggedUserBranchResponse>(
+        '/api/sale-persons/logged-user/branch',
+      );
+
+      if (isHttpSuccess(response.status) && response.data?.success) {
+        return response.data;
+      }
+
+      const apiError: ApiErrorResponse = {
+        error: 'Error',
+        message: response.data?.message || 'Could not load sales persons for this branch',
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      };
+      return rejectWithValue(apiError);
+    } catch (error: unknown) {
+      return rejectWithValue(toApiErrorResponse(error));
     }
   },
 );

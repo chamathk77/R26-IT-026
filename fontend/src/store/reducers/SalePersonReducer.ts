@@ -4,6 +4,7 @@ import {
   deleteSalePerson_Service,
   fetchSalePersonById_Service,
   fetchSalePersons_Service,
+  fetchSalePersonsForLoggedUserBranch_Service,
   updateSalePerson_Service,
 } from '../../services/SalePersonService';
 import { SalePerson } from '../../type/salePerson';
@@ -15,6 +16,14 @@ interface SalePersonState {
     error: string | null;
     success: boolean;
     count: number;
+    items: SalePerson[];
+  };
+  branchList: {
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+    count: number;
+    branchId: string | null;
     items: SalePerson[];
   };
   detail: {
@@ -41,6 +50,14 @@ const initialState: SalePersonState = {
     error: null,
     success: false,
     count: 0,
+    items: [],
+  },
+  branchList: {
+    loading: false,
+    error: null,
+    success: false,
+    count: 0,
+    branchId: null,
     items: [],
   },
   detail: {
@@ -90,6 +107,32 @@ export const SalePersonSlice = createSlice({
       const payload = action.payload as ApiErrorResponse | undefined;
       state.list.error =
         payload?.message || action.error.message || 'Could not load sales persons';
+    });
+
+    builder.addCase(fetchSalePersonsForLoggedUserBranch_Service.pending, (state) => {
+      state.branchList.loading = true;
+      state.branchList.error = null;
+      state.branchList.success = false;
+    });
+    builder.addCase(fetchSalePersonsForLoggedUserBranch_Service.fulfilled, (state, action) => {
+      state.branchList.loading = false;
+      state.branchList.success = true;
+      state.branchList.error = null;
+      state.branchList.count = action.payload.count ?? 0;
+      state.branchList.branchId = action.payload.branchId ?? null;
+      state.branchList.items = Array.isArray(action.payload?.data) ? action.payload.data : [];
+    });
+    builder.addCase(fetchSalePersonsForLoggedUserBranch_Service.rejected, (state, action) => {
+      state.branchList.loading = false;
+      state.branchList.success = false;
+      state.branchList.count = 0;
+      state.branchList.branchId = null;
+      state.branchList.items = [];
+      const payload = action.payload as ApiErrorResponse | undefined;
+      state.branchList.error =
+        payload?.message ||
+        action.error.message ||
+        'Could not load sales persons for this branch';
     });
 
     builder.addCase(fetchSalePersonById_Service.pending, (state) => {

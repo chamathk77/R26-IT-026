@@ -35,7 +35,7 @@ import { resendBillSms_Service, reverseHistory_Service } from '../../../services
 import { assignKpiHistorySalesPerson_Service } from '../../../services/KpiService';
 import {
   fetchSalePersonById_Service,
-  fetchSalePersons_Service,
+  fetchSalePersonsForLoggedUserBranch_Service,
 } from '../../../services/SalePersonService';
 import { getSalePersonFullName, SalePerson } from '../../../type/salePerson';
 import {
@@ -80,10 +80,10 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
   const [selectedSalesPersonId, setSelectedSalesPersonId] = useState<string | null>(null);
   const shop = useSelector((state: RootState) => state.AuthReducer.Login.shopData);
   const salePersons = useSelector(
-    (state: RootState) => state.SalePersonReducer?.list?.items ?? [],
+    (state: RootState) => state.SalePersonReducer?.branchList?.items ?? [],
   );
   const salePersonsLoading = useSelector(
-    (state: RootState) => state.SalePersonReducer?.list?.loading ?? false,
+    (state: RootState) => state.SalePersonReducer?.branchList?.loading ?? false,
   );
   const updatingSalesPerson = useSelector(
     (state: RootState) => state.KpiReducer.assignSalesPerson.loading,
@@ -91,7 +91,11 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
   const normalizedStatus = normalizeHistoryStatus(record.status);
   const isSubmittedStatus = normalizedStatus === 'submited';
   const orderId = record.orderId?.trim() ?? '';
-  const canEditSalesPerson = Boolean(record.salesPersonId && isSubmittedStatus && orderId);
+  const assignedSalesPersonId = record.salesPersonId?.trim() ?? '';
+  const canAssignSalesPerson = Boolean(isSubmittedStatus && orderId);
+  const hasAssignedSalesPerson = Boolean(assignedSalesPersonId);
+  const salesPersonSelectionChanged =
+    Boolean(selectedSalesPersonId) && selectedSalesPersonId !== assignedSalesPersonId;
 
   useEffect(() => {
     const salesPersonId = record.salesPersonId?.trim();
@@ -296,7 +300,7 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
 
   const loadSalePersons = useCallback(async () => {
     try {
-      await dispatch(fetchSalePersons_Service()).unwrap();
+      await dispatch(fetchSalePersonsForLoggedUserBranch_Service()).unwrap();
     } catch (error: unknown) {
       const handled = await handleSessionExpiredApiError(error, show_Alert);
       if (handled) return;
@@ -304,7 +308,7 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
       show_Alert(
         'error',
         'Load failed',
-        getApiErrorMessage(error, 'Could not load sales persons. Please try again.'),
+        getApiErrorMessage(error, 'Could not load sales persons for this branch. Please try again.'),
         1,
         false,
         'OK',
@@ -314,18 +318,18 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
   }, [dispatch, show_Alert]);
 
   const handleOpenSalesPersonPicker = useCallback(() => {
-    if (!canEditSalesPerson) return;
+    if (!canAssignSalesPerson) return;
 
-    setSelectedSalesPersonId(record.salesPersonId?.trim() ?? null);
+    setSelectedSalesPersonId(assignedSalesPersonId || null);
     setPickerVisible(true);
 
     if (salePersons.length === 0 && !salePersonsLoading) {
       void loadSalePersons();
     }
   }, [
-    canEditSalesPerson,
+    assignedSalesPersonId,
+    canAssignSalesPerson,
     loadSalePersons,
-    record.salesPersonId,
     salePersons.length,
     salePersonsLoading,
   ]);
@@ -380,7 +384,7 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
 
       show_Alert(
         'success',
-        'Updated',
+        hasAssignedSalesPerson ? 'Updated' : 'Assigned',
         `${updatedName ?? 'Sales person'} is now assigned to ${orderId}.`,
         1,
         false,
@@ -408,6 +412,7 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
     navigation,
     orderId,
     record.salesPersonId,
+    hasAssignedSalesPerson,
     salesPersonName,
     selectedPerson,
     selectedSalesPersonId,
@@ -555,13 +560,13 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
               labelColor={paperTheme.colors.onSurfaceVariant}
               valueColor={paperTheme.colors.onSurface}
             />
-            {record.salesPersonId ? (
+            {canAssignSalesPerson || hasAssignedSalesPerson ? (
               <View style={styles.detailRow}>
                 <Text style={[styles.detailLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
                   Sales person
                 </Text>
                 <View style={styles.salesPersonValueWrap}>
-                  {canEditSalesPerson ? (
+                  {canAssignSalesPerson ? (
                     <TouchableOpacity
                       activeOpacity={0.75}
                       onPress={handleOpenSalesPersonPicker}
@@ -573,9 +578,22 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
                         color={paperTheme.colors.primary}
                       />
                       <Text
-                        style={[styles.detailValue, styles.salesPersonValue, { color: paperTheme.colors.onSurface }]}
+                        style={[
+                          styles.detailValue,
+                          styles.salesPersonValue,
+                          {
+                            color: hasAssignedSalesPerson
+                              ? paperTheme.colors.onSurface
+                              : paperTheme.colors.onSurfaceVariant,
+                            fontStyle: hasAssignedSalesPerson ? 'normal' : 'italic',
+                          },
+                        ]}
                       >
-                        {salesPersonLoading ? 'Loading...' : salesPersonName?.trim() || '—'}
+                        {salesPersonLoading
+                          ? 'Loading...'
+                          : hasAssignedSalesPerson
+                            ? salesPersonName?.trim() || '—'
+                            : 'Not assigned'}
                       </Text>
                     </TouchableOpacity>
                   ) : (
@@ -817,10 +835,12 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
               style={[pickerStyles.handle, { backgroundColor: paperTheme.colors.outlineVariant }]}
             />
             <Text style={[pickerStyles.title, { color: paperTheme.colors.onSurface }]}>
-              Update sales person
+              {hasAssignedSalesPerson ? 'Update sales person' : 'Assign sales person'}
             </Text>
             <Text style={[pickerStyles.sub, { color: paperTheme.colors.onSurfaceVariant }]}>
-              Choose who assisted this sale for {orderId}. The previous assignment will be replaced.
+              {hasAssignedSalesPerson
+                ? `Choose who assisted this sale for ${orderId}. The previous assignment will be replaced.`
+                : `Choose a sales person for ${orderId}. Only employees assigned to this branch are shown.`}
             </Text>
 
             {salePersonsLoading ? (
@@ -833,7 +853,7 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
             ) : salePersons.length === 0 ? (
               <View style={pickerStyles.modalLoading}>
                 <Text style={{ color: paperTheme.colors.onSurfaceVariant, fontFamily: fonts.PoppinsRegular }}>
-                  No sales persons found. Add sales persons in settings first.
+                  No sales persons found for this branch. Add employees in Manage Employees first.
                 </Text>
               </View>
             ) : (
@@ -848,20 +868,14 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
 
             <TouchableOpacity
               activeOpacity={0.9}
-              disabled={
-                updatingSalesPerson ||
-                !selectedSalesPersonId ||
-                selectedSalesPersonId === record.salesPersonId?.trim()
-              }
+              disabled={updatingSalesPerson || !salesPersonSelectionChanged}
               onPress={() => void handleConfirmSalesPersonUpdate()}
               style={[
                 pickerStyles.confirmBtn,
                 {
-                  backgroundColor:
-                    selectedSalesPersonId &&
-                    selectedSalesPersonId !== record.salesPersonId?.trim()
-                      ? paperTheme.colors.primary
-                      : paperTheme.colors.surfaceVariant,
+                  backgroundColor: salesPersonSelectionChanged
+                    ? paperTheme.colors.primary
+                    : paperTheme.colors.surfaceVariant,
                   opacity: updatingSalesPerson ? 0.7 : 1,
                 },
               ]}
@@ -873,15 +887,13 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
                   style={[
                     pickerStyles.confirmBtnText,
                     {
-                      color:
-                        selectedSalesPersonId &&
-                        selectedSalesPersonId !== record.salesPersonId?.trim()
-                          ? paperTheme.colors.onPrimary
-                          : paperTheme.colors.onSurfaceVariant,
+                      color: salesPersonSelectionChanged
+                        ? paperTheme.colors.onPrimary
+                        : paperTheme.colors.onSurfaceVariant,
                     },
                   ]}
                 >
-                  Update sales person
+                  {hasAssignedSalesPerson ? 'Update sales person' : 'Assign sales person'}
                 </Text>
               )}
             </TouchableOpacity>

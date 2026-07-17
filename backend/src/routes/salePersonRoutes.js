@@ -4,6 +4,7 @@ const { uploadSalePersonImageSingle } = require('../middleware/uploadSalePersonI
 const {
   createSalePerson,
   getSalePersons,
+  getSalePersonsForLoggedUserBranch,
   getSalePersonById,
   updateSalePerson,
   deleteSalePerson,
@@ -12,6 +13,7 @@ const {
 const router = express.Router();
 
 router.post('/', protect, uploadSalePersonImageSingle, createSalePerson);
+router.get('/logged-user/branch', protect, getSalePersonsForLoggedUserBranch);
 router.get('/', protect, getSalePersons);
 router.get('/:id', protect, getSalePersonById);
 router.post('/:id/update', protect, uploadSalePersonImageSingle, updateSalePerson);
