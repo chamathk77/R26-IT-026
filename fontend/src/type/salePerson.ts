@@ -5,6 +5,7 @@ export interface SalePerson {
   firstName: string;
   lastName: string;
   position: string;
+  allowedBranchIds: string[];
   image: string;
   createdAt?: string;
   updatedAt?: string;
@@ -26,6 +27,7 @@ export interface CreateSalePersonRequest {
   firstName: string;
   lastName: string;
   position: string;
+  allowedBranchIds: string[];
   imageUri?: string | null;
 }
 
@@ -35,6 +37,7 @@ export interface UpdateSalePersonPayload {
   firstName?: string;
   lastName?: string;
   position?: string;
+  allowedBranchIds?: string[];
   imageUri?: string | null;
 }
 

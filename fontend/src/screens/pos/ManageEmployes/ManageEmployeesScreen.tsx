@@ -28,7 +28,6 @@ import {
   fetchSalePersons_Service,
 } from '../../../services/SalePersonService';
 import {
-  formatSalePersonJoinedDate,
   getSalePersonFullName,
   SalePerson,
 } from '../../../type/salePerson';
@@ -63,20 +62,22 @@ function EmployeeAvatar({
   );
 }
 
+function getBranchSummary(employee: SalePerson): string {
+  const count = employee.allowedBranchIds?.length ?? 0;
+  if (count === 0) return 'No branch assigned';
+  return `${count} branch${count > 1 ? 'es' : ''} assigned`;
+}
+
 function EmployeeCard({
   employee,
-  expanded,
-  onToggle,
-  onEdit,
+  onPress,
   onDelete,
   swipeableRef,
   paperTheme,
   resolvedTheme,
 }: {
   employee: SalePerson;
-  expanded: boolean;
-  onToggle: () => void;
-  onEdit: () => void;
+  onPress: () => void;
   onDelete: () => void;
   swipeableRef: (ref: Swipeable | null) => void;
   paperTheme: ReturnType<typeof useTheme>['paperTheme'];
@@ -104,14 +105,16 @@ function EmployeeCard({
         </View>
       )}
     >
-      <View
+      <TouchableOpacity
+        activeOpacity={0.92}
+        onPress={onPress}
         style={[
           styles.card,
           { backgroundColor: paperTheme.colors.surface },
           cardShadow(resolvedTheme),
         ]}
       >
-        <TouchableOpacity activeOpacity={0.92} onPress={onToggle} style={styles.cardHeader}>
+        <View style={styles.cardHeader}>
           <EmployeeAvatar image={employee.image} paperTheme={paperTheme} />
           <View style={styles.cardBody}>
             <Text style={[styles.cardName, { color: paperTheme.colors.onSurface }]} numberOfLines={1}>
@@ -123,45 +126,27 @@ function EmployeeCard({
             <Text style={[styles.cardMeta, { color: paperTheme.colors.onSurfaceVariant }]}>
               ID · {employee.salePersonId}
             </Text>
+            <View style={styles.branchRow}>
+              <Ionicons
+                name="git-branch-outline"
+                size={13}
+                color={paperTheme.colors.onSurfaceVariant}
+              />
+              <Text
+                style={[styles.branchSummary, { color: paperTheme.colors.onSurfaceVariant }]}
+                numberOfLines={1}
+              >
+                {getBranchSummary(employee)}
+              </Text>
+            </View>
           </View>
           <Ionicons
-            name={expanded ? 'chevron-up' : 'chevron-down'}
+            name="chevron-forward"
             size={20}
             color={paperTheme.colors.onSurfaceVariant}
           />
-        </TouchableOpacity>
-
-        {expanded ? (
-          <View
-            style={[
-              styles.cardDetails,
-              { borderTopColor: paperTheme.colors.outlineVariant },
-            ]}
-          >
-            <View style={styles.detailRow}>
-              <Ionicons name="calendar-outline" size={16} color={paperTheme.colors.onSurfaceVariant} />
-              <Text style={[styles.detailText, { color: paperTheme.colors.onSurface }]}>
-                Joined {formatSalePersonJoinedDate(employee.createdAt)}
-              </Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Ionicons name="storefront-outline" size={16} color={paperTheme.colors.onSurfaceVariant} />
-              <Text style={[styles.detailText, { color: paperTheme.colors.onSurface }]}>
-                Shop {employee.shopId}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={onEdit}
-              style={[styles.editBtn, { backgroundColor: paperTheme.colors.primary }]}
-            >
-              <Ionicons name="create-outline" size={18} color={paperTheme.colors.onPrimary} />
-              <Text style={[styles.editBtnText, { color: paperTheme.colors.onPrimary }]}>Edit</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-      </View>
+        </View>
+      </TouchableOpacity>
     </Swipeable>
   );
 }
@@ -179,7 +164,6 @@ export default function ManageEmployeesScreen({ navigation }: Props) {
   const { items: employees, loading, count } = useSelector(
     (state: RootState) => state.SalePersonReducer.list,
   );
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
 
@@ -241,9 +225,6 @@ export default function ManageEmployeesScreen({ navigation }: Props) {
           try {
             await dispatch(deleteSalePerson_Service(employee._id)).unwrap();
             swipeableRefs.current.get(employee._id)?.close();
-            if (expandedId === employee._id) {
-              setExpandedId(null);
-            }
           } catch (err: unknown) {
             const handled = await handleSessionExpiredApiError(err, show_Alert);
             if (handled) return;
@@ -265,7 +246,7 @@ export default function ManageEmployeesScreen({ navigation }: Props) {
         closeSwipe,
       );
     },
-    [dispatch, expandedId, show_Alert],
+    [dispatch, show_Alert],
   );
 
   useFocusEffect(
@@ -321,7 +302,7 @@ export default function ManageEmployeesScreen({ navigation }: Props) {
                 {employeeCount} employee{employeeCount === 1 ? '' : 's'}
               </Text>
               <Text style={[styles.heroSub, { color: paperTheme.colors.onPrimaryContainer }]}>
-                Shop {shopId.toUpperCase() || '—'}
+                Shop {shopId.toUpperCase() || '—'} · Tap to edit · Swipe to delete
               </Text>
             </View>
           </View>
@@ -350,11 +331,7 @@ export default function ManageEmployeesScreen({ navigation }: Props) {
               renderItem={({ item }) => (
                 <EmployeeCard
                   employee={item}
-                  expanded={expandedId === item._id}
-                  onToggle={() =>
-                    setExpandedId((current) => (current === item._id ? null : item._id))
-                  }
-                  onEdit={() => navigation.navigate('AddEmployee', { salePersonId: item._id })}
+                  onPress={() => navigation.navigate('AddEmployee', { salePersonId: item._id })}
                   onDelete={() => confirmDeleteEmployee(item)}
                   swipeableRef={(ref) => {
                     if (ref) swipeableRefs.current.set(item._id, ref);
@@ -491,34 +468,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  cardDetails: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 8,
-  },
-  detailRow: {
+  branchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
+    marginTop: 4,
   },
-  detailText: {
+  branchSummary: {
     fontFamily: fonts.PoppinsRegular,
-    fontSize: 13,
+    fontSize: 11,
     flex: 1,
-  },
-  editBtn: {
-    marginTop: 8,
-    borderRadius: 12,
-    paddingVertical: 11,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  editBtnText: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 14,
   },
   swipeDeleteWrap: {
     justifyContent: 'center',

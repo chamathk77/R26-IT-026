@@ -31,6 +31,8 @@ import {
   fetchSalePersonById_Service,
   updateSalePerson_Service,
 } from '../../../services/SalePersonService';
+import { fetchLoggedUserBranches_Service } from '../../../services/ManageUsersService';
+import { ManageUserBranch } from '../../../type/manageUser';
 import { resetSalePersonDetail } from '../../../store/reducers/SalePersonReducer';
 import {
   getApiErrorMessage,
@@ -104,6 +106,9 @@ export default function AddEmployeeScreen({ navigation, route }: Props) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [position, setPosition] = useState('');
+  const [availableBranches, setAvailableBranches] = useState<ManageUserBranch[]>([]);
+  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(!isEditing);
@@ -133,6 +138,9 @@ export default function AddEmployeeScreen({ navigation, route }: Props) {
       setFirstName(person.firstName);
       setLastName(person.lastName);
       setPosition(person.position);
+      setSelectedBranchIds(
+        Array.isArray(person.allowedBranchIds) ? person.allowedBranchIds : [],
+      );
       setImageUri(resolveProductImageUri(person.image));
       setInitialLoaded(true);
     } catch (error: unknown) {
@@ -174,10 +182,52 @@ export default function AddEmployeeScreen({ navigation, route }: Props) {
       setFirstName('');
       setLastName('');
       setPosition('');
+      setSelectedBranchIds([]);
       setImageUri(null);
       setInitialLoaded(true);
     }
   }, [isEditing]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadBranches = async () => {
+      setBranchesLoading(true);
+      try {
+        const response = await dispatch(fetchLoggedUserBranches_Service()).unwrap();
+        if (!isMounted) return;
+        setAvailableBranches(Array.isArray(response.data) ? response.data : []);
+      } catch (error: unknown) {
+        if (!isMounted) return;
+        const handled = await handleSessionExpiredApiError(error, show_Alert);
+        if (handled) return;
+        show_Alert(
+          'error',
+          'Load failed',
+          getApiErrorMessage(error, 'Could not load branches. Please try again.'),
+          1,
+          true,
+          'OK',
+        );
+      } finally {
+        if (isMounted) {
+          setBranchesLoading(false);
+        }
+      }
+    };
+
+    void loadBranches();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [dispatch, show_Alert]);
+
+  const toggleBranchSelection = useCallback((branchId: string) => {
+    setSelectedBranchIds((prev) =>
+      prev.includes(branchId) ? prev.filter((id) => id !== branchId) : [...prev, branchId],
+    );
+  }, []);
 
   const pickFromGallery = useCallback(async () => {
     Keyboard.dismiss();
@@ -217,11 +267,12 @@ export default function AddEmployeeScreen({ navigation, route }: Props) {
     if (!firstName.trim()) return 'First name is required';
     if (!lastName.trim()) return 'Last name is required';
     if (!position.trim()) return 'Position is required';
+    if (!selectedBranchIds.length) return 'Select at least one branch.';
     return null;
   };
 
   const onSave = async () => {
-    if (saving || (isEditing && !initialLoaded)) return;
+    if (saving || branchesLoading || (isEditing && !initialLoaded)) return;
 
     const validationError = validateForm();
     if (validationError) {
@@ -244,6 +295,7 @@ export default function AddEmployeeScreen({ navigation, route }: Props) {
             firstName: firstName.trim(),
             lastName: lastName.trim(),
             position: position.trim(),
+            allowedBranchIds: selectedBranchIds,
             imageUri,
           }),
         ).unwrap();
@@ -257,6 +309,7 @@ export default function AddEmployeeScreen({ navigation, route }: Props) {
             firstName: firstName.trim(),
             lastName: lastName.trim(),
             position: position.trim(),
+            allowedBranchIds: selectedBranchIds,
             imageUri,
           }),
         ).unwrap();
@@ -459,9 +512,125 @@ export default function AddEmployeeScreen({ navigation, route }: Props) {
                 />
               </View>
 
+              <View
+                style={[
+                  styles.branchCard,
+                  { backgroundColor: paperTheme.colors.surface },
+                  softShadow(resolvedTheme),
+                ]}
+              >
+                <View style={styles.branchCardHeader}>
+                  <View style={[styles.branchIconWrap, { backgroundColor: paperTheme.colors.primaryContainer }]}>
+                    <Ionicons name="git-branch-outline" size={18} color={paperTheme.colors.primary} />
+                  </View>
+                  <View style={styles.branchHeaderText}>
+                    <Text style={[styles.branchCardTitle, { color: paperTheme.colors.onSurface }]}>
+                      Branch access
+                    </Text>
+                    <Text style={[styles.branchCardSub, { color: paperTheme.colors.onSurfaceVariant }]}>
+                      {availableBranches.length
+                        ? `${selectedBranchIds.length} of ${availableBranches.length} selected`
+                        : 'Assign at least one branch'}
+                    </Text>
+                  </View>
+                </View>
+
+                {branchesLoading ? (
+                  <View style={styles.branchLoadingRow}>
+                    <ActivityIndicator size="small" color={paperTheme.colors.primary} />
+                    <Text style={[styles.branchHint, { color: paperTheme.colors.onSurfaceVariant }]}>
+                      Loading shop branches...
+                    </Text>
+                  </View>
+                ) : availableBranches.length === 0 ? (
+                  <Text style={[styles.branchHint, { color: paperTheme.colors.error }]}>
+                    No active branch found for this shop.
+                  </Text>
+                ) : (
+                  <>
+                    <Text style={[styles.branchHint, { color: paperTheme.colors.onSurfaceVariant }]}>
+                      Tap to assign or unassign branches. At least one branch is required before saving.
+                    </Text>
+                    <View style={styles.branchList}>
+                      {availableBranches.map((branch) => {
+                        const assigned = selectedBranchIds.includes(branch.branchId);
+                        return (
+                          <TouchableOpacity
+                            key={branch.branchId}
+                            style={[
+                              styles.branchChip,
+                              {
+                                backgroundColor: assigned
+                                  ? `${paperTheme.colors.primary}18`
+                                  : paperTheme.colors.surfaceVariant,
+                                borderColor: assigned
+                                  ? paperTheme.colors.primary
+                                  : paperTheme.colors.outlineVariant,
+                              },
+                            ]}
+                            onPress={() => toggleBranchSelection(branch.branchId)}
+                            activeOpacity={0.85}
+                          >
+                            <View
+                              style={[
+                                styles.branchCheck,
+                                {
+                                  borderColor: assigned
+                                    ? paperTheme.colors.primary
+                                    : paperTheme.colors.outline,
+                                  backgroundColor: assigned
+                                    ? paperTheme.colors.primary
+                                    : 'transparent',
+                                },
+                              ]}
+                            >
+                              {assigned ? (
+                                <Ionicons
+                                  name="checkmark"
+                                  size={14}
+                                  color={paperTheme.colors.onPrimary}
+                                />
+                              ) : null}
+                            </View>
+                            <View style={styles.branchChipTextWrap}>
+                              <Text
+                                style={[styles.branchChipTitle, { color: paperTheme.colors.onSurface }]}
+                              >
+                                {branch.branchName}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.branchChipMeta,
+                                  { color: paperTheme.colors.onSurfaceVariant },
+                                ]}
+                              >
+                                {branch.branchId}
+                                {branch.isMainBranch ? ' • Main branch' : ''}
+                              </Text>
+                            </View>
+                            <Text
+                              style={[
+                                styles.branchToggleLabel,
+                                {
+                                  color: assigned
+                                    ? paperTheme.colors.primary
+                                    : paperTheme.colors.onSurfaceVariant,
+                                },
+                              ]}
+                            >
+                              {assigned ? 'Assigned' : 'Tap to assign'}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </>
+                )}
+              </View>
+
               <TouchableOpacity
                 activeOpacity={0.9}
-                disabled={saving}
+                disabled={saving || branchesLoading}
                 onPress={() => {
                   void onSave();
                 }}
@@ -614,6 +783,84 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.OS === 'ios' ? 13 : 10,
     fontFamily: fonts.PoppinsMedium,
     fontSize: 14,
+  },
+  branchCard: {
+    borderRadius: 20,
+    padding: 16,
+    gap: 10,
+  },
+  branchCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  branchIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  branchHeaderText: {
+    flex: 1,
+    gap: 2,
+  },
+  branchCardTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 15,
+  },
+  branchCardSub: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+  },
+  branchLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  branchHint: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  branchList: {
+    gap: 10,
+  },
+  branchChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  branchCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  branchChipTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  branchChipTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
+  },
+  branchChipMeta: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  branchToggleLabel: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 11,
+    maxWidth: 72,
+    textAlign: 'right',
   },
   saveBtn: {
     borderRadius: 16,

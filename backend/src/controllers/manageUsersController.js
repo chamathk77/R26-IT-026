@@ -461,7 +461,7 @@ const getLoggedUserBranches = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Not authorized, user not found' });
     }
 
-    const shopId = normalizeShopId(user.shopId);
+    const shopId = normalizeShopId(user.shopId || req.user?.shopId);
     if (!shopId) {
       return res.status(403).json({
         success: false,
@@ -471,13 +471,7 @@ const getLoggedUserBranches = async (req, res) => {
 
     const activeBranches = await getActiveBranchesForShop(shopId);
     const allowedBranchIds = normalizeAllowedBranchIds(user.allowedBranchIds);
-
-    const branches =
-      user.role === 'owner' && allowedBranchIds.length === 0
-        ? activeBranches.map(mapBranch)
-        : activeBranches
-            .filter((branch) => allowedBranchIds.includes(normalizeBranchId(branch.branchId)))
-            .map(mapBranch);
+    const branches = activeBranches.map(mapBranch);
 
     return res.status(200).json({
       success: true,
@@ -485,7 +479,7 @@ const getLoggedUserBranches = async (req, res) => {
       allowedBranchIds,
       count: branches.length,
       data: branches,
-      message: 'Logged user branches loaded successfully',
+      message: 'Shop branches loaded successfully',
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

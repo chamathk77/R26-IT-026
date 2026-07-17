@@ -43,20 +43,27 @@ function getRoleBadgeTone(role: string): 'primary' | 'success' | 'warning' | 'ne
   return 'neutral';
 }
 
+function getBranchSummary(user: ShopUser): string {
+  const count = user.allowedBranchIds?.length ?? 0;
+  if (user.role === 'owner' && count === 0) {
+    return 'All branches';
+  }
+  if (count === 0) {
+    return 'No branch assigned';
+  }
+  return `${count} branch${count > 1 ? 'es' : ''} assigned`;
+}
+
 function UserCard({
   user,
-  expanded,
-  onToggle,
-  onEdit,
+  onPress,
   onDelete,
   swipeableRef,
   paperTheme,
   resolvedTheme,
 }: {
   user: ShopUser;
-  expanded: boolean;
-  onToggle: () => void;
-  onEdit: () => void;
+  onPress: () => void;
   onDelete: () => void;
   swipeableRef: (ref: Swipeable | null) => void;
   paperTheme: ReturnType<typeof useTheme>['paperTheme'];
@@ -71,14 +78,16 @@ function UserCard({
     .toUpperCase();
 
   const card = (
-    <View
+    <TouchableOpacity
+      activeOpacity={0.92}
+      onPress={onPress}
       style={[
         styles.card,
         { backgroundColor: paperTheme.colors.surface },
         cardShadow(resolvedTheme),
       ]}
     >
-      <TouchableOpacity activeOpacity={0.92} onPress={onToggle} style={styles.cardHeader}>
+      <View style={styles.cardHeader}>
         <View
           style={[
             styles.avatar,
@@ -105,61 +114,35 @@ function UserCard({
           >
             {user.email}
           </Text>
-        </View>
-        <SettingsBadge
-          label={user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-          tone={getRoleBadgeTone(user.role)}
-          paperTheme={paperTheme}
-        />
-      </TouchableOpacity>
-
-      {expanded ? (
-        <View
-          style={[
-            styles.cardDetails,
-            { borderTopColor: paperTheme.colors.outlineVariant },
-          ]}
-        >
-          <View style={styles.detailRow}>
-            <Ionicons name="mail-outline" size={16} color={paperTheme.colors.onSurfaceVariant} />
-            <Text style={[styles.detailText, { color: paperTheme.colors.onSurface }]}>
-              {user.email}
-            </Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Ionicons name="call-outline" size={16} color={paperTheme.colors.onSurfaceVariant} />
-            <Text style={[styles.detailText, { color: paperTheme.colors.onSurface }]}>
-              {user.phoneNumber}
-            </Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Ionicons name="git-branch-outline" size={16} color={paperTheme.colors.onSurfaceVariant} />
-            <Text style={[styles.detailText, { color: paperTheme.colors.onSurface }]}>
-              {user.allowedBranchIds?.length
-                ? `${user.allowedBranchIds.length} branch${user.allowedBranchIds.length > 1 ? 'es' : ''} assigned`
-                : 'No branch assigned'}
-            </Text>
-          </View>
-
-          {!isOwner ? (
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={onEdit}
-              style={[styles.editBtn, { backgroundColor: paperTheme.colors.primary }]}
+          <View style={styles.branchRow}>
+            <Ionicons
+              name="git-branch-outline"
+              size={13}
+              color={paperTheme.colors.onSurfaceVariant}
+            />
+            <Text
+              style={[styles.branchSummary, { color: paperTheme.colors.onSurfaceVariant }]}
+              numberOfLines={1}
             >
-              <Ionicons name="create-outline" size={18} color={paperTheme.colors.onPrimary} />
-              <Text style={[styles.editBtnText, { color: paperTheme.colors.onPrimary }]}>
-                Edit user
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <Text style={[styles.ownerHint, { color: paperTheme.colors.onSurfaceVariant }]}>
-              Owner account cannot be edited here.
+              {getBranchSummary(user)}
             </Text>
-          )}
+          </View>
         </View>
-      ) : null}
-    </View>
+        <View style={styles.cardTrailing}>
+          <SettingsBadge
+            label={user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+            tone={getRoleBadgeTone(user.role)}
+            paperTheme={paperTheme}
+          />
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={paperTheme.colors.onSurfaceVariant}
+            style={styles.chevron}
+          />
+        </View>
+      </View>
+    </TouchableOpacity>
   );
 
   if (isOwner) {
@@ -206,7 +189,6 @@ export default function ManageAccountScreen({ navigation }: Props) {
   const users = listState?.items ?? [];
   const loading = listState?.loading ?? false;
   const count = listState?.count ?? 0;
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
 
@@ -265,9 +247,6 @@ export default function ManageAccountScreen({ navigation }: Props) {
           try {
             await dispatch(deleteShopUser_Service(user._id)).unwrap();
             swipeableRefs.current.get(user._id)?.close();
-            if (expandedId === user._id) {
-              setExpandedId(null);
-            }
           } catch (err: unknown) {
             const handled = await handleSessionExpiredApiError(err, show_Alert);
             if (handled) return;
@@ -289,7 +268,7 @@ export default function ManageAccountScreen({ navigation }: Props) {
         closeSwipe,
       );
     },
-    [dispatch, expandedId, show_Alert],
+    [dispatch, show_Alert],
   );
 
   useFocusEffect(
@@ -351,7 +330,7 @@ export default function ManageAccountScreen({ navigation }: Props) {
       </View>
 
       <Text style={[styles.caption, { color: paperTheme.colors.onSurfaceVariant }]}>
-        Tap a user to expand details. Owner is read-only. Swipe left on admin or staff to delete.
+        Tap a user to view details. Owner is read-only. Swipe left on admin or staff to delete.
       </Text>
     </View>
   );
@@ -402,11 +381,7 @@ export default function ManageAccountScreen({ navigation }: Props) {
             renderItem={({ item }) => (
               <UserCard
                 user={item}
-                expanded={expandedId === item._id}
-                onToggle={() =>
-                  setExpandedId((prev) => (prev === item._id ? null : item._id))
-                }
-                onEdit={() => navigation.navigate('ManageUserForm', { userId: item._id })}
+                onPress={() => navigation.navigate('ManageUserForm', { userId: item._id })}
                 onDelete={() => confirmDeleteUser(item)}
                 swipeableRef={(ref) => {
                   if (ref) swipeableRefs.current.set(item._id, ref);
@@ -571,41 +546,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  cardDetails: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 14,
-    paddingBottom: 14,
-    paddingTop: 12,
-    gap: 8,
-  },
-  detailRow: {
+  branchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
+    marginTop: 4,
   },
-  detailText: {
+  branchSummary: {
     fontFamily: fonts.PoppinsRegular,
-    fontSize: 13,
+    fontSize: 11,
     flex: 1,
   },
-  editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  cardTrailing: {
+    alignItems: 'flex-end',
     gap: 8,
-    borderRadius: 12,
-    paddingVertical: 12,
-    marginTop: 8,
   },
-  editBtnText: {
-    fontFamily: fonts.PoppinsSemiBold,
-    fontSize: 14,
-  },
-  ownerHint: {
-    fontFamily: fonts.PoppinsRegular,
-    fontSize: 12,
-    marginTop: 8,
-    fontStyle: 'italic',
+  chevron: {
+    marginTop: 2,
   },
   swipeDeleteWrap: {
     justifyContent: 'center',

@@ -40,12 +40,31 @@ function appendImageToFormData(formData: FormData, imageUri: string) {
   } as unknown as Blob);
 }
 
+function appendAllowedBranchIds(
+  target: FormData | Record<string, string | string[]>,
+  allowedBranchIds?: string[],
+) {
+  if (!Array.isArray(allowedBranchIds)) return;
+
+  const normalized = [
+    ...new Set(allowedBranchIds.map((id) => String(id).trim().toUpperCase()).filter(Boolean)),
+  ];
+
+  if (target instanceof FormData) {
+    target.append('allowedBranchIds', normalized.join(','));
+    return;
+  }
+
+  target.allowedBranchIds = normalized;
+}
+
 function buildSalePersonFormData(
   fields: {
     salePersonId?: string;
     firstName?: string;
     lastName?: string;
     position?: string;
+    allowedBranchIds?: string[];
     imageUri?: string | null;
   },
   options?: { includeImage?: boolean },
@@ -64,6 +83,7 @@ function buildSalePersonFormData(
   if (fields.position != null) {
     formData.append('position', fields.position.trim());
   }
+  appendAllowedBranchIds(formData, fields.allowedBranchIds);
 
   if (options?.includeImage && fields.imageUri && isLocalImageUri(fields.imageUri)) {
     appendImageToFormData(formData, fields.imageUri);
@@ -77,8 +97,9 @@ function buildSalePersonJsonBody(fields: {
   firstName?: string;
   lastName?: string;
   position?: string;
+  allowedBranchIds?: string[];
 }) {
-  const body: Record<string, string> = {};
+  const body: Record<string, string | string[]> = {};
 
   if (fields.salePersonId != null) {
     body.salePersonId = fields.salePersonId.trim().toUpperCase();
@@ -92,6 +113,7 @@ function buildSalePersonJsonBody(fields: {
   if (fields.position != null) {
     body.position = fields.position.trim();
   }
+  appendAllowedBranchIds(body, fields.allowedBranchIds);
 
   return body;
 }

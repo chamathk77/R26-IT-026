@@ -232,10 +232,6 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
 
         const branches = Array.isArray(response.data) ? response.data : [];
         setAvailableBranches(branches);
-
-        if (!isEditing && branches.length === 1) {
-          setSelectedBranchIds([branches[0].branchId]);
-        }
       } catch (error: unknown) {
         if (!isMounted) return;
 
@@ -263,7 +259,7 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
     return () => {
       isMounted = false;
     };
-  }, [dispatch, isEditing, show_Alert]);
+  }, [dispatch, show_Alert]);
 
   const validateForm = useCallback((): string | null => {
     if (!name.trim()) return 'Name is required.';
@@ -291,6 +287,28 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
 
     return null;
   }, [confirmPassword, email, isEditing, name, password, phoneNumber, role, selectedBranchIds]);
+
+  const ownerHasAllBranches =
+    isOwnerUser &&
+    (!existingUser?.allowedBranchIds?.length ||
+      existingUser.allowedBranchIds.length >= availableBranches.length);
+
+  const isBranchAssigned = useCallback(
+    (branchId: string) => {
+      if (isOwnerUser) {
+        if (ownerHasAllBranches) return true;
+        return selectedBranchIds.includes(branchId);
+      }
+      return selectedBranchIds.includes(branchId);
+    },
+    [isOwnerUser, ownerHasAllBranches, selectedBranchIds],
+  );
+
+  const selectedBranchCount = isOwnerUser
+    ? ownerHasAllBranches
+      ? availableBranches.length
+      : selectedBranchIds.length
+    : selectedBranchIds.length;
 
   const toggleBranchSelection = useCallback((branchId: string) => {
     setSelectedBranchIds((prev) =>
@@ -445,7 +463,11 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: paperTheme.colors.background }]}>
         <CommonHeader
-          title="Edit user"
+          title={
+            existingUser?.role === 'owner'
+              ? 'View owner'
+              : 'Edit user'
+          }
           titleColor={paperTheme.colors.onBackground}
           iconColor={paperTheme.colors.onBackground}
           onPressLeftBtn={() => navigation.goBack()}
@@ -468,7 +490,9 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
         edges={['top']}
       >
         <CommonHeader
-          title={isEditing ? 'Edit user' : 'New user'}
+          title={
+            isOwnerUser ? 'View owner' : isEditing ? 'Edit user' : 'New user'
+          }
           titleColor={paperTheme.colors.onBackground}
           iconColor={paperTheme.colors.onBackground}
           onPressLeftBtn={() => navigation.goBack()}
@@ -503,14 +527,18 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
                 color={paperTheme.colors.primary}
               />
               <Text style={[styles.heroTitle, { color: paperTheme.colors.onPrimaryContainer }]}>
-                {isEditing ? 'Update shop user' : 'Create shop user'}
+                {isOwnerUser
+                  ? 'Owner account'
+                  : isEditing
+                    ? 'Update shop user'
+                    : 'Create shop user'}
               </Text>
               <Text style={[styles.heroSub, { color: paperTheme.colors.onPrimaryContainer }]}>
                 {isOwnerUser
-                  ? 'Owner account is visible here, but it cannot be edited or deleted from this screen.'
+                  ? 'View-only. Owner details and branch access cannot be changed here.'
                   : isEditing
-                  ? 'Change details or set a new password without the old one.'
-                  : 'Add an admin or staff member for your shop.'}
+                    ? 'Update details and branch access. At least one branch is required.'
+                    : 'Add an admin or staff member. Select at least one branch before creating.'}
               </Text>
             </View>
 
@@ -606,87 +634,129 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
             )}
 
             <Text style={[styles.label, { color: paperTheme.colors.onSurfaceVariant }]}>
-              BRANCH ACCESS
+              BRANCH ACCESS {availableBranches.length ? `(${selectedBranchCount}/${availableBranches.length})` : ''}
             </Text>
             <View style={styles.branchSection}>
               {branchesLoading ? (
                 <View style={styles.branchLoadingRow}>
                   <ActivityIndicator size="small" color={paperTheme.colors.primary} />
                   <Text style={[styles.branchHint, { color: paperTheme.colors.onSurfaceVariant }]}>
-                    Loading branches...
+                    Loading shop branches...
                   </Text>
                 </View>
               ) : availableBranches.length === 0 ? (
                 <Text style={[styles.branchHint, { color: paperTheme.colors.error }]}>
-                  No branch available for this account.
+                  No active branch found for this shop.
                 </Text>
               ) : (
                 <>
                   <Text style={[styles.branchHint, { color: paperTheme.colors.onSurfaceVariant }]}>
-                    {availableBranches.length === 1
-                      ? 'Single branch detected and selected automatically.'
-                      : 'Select one or more branches for this user.'}
+                    {isOwnerUser
+                      ? ownerHasAllBranches
+                        ? 'Owner has access to all shop branches.'
+                        : 'Branches assigned to this owner account.'
+                      : 'Tap to assign or unassign branches. At least one branch is required.'}
                   </Text>
                   <View style={styles.branchList}>
                     {availableBranches.map((branch) => {
-                      const active = selectedBranchIds.includes(branch.branchId);
+                      const assigned = isBranchAssigned(branch.branchId);
                       return (
                         <TouchableOpacity
                           key={branch.branchId}
                           style={[
                             styles.branchChip,
                             {
-                              backgroundColor: active
-                                ? paperTheme.colors.primary
+                              backgroundColor: assigned
+                                ? `${paperTheme.colors.primary}18`
                                 : paperTheme.colors.surface,
-                              borderColor: active
+                              borderColor: assigned
                                 ? paperTheme.colors.primary
                                 : paperTheme.colors.outlineVariant,
-                              opacity: isOwnerUser ? 0.8 : 1,
+                              opacity: isOwnerUser ? 0.95 : 1,
                             },
                             cardShadow(resolvedTheme),
                           ]}
                           onPress={() => {
-                            if (!isOwnerUser && availableBranches.length > 1) {
+                            if (!isOwnerUser) {
                               toggleBranchSelection(branch.branchId);
                             }
                           }}
-                          disabled={isOwnerUser || availableBranches.length === 1}
+                          disabled={isOwnerUser}
+                          activeOpacity={isOwnerUser ? 1 : 0.85}
                         >
                           <View style={styles.branchChipHeader}>
-                            <Text
+                            <View
                               style={[
-                                styles.branchChipTitle,
+                                styles.branchCheck,
                                 {
-                                  color: active
-                                    ? paperTheme.colors.onPrimary
-                                    : paperTheme.colors.onSurface,
+                                  borderColor: assigned
+                                    ? paperTheme.colors.primary
+                                    : paperTheme.colors.outline,
+                                  backgroundColor: assigned
+                                    ? paperTheme.colors.primary
+                                    : 'transparent',
                                 },
                               ]}
                             >
-                              {branch.branchName}
-                            </Text>
-                            {active ? (
+                              {assigned ? (
+                                <Ionicons
+                                  name="checkmark"
+                                  size={14}
+                                  color={paperTheme.colors.onPrimary}
+                                />
+                              ) : null}
+                            </View>
+                            <View style={styles.branchChipTextWrap}>
+                              <Text
+                                style={[
+                                  styles.branchChipTitle,
+                                  { color: paperTheme.colors.onSurface },
+                                ]}
+                              >
+                                {branch.branchName}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.branchChipMeta,
+                                  { color: paperTheme.colors.onSurfaceVariant },
+                                ]}
+                              >
+                                {branch.branchId}
+                                {branch.isMainBranch ? ' • Main branch' : ''}
+                              </Text>
+                              {branch.address ? (
+                                <Text
+                                  style={[
+                                    styles.branchChipAddress,
+                                    { color: paperTheme.colors.onSurfaceVariant },
+                                  ]}
+                                  numberOfLines={1}
+                                >
+                                  {branch.address}
+                                </Text>
+                              ) : null}
+                            </View>
+                            {!isOwnerUser ? (
+                              <Text
+                                style={[
+                                  styles.branchToggleLabel,
+                                  {
+                                    color: assigned
+                                      ? paperTheme.colors.primary
+                                      : paperTheme.colors.onSurfaceVariant,
+                                  },
+                                ]}
+                              >
+                                {assigned ? 'Assigned' : 'Tap to assign'}
+                              </Text>
+                            ) : assigned ? (
                               <Ionicons
                                 name="checkmark-circle"
-                                size={18}
-                                color={paperTheme.colors.onPrimary}
+                                size={20}
+                                color={paperTheme.colors.primary}
                               />
                             ) : null}
                           </View>
-                          <Text
-                            style={[
-                              styles.branchChipMeta,
-                              {
-                                color: active
-                                  ? paperTheme.colors.onPrimary
-                                  : paperTheme.colors.onSurfaceVariant,
-                              },
-                            ]}
-                          >
-                            {branch.branchId}
-                            {branch.isMainBranch ? ' • Main branch' : ''}
-                          </Text>
                         </TouchableOpacity>
                       );
                     })}
@@ -705,7 +775,6 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
                   secureTextEntry={!showPassword}
                   showToggle
                   onToggleSecure={() => setShowPassword((prev) => !prev)}
-                  editable={!isOwnerUser}
                   paperTheme={paperTheme}
                   resolvedTheme={resolvedTheme}
                 />
@@ -717,56 +786,74 @@ export default function ManageUserFormScreen({ navigation, route }: Props) {
                   secureTextEntry={!showConfirmPassword}
                   showToggle
                   onToggleSecure={() => setShowConfirmPassword((prev) => !prev)}
-                  editable={!isOwnerUser}
                   paperTheme={paperTheme}
                   resolvedTheme={resolvedTheme}
                 />
+
+                <TouchableOpacity
+                  style={[
+                    styles.primaryBtn,
+                    {
+                      backgroundColor: paperTheme.colors.primary,
+                      opacity: saving ? 0.7 : 1,
+                    },
+                  ]}
+                  onPress={() => void handleSave()}
+                  disabled={saving || deleting || branchesLoading}
+                >
+                  {saving ? (
+                    <ActivityIndicator color={paperTheme.colors.onPrimary} />
+                  ) : (
+                    <Text style={[styles.primaryBtnText, { color: paperTheme.colors.onPrimary }]}>
+                      {isEditing ? 'Save changes' : 'Create user'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                {isEditing ? (
+                  <TouchableOpacity
+                    style={[
+                      styles.deleteBtn,
+                      {
+                        borderColor: '#fecaca',
+                        backgroundColor: resolvedTheme === 'dark' ? '#450a0a' : '#fef2f2',
+                        opacity: deleting ? 0.7 : 1,
+                      },
+                    ]}
+                    onPress={handleDelete}
+                    disabled={saving || deleting}
+                  >
+                    {deleting ? (
+                      <ActivityIndicator color="#dc2626" />
+                    ) : (
+                      <>
+                        <Ionicons name="trash-outline" size={18} color="#dc2626" />
+                        <Text style={styles.deleteBtnText}>Delete user</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                ) : null}
               </>
-            ) : null}
-
-            <TouchableOpacity
-              style={[
-                styles.primaryBtn,
-                {
-                  backgroundColor: paperTheme.colors.primary,
-                  opacity: saving ? 0.7 : 1,
-                },
-              ]}
-              onPress={() => void handleSave()}
-              disabled={saving || deleting || isOwnerUser || branchesLoading}
-            >
-              {saving ? (
-                <ActivityIndicator color={paperTheme.colors.onPrimary} />
-              ) : (
-                <Text style={[styles.primaryBtnText, { color: paperTheme.colors.onPrimary }]}>
-                  {isEditing ? 'Save changes' : 'Create user'}
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            {isEditing && !isOwnerUser ? (
-              <TouchableOpacity
+            ) : (
+              <View
                 style={[
-                  styles.deleteBtn,
+                  styles.readOnlyBanner,
                   {
-                    borderColor: '#fecaca',
-                    backgroundColor: resolvedTheme === 'dark' ? '#450a0a' : '#fef2f2',
-                    opacity: deleting ? 0.7 : 1,
+                    backgroundColor: paperTheme.colors.surfaceVariant,
+                    borderColor: paperTheme.colors.outlineVariant,
                   },
                 ]}
-                onPress={handleDelete}
-                disabled={saving || deleting}
               >
-                {deleting ? (
-                  <ActivityIndicator color="#dc2626" />
-                ) : (
-                  <>
-                    <Ionicons name="trash-outline" size={18} color="#dc2626" />
-                    <Text style={styles.deleteBtnText}>Delete user</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            ) : null}
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={18}
+                  color={paperTheme.colors.onSurfaceVariant}
+                />
+                <Text style={[styles.readOnlyBannerText, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  Owner account is read-only and cannot be updated or deleted.
+                </Text>
+              </View>
+            )}
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -877,19 +964,56 @@ const styles = StyleSheet.create({
   },
   branchChipHeader: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  branchCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  branchChipTextWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   branchChipTitle: {
-    flex: 1,
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 14,
   },
   branchChipMeta: {
     fontFamily: fonts.PoppinsRegular,
     fontSize: 12,
-    marginTop: 4,
+    marginTop: 2,
+  },
+  branchChipAddress: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  branchToggleLabel: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 11,
+    maxWidth: 72,
+    textAlign: 'right',
+  },
+  readOnlyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 8,
+  },
+  readOnlyBannerText: {
+    flex: 1,
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 13,
+    lineHeight: 18,
   },
   ownerRoleCard: {
     borderWidth: 1,

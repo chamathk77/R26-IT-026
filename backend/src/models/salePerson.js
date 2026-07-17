@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 
+const BRANCH_ID_PATTERN = /^B\d{5}$/;
+
 const salePersonSchema = new mongoose.Schema(
   {
     shopId: {
@@ -30,6 +32,10 @@ const salePersonSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    allowedBranchIds: {
+      type: [String],
+      default: [],
+    },
     image: {
       type: String,
       default: '',
@@ -55,6 +61,25 @@ salePersonSchema.pre('validate', function normalizeSalePersonFields() {
   if (this.position) {
     this.position = String(this.position).trim();
   }
+  if (Array.isArray(this.allowedBranchIds)) {
+    const normalized = [
+      ...new Set(
+        this.allowedBranchIds
+          .map((branchId) => String(branchId ?? '').trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    ];
+
+    for (const branchId of normalized) {
+      if (!BRANCH_ID_PATTERN.test(branchId)) {
+        throw new Error('allowedBranchIds must use branch format B00001');
+      }
+    }
+
+    this.allowedBranchIds = normalized;
+  } else {
+    this.allowedBranchIds = [];
+  }
   if (this.image === undefined || this.image === null) {
     this.image = '';
   } else {
@@ -63,5 +88,6 @@ salePersonSchema.pre('validate', function normalizeSalePersonFields() {
 });
 
 salePersonSchema.index({ shopId: 1, salePersonId: 1 }, { unique: true });
+salePersonSchema.index({ shopId: 1, allowedBranchIds: 1 });
 
 module.exports = mongoose.model('SalePerson', salePersonSchema);
