@@ -1,0 +1,234 @@
+import { api } from './axios';
+import type {
+  ActiveShopBranchesResponse,
+  ActiveShopDetailsResponse,
+  ActiveShopPaymentDetailsResponse,
+  ActiveShopPaymentsResponse,
+  ActiveShopsResponse,
+  ClearActiveShopDataResponse,
+  DeleteActiveShopPaymentResponse,
+  FetchActiveShopPaymentsParams,
+  FetchActiveShopsParams,
+  FinishTrialShopResponse,
+  OnboardingShopDetailsResponse,
+  OnboardUsersResponse,
+  TrialShopDetailsResponse,
+  TrialShopStatus,
+  TrialShopsResponse,
+  UpdateActiveShopPaymentPayload,
+  UpdateActiveShopPaymentResponse,
+  UpdateActiveShopPayload,
+  UpdateActiveShopResponse,
+  UpdateOnboardingShopPayload,
+  UpdateOnboardingShopResponse,
+  BulkImportResponse,
+  BulkImportResultResponse,
+  BulkImportTemplateResponse,
+  BulkImportRow,
+  DeleteShopBulkImportCatalogResponse,
+} from './shops.types';
+
+export async function fetchOnboardUsers(): Promise<OnboardUsersResponse> {
+  const response = await api.get<OnboardUsersResponse>(
+    '/api/dashboard/shops/onboard-users',
+  );
+  return response.data;
+}
+
+export async function fetchOnboardingShopDetails(
+  shopId: string,
+): Promise<OnboardingShopDetailsResponse> {
+  const response = await api.get<OnboardingShopDetailsResponse>(
+    `/api/dashboard/shops/onboard-users/${encodeURIComponent(shopId)}`,
+  );
+  return response.data;
+}
+
+export async function updateOnboardingShop(
+  shopId: string,
+  payload: UpdateOnboardingShopPayload,
+): Promise<UpdateOnboardingShopResponse> {
+  const response = await api.put<UpdateOnboardingShopResponse>(
+    `/api/dashboard/shops/onboard-users/${encodeURIComponent(shopId)}`,
+    payload,
+  );
+  return response.data;
+}
+
+export async function fetchTrialShops(
+  status?: TrialShopStatus,
+): Promise<TrialShopsResponse> {
+  const response = await api.get<TrialShopsResponse>('/api/dashboard/shops/trial-shops', {
+    params: status ? { status } : undefined,
+  });
+  return response.data;
+}
+
+export async function fetchTrialShopDetails(
+  shopId: string,
+): Promise<TrialShopDetailsResponse> {
+  const response = await api.get<TrialShopDetailsResponse>(
+    `/api/dashboard/shops/trial-shops/${encodeURIComponent(shopId)}`,
+  );
+  return response.data;
+}
+
+export async function finishTrialShop(shopId: string): Promise<FinishTrialShopResponse> {
+  const response = await api.post<FinishTrialShopResponse>(
+    `/api/dashboard/shops/trial-shops/${encodeURIComponent(shopId)}/finish-trial`,
+  );
+  return response.data;
+}
+
+export async function fetchActiveShops(
+  params: FetchActiveShopsParams = {},
+): Promise<ActiveShopsResponse> {
+  const query: Record<string, string> = {};
+  if (params.status) query.status = params.status;
+  if (params.ownerMobileNumber?.trim()) {
+    query.ownerMobileNumber = params.ownerMobileNumber.trim();
+  }
+  if (params.shopId?.trim()) query.shopId = params.shopId.trim();
+
+  const response = await api.get<ActiveShopsResponse>(
+    '/api/dashboard/shops/active-shops',
+    { params: Object.keys(query).length ? query : undefined },
+  );
+  return response.data;
+}
+
+export async function fetchActiveShopDetails(
+  shopId: string,
+): Promise<ActiveShopDetailsResponse> {
+  const response = await api.get<ActiveShopDetailsResponse>(
+    `/api/dashboard/shops/active-shops/${encodeURIComponent(shopId)}`,
+  );
+  return response.data;
+}
+
+export async function updateActiveShopDetails(
+  shopId: string,
+  payload: UpdateActiveShopPayload,
+): Promise<UpdateActiveShopResponse> {
+  const response = await api.put<UpdateActiveShopResponse>(
+    `/api/dashboard/shops/active-shops/${encodeURIComponent(shopId)}`,
+    payload,
+  );
+  return response.data;
+}
+
+export async function clearActiveShopData(
+  shopId: string,
+  confirmShopId: string,
+): Promise<ClearActiveShopDataResponse> {
+  const response = await api.delete<ClearActiveShopDataResponse>(
+    `/api/dashboard/shops/active-shops/${encodeURIComponent(shopId)}/clear-data`,
+    { data: { confirmShopId } },
+  );
+  return response.data;
+}
+
+export async function fetchActiveShopBranches(
+  shopId: string,
+): Promise<ActiveShopBranchesResponse> {
+  const response = await api.get<ActiveShopBranchesResponse>(
+    `/api/dashboard/shops/active-shops/${encodeURIComponent(shopId)}/branches`,
+  );
+  return response.data;
+}
+
+export async function fetchActiveShopPayments(
+  shopId: string,
+  params: FetchActiveShopPaymentsParams = {},
+): Promise<ActiveShopPaymentsResponse> {
+  const query: Record<string, string> = {};
+  if (params.paymentType) query.paymentType = params.paymentType;
+  if (params.status) query.status = params.status;
+
+  const response = await api.get<ActiveShopPaymentsResponse>(
+    `/api/dashboard/shops/active-shops/${encodeURIComponent(shopId)}/payments`,
+    { params: Object.keys(query).length ? query : undefined },
+  );
+  return response.data;
+}
+
+export async function fetchActiveShopPaymentDetails(
+  shopId: string,
+  paymentId: string,
+): Promise<ActiveShopPaymentDetailsResponse> {
+  const response = await api.get<ActiveShopPaymentDetailsResponse>(
+    `/api/dashboard/shops/active-shops/${encodeURIComponent(shopId)}/payments/${encodeURIComponent(paymentId)}`,
+  );
+  return response.data;
+}
+
+export async function updateActiveShopPayment(
+  shopId: string,
+  paymentId: string,
+  payload: UpdateActiveShopPaymentPayload,
+): Promise<UpdateActiveShopPaymentResponse> {
+  const response = await api.put<UpdateActiveShopPaymentResponse>(
+    `/api/dashboard/shops/active-shops/${encodeURIComponent(shopId)}/payments/${encodeURIComponent(paymentId)}`,
+    payload,
+  );
+  return response.data;
+}
+
+export async function deleteActiveShopPayment(
+  shopId: string,
+  paymentId: string,
+): Promise<DeleteActiveShopPaymentResponse> {
+  const response = await api.delete<DeleteActiveShopPaymentResponse>(
+    `/api/dashboard/shops/active-shops/${encodeURIComponent(shopId)}/payments/${encodeURIComponent(paymentId)}`,
+  );
+  return response.data;
+}
+
+export async function fetchShopBulkImportTemplate(
+  shopId: string,
+): Promise<BulkImportTemplateResponse> {
+  const response = await api.get<BulkImportTemplateResponse>(
+    `/api/dashboard/shops/${encodeURIComponent(shopId)}/bulk-import/template`,
+  );
+  return response.data;
+}
+
+export async function bulkImportShopCatalog(
+  shopId: string,
+  payload: { columns: string[]; rows: BulkImportRow[]; branchId?: string },
+): Promise<BulkImportResponse> {
+  const response = await api.post<BulkImportResponse>(
+    `/api/dashboard/shops/${encodeURIComponent(shopId)}/bulk-import`,
+    payload,
+  );
+  return response.data;
+}
+
+export async function fetchShopBulkImportResult(
+  shopId: string,
+): Promise<BulkImportResultResponse> {
+  const response = await api.get<BulkImportResultResponse>(
+    `/api/dashboard/shops/${encodeURIComponent(shopId)}/bulk-import/result`,
+  );
+  return response.data;
+}
+
+export async function dismissShopBulkImportResult(
+  shopId: string,
+): Promise<{ success: boolean; dismissed: number }> {
+  const response = await api.delete<{ success: boolean; dismissed: number }>(
+    `/api/dashboard/shops/${encodeURIComponent(shopId)}/bulk-import/result`,
+  );
+  return response.data;
+}
+
+export async function deleteShopBulkImportCatalog(
+  shopId: string,
+  confirmShopId: string,
+): Promise<DeleteShopBulkImportCatalogResponse> {
+  const response = await api.delete<DeleteShopBulkImportCatalogResponse>(
+    `/api/dashboard/shops/${encodeURIComponent(shopId)}/bulk-import/catalog`,
+    { data: { confirmShopId } },
+  );
+  return response.data;
+}
