@@ -45,9 +45,11 @@ import {
   fetchActiveShopDetails,
   updateActiveShopDetails,
 } from '@/lib/api/shops';
+import ShopBillingConfigPanel from '@/components/shops/ShopBillingConfigPanel';
 import type {
   ActiveShopDetails,
   ActiveShopStatus,
+  ShopBillingConfig,
   UpdateActiveShopPayload,
 } from '@/lib/api/shops.types';
 
@@ -70,6 +72,7 @@ type EditableActiveShopForm = {
   costModule: boolean;
   marketingModule: boolean;
   warrantyModule: boolean;
+  quotationsModule: boolean;
   maxUsers: string;
   isAdditionalUsersAdded: boolean;
   numAdditionalUsers: string;
@@ -82,6 +85,7 @@ type EditableActiveShopForm = {
   smsNextRenewalDate: string;
   smsDueDays: string;
   isSmsDeactivationScheduled: boolean;
+  billingConfig: ShopBillingConfig;
 };
 
 const DEFAULT_SMS_STATUSES = ['notActivated', 'active', 'pending', 'due', 'inactive'];
@@ -171,6 +175,7 @@ function toFormState(shop: ActiveShopDetails): EditableActiveShopForm {
     costModule: Boolean(shop.costModule),
     marketingModule: Boolean(shop.marketingModule),
     warrantyModule: Boolean(shop.warrantyModule),
+    quotationsModule: Boolean(shop.quotationsModule),
     maxUsers: shop.maxUsers == null ? '' : String(shop.maxUsers),
     isAdditionalUsersAdded: Boolean(shop.isAdditionalUsersAdded),
     numAdditionalUsers:
@@ -184,6 +189,7 @@ function toFormState(shop: ActiveShopDetails): EditableActiveShopForm {
     smsNextRenewalDate: toDateTimeLocalValue(shop.smsfeature.smsNextRenewalDate),
     smsDueDays: String(shop.smsfeature.smsDueDays ?? 0),
     isSmsDeactivationScheduled: Boolean(shop.smsfeature.isSmsDeactivationScheduled),
+    billingConfig: shop.billingConfig ?? { taxes: [] },
   };
 }
 
@@ -240,11 +246,13 @@ function buildUpdatePayload(form: EditableActiveShopForm): UpdateActiveShopPaylo
     costModule: form.costModule,
     marketingModule: form.marketingModule,
     warrantyModule: form.warrantyModule,
+    quotationsModule: form.quotationsModule,
     maxUsers,
     isAdditionalUsersAdded: form.isAdditionalUsersAdded,
     numAdditionalUsers,
     webModule: form.webModule,
     webModuleEnabledAt: fromDateTimeLocalValue(form.webModuleEnabledAt),
+    billingConfig: form.billingConfig,
     smsfeature: {
       senderId: form.smsSenderId.trim() === '' ? null : form.smsSenderId.trim(),
       smsUsedInPeriod,
@@ -319,15 +327,6 @@ function IndustryModuleChips({ shop }: { shop: ActiveShopDetails }) {
 
   if (shop.industryType === 'salon' && shop.salonModule) {
     return <ModuleChip label="Appointments" enabled={shop.salonModule.appointments} />;
-  }
-
-  if (shop.industryType === 'automotive' && shop.automotiveModule) {
-    return (
-      <>
-        <ModuleChip label="Quotations" enabled={shop.automotiveModule.quotations} />
-        <ModuleChip label="Warranty" enabled={shop.automotiveModule.warranty} />
-      </>
-    );
   }
 
   return (
@@ -1029,6 +1028,19 @@ export default function ActiveShopDetailsPage() {
               <Card sx={{ mb: 3, borderRadius: 3 }}>
                 <CardContent sx={{ p: 3 }}>
                   <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                    Billing settings
+                  </Typography>
+                  <ShopBillingConfigPanel
+                    value={form.billingConfig}
+                    editable={editable}
+                    onChange={(billingConfig) => updateField('billingConfig', billingConfig)}
+                  />
+                </CardContent>
+              </Card>
+
+              <Card sx={{ mb: 3, borderRadius: 3 }}>
+                <CardContent sx={{ p: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
                     Modules & users
                   </Typography>
                   {editable ? (
@@ -1041,6 +1053,7 @@ export default function ActiveShopDetailsPage() {
                           ['costModule', 'Cost'],
                           ['marketingModule', 'Marketing'],
                           ['warrantyModule', 'Warranty'],
+                          ['quotationsModule', 'Quotations'],
                           ['webModule', 'Web portal'],
                         ] as const
                       ).map(([key, label]) => (
@@ -1100,6 +1113,7 @@ export default function ActiveShopDetailsPage() {
                         <ModuleChip label="Cost" enabled={shop.costModule} />
                         <ModuleChip label="Marketing" enabled={shop.marketingModule} />
                         <ModuleChip label="Warranty" enabled={shop.warrantyModule} />
+                        <ModuleChip label="Quotations" enabled={shop.quotationsModule} />
                         <ModuleChip label="Web" enabled={shop.webModule} />
                       </Stack>
                       <Divider sx={{ my: 2 }} />

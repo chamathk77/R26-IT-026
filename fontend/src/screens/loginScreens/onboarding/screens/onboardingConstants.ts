@@ -44,7 +44,7 @@ export const INDUSTRY_TYPE_OPTIONS: IndustryTypeOption[] = [
   {
     id: 'automotive',
     title: 'Automotive / spare parts',
-    description: 'Quotations and product warranty',
+    description: 'Parts, service jobs, and workshop sales',
     icon: 'car-outline',
   },
 ];

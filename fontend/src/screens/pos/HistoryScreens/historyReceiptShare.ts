@@ -11,6 +11,8 @@ import {
 import { formatDisplayOrderNumber } from '../../../utils/orderNumber';
 import { formatHistoryItemWarrantySms } from '../../../utils/historyReceiptSms';
 import { formatHistoryItemWarranty } from '../../../utils/warranty';
+import { appendHistoryBillingLines } from '../../../utils/historyReceiptBilling';
+import { formatHistoryOrderTypeLabel } from '../../../utils/historyReceiptOrder';
 
 export function buildCustomerReceiptSmsPreview({
   record,
@@ -21,20 +23,19 @@ export function buildCustomerReceiptSmsPreview({
 }): string {
   const shopName = shop?.shopName?.trim() || 'Shop';
   const displayOrderId = formatDisplayOrderNumber(record.cartNumber, record.orderId);
-  const hasDiscount = record.isDiscount && record.discountedAmount > 0;
+  const orderTypeLabel = formatHistoryOrderTypeLabel(record, shop);
   const lines = [
     `Thank you for shopping at ${shopName}!`,
     '',
     `Order: ${displayOrderId}`,
-    `Subtotal: ${formatCheckoutAmount(record.amount)}`,
   ];
 
-  if (hasDiscount) {
-    lines.push(`Discount: -${formatCheckoutAmount(record.discountedAmount)}`);
-    lines.push(`Total paid: ${formatCheckoutAmount(record.totalAmount)}`);
-  } else if (record.totalAmount !== record.amount) {
-    lines.push(`Total paid: ${formatCheckoutAmount(record.totalAmount)}`);
+  if (orderTypeLabel) {
+    lines.push(`Order type: ${orderTypeLabel}`);
   }
+
+  appendHistoryBillingLines(lines, record);
+  lines[lines.length - 1] = `Total paid: ${formatCheckoutAmount(record.totalAmount)}`;
 
   if (record.items.length) {
     lines.push('', 'Items:');
@@ -74,6 +75,7 @@ export function buildReceiptShareMessage({
   const isReversed = normalizedStatus === 'reversed';
   const isVoided = isCanceled || isReversed;
   const hasDiscount = record.isDiscount && record.discountedAmount > 0;
+  const orderTypeLabel = formatHistoryOrderTypeLabel(record, shop);
   const url = buildDigitalReceiptUrl(record._id);
 
   const lines: string[] = [
@@ -95,8 +97,13 @@ export function buildReceiptShareMessage({
   lines.push(
     `Date: ${formatCheckoutTime(record.checkOutTime)}`,
     `Payment: ${getPaymentLabel(record.paymentOption)}`,
-    `Status: ${getHistoryStatusLabel(record.status)}`,
   );
+
+  if (orderTypeLabel) {
+    lines.push(`Order type: ${orderTypeLabel}`);
+  }
+
+  lines.push(`Status: ${getHistoryStatusLabel(record.status)}`);
 
   if (isVoided) {
     lines.push(
@@ -128,16 +135,10 @@ export function buildReceiptShareMessage({
     }
   }
 
-  lines.push(
-    '',
-    `Subtotal: ${formatCheckoutAmount(record.amount)}`,
-  );
+  lines.push('');
 
-  if (hasDiscount) {
-    lines.push(`Discount: -${formatCheckoutAmount(record.discountedAmount)}`);
-  }
-
-  lines.push(`Total: ${formatCheckoutAmount(record.totalAmount)}`, '');
+  appendHistoryBillingLines(lines, record);
+  lines.push('');
 
   if (isVoided) {
     lines.push(

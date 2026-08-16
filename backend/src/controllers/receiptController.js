@@ -99,6 +99,32 @@ function formatHistoryItemWarrantyHtml(entry) {
   return `<div class="item-warranty">${escapeHtml(label)}</div>`;
 }
 
+function formatHistoryOrderTypeLabel(history) {
+  const orderType = history?.orderType ? String(history.orderType) : '';
+  if (!orderType) return '';
+
+  const orderLabel = String(history.orderLabel ?? '').trim();
+
+  if (orderType === 'takeaway') {
+    return orderLabel && orderLabel.toLowerCase() !== 'takeaway' ? orderLabel : 'Takeaway';
+  }
+
+  if (orderType === 'delivery') {
+    return orderLabel && orderLabel.toLowerCase() !== 'delivery' ? orderLabel : 'Delivery';
+  }
+
+  if (orderType === 'dine_in') {
+    if (orderLabel && orderLabel.toLowerCase() !== 'dine-in') {
+      return orderLabel.toLowerCase().startsWith('table')
+        ? `Dine-in · ${orderLabel}`
+        : `Dine-in · Table ${orderLabel}`;
+    }
+    return 'Dine-in';
+  }
+
+  return '';
+}
+
 function buildReceiptHtml({ shop, history }) {
   const shopName = shop?.shopName?.trim() || 'Shop';
   const shopAddress = shop?.address?.trim() || '—';
@@ -126,6 +152,10 @@ function buildReceiptHtml({ shop, history }) {
     : isReversed
       ? 'This receipt is reversed and is no longer valid.'
       : 'Thank you for shopping with us. Come again!';
+  const orderTypeLabel = formatHistoryOrderTypeLabel(history);
+  const orderTypeRow = orderTypeLabel
+    ? receiptRow('Order type', orderTypeLabel)
+    : '';
 
   const itemRows = (history.items ?? [])
     .map((entry) => {
@@ -154,6 +184,26 @@ function buildReceiptHtml({ shop, history }) {
   const discountRow = hasDiscount
     ? receiptRow('Discount', `-${formatCheckoutAmount(history.discountedAmount)}`)
     : '';
+
+  const serviceChargeRows = (history.serviceChargeBreakdown ?? [])
+    .filter((entry) => Number(entry?.amount) > 0)
+    .map((entry) => receiptRow(entry.label, formatCheckoutAmount(entry.amount)))
+    .join('');
+
+  const fallbackServiceChargeRow =
+    !serviceChargeRows && Number(history.serviceChargeAmount) > 0
+      ? receiptRow('Service charge', formatCheckoutAmount(history.serviceChargeAmount))
+      : '';
+
+  const taxRows = (history.taxBreakdown ?? [])
+    .filter((entry) => Number(entry?.amount) > 0)
+    .map((entry) => receiptRow(entry.label, formatCheckoutAmount(entry.amount)))
+    .join('');
+
+  const fallbackTaxRow =
+    !taxRows && Number(history.taxAmount) > 0
+      ? receiptRow('Tax', formatCheckoutAmount(history.taxAmount))
+      : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -360,6 +410,7 @@ function buildReceiptHtml({ shop, history }) {
 
         ${receiptRow('Date', formatCheckoutTime(history.checkOutTime))}
         ${receiptRow('Payment', getPaymentLabel(history.paymentOption))}
+        ${orderTypeRow}
         <div class="receipt-row">
           <span class="receipt-label">Status</span>
           <span class="receipt-value ${isCanceled ? 'status-value-canceled' : isReversed ? 'status-value-reversed' : ''}">${escapeHtml(getHistoryStatusLabel(history.status))}</span>
@@ -383,6 +434,8 @@ function buildReceiptHtml({ shop, history }) {
 
         ${receiptRow('Subtotal', formatCheckoutAmount(history.amount))}
         ${discountRow}
+        ${serviceChargeRows}${fallbackServiceChargeRow}
+        ${taxRows}${fallbackTaxRow}
         ${receiptRow('Total', formatCheckoutAmount(history.totalAmount), true)}
 
         <div class="divider"></div>

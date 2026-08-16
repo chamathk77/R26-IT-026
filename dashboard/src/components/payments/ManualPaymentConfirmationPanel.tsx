@@ -298,7 +298,7 @@ export default function ManualPaymentConfirmationPanel() {
                   value={form.paymentAmount}
                   onChange={(e) => updateField('paymentAmount', e.target.value)}
                   disabled={submitting}
-                  inputProps={{ min: 1, step: '0.01' }}
+                  slotProps={{ htmlInput: { min: 1, step: '0.01' } }}
                 />
               </Grid>
 
@@ -311,7 +311,7 @@ export default function ManualPaymentConfirmationPanel() {
                   value={form.paymentReceivedDate}
                   onChange={(e) => updateField('paymentReceivedDate', e.target.value)}
                   disabled={submitting}
-                  InputLabelProps={{ shrink: true }}
+                  slotProps={{ inputLabel: { shrink: true } }}
                 />
               </Grid>
 

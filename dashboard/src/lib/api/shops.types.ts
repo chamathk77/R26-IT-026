@@ -30,6 +30,7 @@ export interface OnboardingShopDetails {
   costModule: boolean;
   marketingModule: boolean;
   warrantyModule: boolean;
+  quotationsModule: boolean;
   oneTimePaymentAmount: number | null;
   isOneTimePaymentDone: boolean;
   isOneTimePaymentGenerated: boolean;
@@ -57,6 +58,7 @@ export interface UpdateOnboardingShopPayload {
   costModule?: boolean;
   marketingModule?: boolean;
   warrantyModule?: boolean;
+  quotationsModule?: boolean;
 }
 
 export interface UpdateOnboardingShopResponse {
@@ -117,6 +119,7 @@ export interface TrialShopDetails {
   costModule: boolean;
   marketingModule: boolean;
   warrantyModule: boolean;
+  quotationsModule: boolean;
   maxUsers: number;
   createdAt: string;
   updatedAt: string;
@@ -203,9 +206,15 @@ export interface SalonModuleFlags {
   appointments: boolean;
 }
 
-export interface AutomotiveModuleFlags {
-  quotations: boolean;
-  warranty: boolean;
+export interface ShopTaxConfig {
+  id: string;
+  label: string;
+  rate: number;
+  enabled: boolean;
+}
+
+export interface ShopBillingConfig {
+  taxes: ShopTaxConfig[];
 }
 
 export interface ActiveShopDetails {
@@ -237,12 +246,13 @@ export interface ActiveShopDetails {
   costModule: boolean;
   marketingModule: boolean;
   warrantyModule: boolean;
+  quotationsModule: boolean;
+  billingConfig: ShopBillingConfig;
   webModule: boolean;
   webModuleEnabledAt: string | null;
   industryType: IndustryType;
   restaurantModule: RestaurantModuleFlags | null;
   salonModule: SalonModuleFlags | null;
-  automotiveModule: AutomotiveModuleFlags | null;
   maxUsers: number | null;
   isAdditionalUsersAdded: boolean;
   numAdditionalUsers: number | null;
@@ -294,6 +304,8 @@ export interface UpdateActiveShopPayload {
   costModule?: boolean;
   marketingModule?: boolean;
   warrantyModule?: boolean;
+  quotationsModule?: boolean;
+  billingConfig?: ShopBillingConfig;
   maxUsers?: number;
   isAdditionalUsersAdded?: boolean;
   numAdditionalUsers?: number | null;

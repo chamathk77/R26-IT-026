@@ -17,6 +17,9 @@ const {
   removeCustomerData,
   buildPastOrderSnapshot,
 } = require("./customerController");
+const {
+  buildBillingSnapshot,
+} = require("../services/billingCalculationService");
 
 const PAYMENT_OPTIONS = History.PAYMENT_OPTIONS;
 
@@ -253,6 +256,10 @@ async function sendHistoryReceiptSms({
     totalAmount,
     isDiscount,
     discountedAmount,
+    taxAmount: historyRecord.taxAmount,
+    serviceChargeAmount: historyRecord.serviceChargeAmount,
+    taxBreakdown: historyRecord.taxBreakdown ?? [],
+    serviceChargeBreakdown: historyRecord.serviceChargeBreakdown ?? [],
     receiptUrl,
     items: historyRecord.items ?? [],
   });
@@ -345,6 +352,10 @@ function mapHistoryRecord(record) {
     amount: roundMoney(record.amount),
     isDiscount: Boolean(record.isDiscount),
     discountedAmount: roundMoney(record.discountedAmount ?? 0),
+    taxAmount: roundMoney(record.taxAmount ?? 0),
+    serviceChargeAmount: roundMoney(record.serviceChargeAmount ?? 0),
+    taxBreakdown: record.taxBreakdown ?? [],
+    serviceChargeBreakdown: record.serviceChargeBreakdown ?? [],
     items: (record.items ?? []).map(mapHistoryItem),
     totalAmount: roundMoney(record.totalAmount),
     customerName: record.customerName ?? "",
@@ -360,6 +371,8 @@ function mapHistoryRecord(record) {
     reversedUserId: record.reversedUserId ?? null,
     reversedUserName: record.reversedUserName ?? null,
     salesPersonId: record.salesPersonId ?? null,
+    orderType: record.orderType ?? null,
+    orderLabel: record.orderLabel ?? '',
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -575,9 +588,15 @@ const createHistory = async (req, res) => {
       return res.status(400).json({ success: false, message: salesPersonResult.error });
     }
 
+    const shopBilling = await ShopsData.findOne({ shopId }).select('billingConfig').lean();
+
     const amount = roundMoney(cart.totalPrice);
     const discountedAmount = roundMoney(cart.discountedAmount ?? 0);
-    const totalAmount = roundMoney(amount - discountedAmount);
+    const taxAmount = roundMoney(cart.taxAmount ?? 0);
+    const serviceChargeAmount = roundMoney(cart.serviceChargeAmount ?? 0);
+    const totalAmount = roundMoney(
+      cart.grandTotal ?? amount - discountedAmount + taxAmount + serviceChargeAmount,
+    );
     const checkOutTime = new Date();
     const orderId = await generateShopOrderId(shopId, branchId, cart.cartNumber);
     const historyItems = await buildHistoryItemsFromCart(cart.items, checkOutTime, shopId);
@@ -592,6 +611,11 @@ const createHistory = async (req, res) => {
       amount,
       isDiscount: Boolean(cart.isDiscount),
       discountedAmount,
+      taxAmount,
+      serviceChargeAmount,
+      taxBreakdown: cart.taxBreakdown ?? [],
+      serviceChargeBreakdown: cart.serviceChargeBreakdown ?? [],
+      billingSnapshot: buildBillingSnapshot(shopBilling?.billingConfig),
       items: historyItems,
       totalAmount,
       customerName: String(customerName ?? "").trim(),
@@ -601,6 +625,8 @@ const createHistory = async (req, res) => {
       submittedUserName,
       paymentOption,
       salesPersonId: salesPersonResult.salesPersonId,
+      orderType: cart.orderType ?? null,
+      orderLabel: cart.orderLabel ?? '',
     });
 
     try {

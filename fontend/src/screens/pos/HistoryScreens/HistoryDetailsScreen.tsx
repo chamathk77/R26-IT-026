@@ -712,6 +712,24 @@ export default function HistoryDetailsScreen({ navigation, route }: Props) {
                 valueColor={paperTheme.colors.error}
               />
             ) : null}
+            {(record.serviceChargeBreakdown ?? []).map((entry) => (
+              <DetailRow
+                key={entry.id}
+                label={entry.label}
+                value={formatCheckoutAmount(entry.amount)}
+                labelColor={paperTheme.colors.onSurfaceVariant}
+                valueColor={paperTheme.colors.onSurface}
+              />
+            ))}
+            {(record.taxBreakdown ?? []).map((entry) => (
+              <DetailRow
+                key={entry.id}
+                label={entry.label}
+                value={formatCheckoutAmount(entry.amount)}
+                labelColor={paperTheme.colors.onSurfaceVariant}
+                valueColor={paperTheme.colors.onSurface}
+              />
+            ))}
             <View style={[styles.totalRow, { borderTopColor: paperTheme.colors.outlineVariant }]}>
               <Text style={[styles.totalLabel, { color: paperTheme.colors.onSurface }]}>
                 Total

@@ -1,4 +1,5 @@
 const ShopsData = require('../../models/shopsData');
+const { resolveQuotationsModule, applyQuotationsModuleUpdate } = require('../../utils/industryHelper');
 const {
   finishTrialManually,
   getTrialSecondsRemaining,
@@ -49,6 +50,8 @@ const TRIAL_SHOP_DETAIL_FIELDS = [
   'costModule',
   'marketingModule',
   'warrantyModule',
+  'quotationsModule',
+  'automotiveModule',
   'maxUsers',
   'createdAt',
   'updatedAt',
@@ -80,6 +83,8 @@ const ONBOARDING_SHOP_DETAILS_FIELDS = [
   'costModule',
   'marketingModule',
   'warrantyModule',
+  'quotationsModule',
+  'automotiveModule',
   'oneTimePaymentAmount',
   'isOneTimePaymentDone',
   'isOneTimePaymentGenerated',
@@ -134,6 +139,7 @@ function formatTrialShopDetails(shop) {
     costModule: shop.costModule,
     marketingModule: shop.marketingModule,
     warrantyModule: Boolean(shop.warrantyModule),
+    quotationsModule: resolveQuotationsModule(shop),
     maxUsers: shop.maxUsers,
     createdAt: shop.createdAt,
     updatedAt: shop.updatedAt,
@@ -169,6 +175,7 @@ function formatOnboardingShopDetails(shop) {
     costModule: shop.costModule,
     marketingModule: shop.marketingModule,
     warrantyModule: Boolean(shop.warrantyModule),
+    quotationsModule: resolveQuotationsModule(shop),
     oneTimePaymentAmount: shop.oneTimePaymentAmount,
     isOneTimePaymentDone: shop.isOneTimePaymentDone,
     isOneTimePaymentGenerated: shop.isOneTimePaymentGenerated,
@@ -295,6 +302,13 @@ function buildOnboardingShopUpdate(body) {
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(body, 'quotationsModule')) {
+    const quotationsModule = normalizeBoolean(body.quotationsModule, 'quotationsModule', errors);
+    if (quotationsModule !== undefined) {
+      applyQuotationsModuleUpdate(update, quotationsModule);
+    }
+  }
+
   return { update, errors };
 }
 
@@ -409,6 +423,9 @@ const updateOnboardingShop = async (req, res) => {
       {
         new: true,
         runValidators: true,
+        strict: Object.prototype.hasOwnProperty.call(update, 'automotiveModule.quotations')
+          ? false
+          : true,
       },
     )
       .select(ONBOARDING_SHOP_DETAILS_FIELDS.join(' '))

@@ -1,6 +1,5 @@
 import type { LoginShop } from '../type/auth';
 import type {
-  AutomotiveModuleFlags,
   IndustryType,
   RestaurantModuleFlags,
   SalonModuleFlags,
@@ -38,19 +37,10 @@ export function resolveShopIndustry(
         }
       : null;
 
-  const automotiveModule: AutomotiveModuleFlags | null =
-    industryType === 'automotive' && shop?.automotiveModule
-      ? {
-          quotations: Boolean(shop.automotiveModule.quotations),
-          warranty: Boolean(shop.automotiveModule.warranty),
-        }
-      : null;
-
   return {
     industryType,
     restaurantModule,
     salonModule,
-    automotiveModule,
   };
 }
 
@@ -80,12 +70,4 @@ export function hasTableManagement(shop: LoginShop | null | undefined): boolean 
 
 export function hasSalonAppointments(shop: LoginShop | null | undefined): boolean {
   return Boolean(resolveShopIndustry(shop).salonModule?.appointments);
-}
-
-export function hasAutomotiveQuotations(shop: LoginShop | null | undefined): boolean {
-  return Boolean(resolveShopIndustry(shop).automotiveModule?.quotations);
-}
-
-export function hasAutomotiveWarranty(shop: LoginShop | null | undefined): boolean {
-  return Boolean(resolveShopIndustry(shop).automotiveModule?.warranty);
 }

@@ -2,7 +2,11 @@ const ShopsData = require('../../models/shopsData');
 const Payments = require('../../models/payments');
 const Branch = require('../../models/branch');
 const { deleteAllShopScopedData } = require('../../utils/deleteShopDataHelper');
-const { formatIndustryFieldsForClient } = require('../../utils/industryHelper');
+const { formatIndustryFieldsForClient, resolveQuotationsModule, applyQuotationsModuleUpdate } = require('../../utils/industryHelper');
+const {
+  formatBillingConfigForClient,
+  normalizeBillingConfigInput,
+} = require('../../services/billingCalculationService');
 const { formatPaymentRecord } = require('../../utils/paymentResponseHelper');
 const mongoose = require('mongoose');
 
@@ -80,6 +84,8 @@ const ACTIVE_SHOP_DETAIL_FIELDS = [
   'costModule',
   'marketingModule',
   'warrantyModule',
+  'quotationsModule',
+  'billingConfig',
   'webModule',
   'webModuleEnabledAt',
   'industryType',
@@ -251,6 +257,13 @@ function buildActiveShopUpdate(body) {
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(body, 'quotationsModule')) {
+    const quotationsModule = normalizeBoolean(body.quotationsModule, 'quotationsModule', errors);
+    if (quotationsModule !== undefined) {
+      applyQuotationsModuleUpdate(update, quotationsModule);
+    }
+  }
+
   if (Object.prototype.hasOwnProperty.call(body, 'maxUsers')) {
     const maxUsers = normalizeNonNegativeNumber(body.maxUsers, 'maxUsers', errors);
     if (maxUsers !== undefined && maxUsers >= 1) {
@@ -351,6 +364,13 @@ function buildActiveShopUpdate(body) {
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(body, 'billingConfig')) {
+    const billingConfig = normalizeBillingConfigInput(body.billingConfig, errors);
+    if (billingConfig) {
+      update.billingConfig = billingConfig;
+    }
+  }
+
   return { update, errors };
 }
 
@@ -432,6 +452,8 @@ function formatActiveShopDetails(shop) {
     costModule: Boolean(shop.costModule),
     marketingModule: Boolean(shop.marketingModule),
     warrantyModule: Boolean(shop.warrantyModule),
+    quotationsModule: resolveQuotationsModule(shop),
+    billingConfig: formatBillingConfigForClient(shop.billingConfig),
     webModule: Boolean(shop.webModule),
     webModuleEnabledAt: shop.webModuleEnabledAt ?? null,
     ...formatIndustryFieldsForClient(shop),
@@ -616,6 +638,9 @@ const updateActiveShopDetails = async (req, res) => {
       {
         new: true,
         runValidators: true,
+        strict: Object.prototype.hasOwnProperty.call(update, 'automotiveModule.quotations')
+          ? false
+          : true,
       },
     )
       .select(ACTIVE_SHOP_DETAIL_FIELDS)

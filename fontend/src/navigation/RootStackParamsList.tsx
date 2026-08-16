@@ -73,6 +73,7 @@ export type RootStackParamList = {
   ManageAddUsers: undefined;
   ManageUserForm: { userId?: string } | undefined;
   ThemePreference: undefined;
+  UserBehavior: undefined;
   PrinterConnection: { printerRole?: 'receipt' | 'kitchen' } | undefined;
   ChangeSubscription: undefined;
   SubscriptionPayments: undefined;
@@ -83,4 +84,7 @@ export type RootStackParamList = {
   KpiUnassignedOrderDetail: {
     orderId: string;
   };
+  QuotationsList: undefined;
+  QuotationForm: { quotation?: import('../type/quotation').QuotationRecord } | undefined;
+  QuotationDetail: { quotationId: string; justCreated?: boolean };
 };

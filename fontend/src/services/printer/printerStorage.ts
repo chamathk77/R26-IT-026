@@ -9,6 +9,11 @@ const STORAGE_KEYS: Record<PrinterRole, string> = {
   kitchen: 'printer_config_kitchen_v1',
 };
 
+const ENABLED_KEYS: Record<PrinterRole, string> = {
+  receipt: 'printer_enabled_receipt_v1',
+  kitchen: 'printer_enabled_kitchen_v1',
+};
+
 function parseStoredConfig(raw: string): PrinterConfig | null {
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
@@ -81,4 +86,20 @@ export async function getSavedPrinterConfig(
 
 export async function clearSavedPrinterConfig(role: PrinterRole): Promise<void> {
   await SecureStore.deleteItemAsync(STORAGE_KEYS[role]);
+}
+
+/** When false, checkout must not auto-reconnect after the user taps Disconnect. */
+export async function isPrinterPrintingEnabled(role: PrinterRole): Promise<boolean> {
+  const raw = await SecureStore.getItemAsync(ENABLED_KEYS[role]);
+  if (raw == null) {
+    return true;
+  }
+  return raw === 'true';
+}
+
+export async function setPrinterPrintingEnabled(
+  role: PrinterRole,
+  enabled: boolean,
+): Promise<void> {
+  await SecureStore.setItemAsync(ENABLED_KEYS[role], enabled ? 'true' : 'false');
 }

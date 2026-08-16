@@ -1,9 +1,9 @@
 import type {
-  AutomotiveModuleFlags,
   IndustryType,
   RestaurantModuleFlags,
   SalonModuleFlags,
 } from './industry';
+import type { ShopBillingConfig } from './billing';
 
 export type { IndustryType } from './industry';
 
@@ -44,6 +44,8 @@ export interface LoginShop {
   costModule?: boolean;
   marketingModule?: boolean;
   warrantyModule?: boolean;
+  quotationsModule?: boolean;
+  billingConfig?: ShopBillingConfig;
   maxUsers?: number;
   status?: string;
   trailStartDate?: string | null;
@@ -57,7 +59,8 @@ export interface LoginShop {
   industryType?: IndustryType;
   restaurantModule?: RestaurantModuleFlags | null;
   salonModule?: SalonModuleFlags | null;
-  automotiveModule?: AutomotiveModuleFlags | null;
+  /** @deprecated Legacy flag — use quotationsModule */
+  automotiveModule?: { quotations?: boolean; warranty?: boolean } | null;
   [key: string]: unknown;
 }
 

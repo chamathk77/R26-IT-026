@@ -4,6 +4,10 @@ const History = require('../models/history');
 const Product = require('../models/product');
 const BranchStock = require('../models/branchStock');
 const ShopTable = require('../models/restaurant/shopTable');
+const ShopsData = require('../models/shopsData');
+const {
+  calculateBillTotalsFromCart,
+} = require('../services/billingCalculationService');
 const {
   shopHasKitchenOrders,
   createKitchenTicketsFromCart,
@@ -421,7 +425,16 @@ async function finalizeCartForProceed(cart, options = {}) {
   applyDiscountFlags(cart, discount ?? { enabled: false });
   cart.totalPrice = calculateTotalFromItemUnitCosts(cart.items);
   cart.discountedAmount = calculateDiscountedAmount(cart.totalPrice, discount);
-  return { cart, productMap };
+
+  const shop = await ShopsData.findOne({ shopId }).select('billingConfig').lean();
+  const billingTotals = calculateBillTotalsFromCart(cart, shop?.billingConfig);
+  cart.taxAmount = billingTotals.taxAmount;
+  cart.serviceChargeAmount = billingTotals.serviceChargeAmount;
+  cart.taxBreakdown = billingTotals.taxBreakdown;
+  cart.serviceChargeBreakdown = billingTotals.serviceChargeBreakdown;
+  cart.grandTotal = billingTotals.totalAmount;
+
+  return { cart, productMap, billingTotals };
 }
 
 async function proceedCartSession(cart, options = {}) {
@@ -1177,6 +1190,11 @@ const checkoutCartSession = async (req, res) => {
       isDiscountAmount: cart.isDiscountAmount,
       discount: cart.discount,
       discountedAmount: cart.discountedAmount,
+      taxAmount: cart.taxAmount ?? 0,
+      serviceChargeAmount: cart.serviceChargeAmount ?? 0,
+      taxBreakdown: cart.taxBreakdown ?? [],
+      serviceChargeBreakdown: cart.serviceChargeBreakdown ?? [],
+      grandTotal: cart.grandTotal ?? cart.totalPrice,
       totalPrice: cart.totalPrice,
       kitchenTicket: kitchenTicket ? mapKitchenTicket(kitchenTicket) : null,
       data: items,

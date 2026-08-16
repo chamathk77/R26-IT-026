@@ -25,6 +25,8 @@ import TablePickerGrid from '../../components/restaurant/TablePickerGrid';
 import TableOrderDetailModal from '../../components/restaurant/TableOrderDetailModal';
 import { useShopIndustry } from '../../hooks/useShopIndustry';
 import { hasTableManagement } from '../../utils/industryHelper';
+import { hasQuotationsModule } from '../../utils/featureHelper';
+import { refreshShopModuleFlags } from '../../utils/refreshShopModuleFlags';
 import { ShopTable, TablePickerItem, toTablePickerItems } from '../../type/table';
 import { fetchTables_Service } from '../../services/TableService';
 import {
@@ -173,6 +175,7 @@ export default function HomeScreen({ navigation }: Props) {
   const showManageEmployees = isOwnerOrAdmin(userRole);
   const showTablePicker = hasTableManagement(shop);
   const showOwnerSummary = isOwner(userRole);
+  const showQuotationsModule = hasQuotationsModule(shop);
 
   const [tableItems, setTableItems] = useState<TablePickerItem[]>([]);
   const [tablesLoading, setTablesLoading] = useState(false);
@@ -369,17 +372,22 @@ export default function HomeScreen({ navigation }: Props) {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([loadDashboardStats({ silent: true }), loadTables()]);
+      await Promise.all([
+        refreshShopModuleFlags(dispatch),
+        loadDashboardStats({ silent: true }),
+        loadTables(),
+      ]);
     } finally {
       setRefreshing(false);
     }
-  }, [loadDashboardStats, loadTables]);
+  }, [dispatch, loadDashboardStats, loadTables]);
 
   useFocusEffect(
     useCallback(() => {
+      void refreshShopModuleFlags(dispatch);
       void loadDashboardStats();
       void loadTables();
-    }, [loadDashboardStats, loadTables]),
+    }, [dispatch, loadDashboardStats, loadTables]),
   );
 
   const confirmLogout = () => {
@@ -607,6 +615,20 @@ export default function HomeScreen({ navigation }: Props) {
                 </>
               ) : null}
             </View>
+          ) : null}
+
+          {showQuotationsModule ? (
+            <TouchableOpacity
+              style={[styles.manageInventoryBtn, { backgroundColor: '#e0f2fe', borderColor: '#0369a1' }]}
+              onPress={() => {
+                if (navigationRef.isReady()) {
+                  navigationRef.navigate('QuotationsList');
+                }
+              }}
+            >
+              <Ionicons name="clipboard-outline" size={18} color="#0369a1" />
+              <Text style={[styles.manageInventoryBtnText, { color: '#0369a1' }]}>Quotations</Text>
+            </TouchableOpacity>
           ) : null}
 
           {showManageButtons ? (

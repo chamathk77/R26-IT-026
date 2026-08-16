@@ -2,8 +2,10 @@ import * as XLSX from 'xlsx';
 import {
   BULK_IMPORT_BASE_COLUMNS,
   BULK_IMPORT_WARRANTY_COLUMNS,
+  BulkImportBaseColumn,
   BulkImportColumn,
   BulkImportRow,
+  BulkImportWarrantyColumn,
 } from '@/lib/api/shops.types';
 
 export const BULK_IMPORT_COLUMN_HELP: Record<

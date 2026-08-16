@@ -19,6 +19,7 @@ interface CommonHeader {
   iconColor?: string;
   title: string;
   isOptions?: boolean;
+  rightIcon?: string;
 }
 
 const  CommonHeader = (props: CommonHeader) => {
@@ -53,7 +54,7 @@ const  CommonHeader = (props: CommonHeader) => {
       // onPress={() => (props.onPressLeftBtn ? props.onPressLeftBtn() : null)}
       >
         {props.onPressRightBtn? <IconButton
-          icon={props.isOptions ? "dots-vertical" : "arrow-right"}
+          icon={props.rightIcon ?? (props.isOptions ? "dots-vertical" : "arrow-right")}
           iconColor={props.iconColor ? props.iconColor : paperTheme.colors.primary}
           size={23}
           onPress={() => (props.onPressRightBtn ? props.onPressRightBtn() : null)}

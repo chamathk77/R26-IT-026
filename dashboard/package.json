@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3001",
-    "build": "next build",
+    "dev": "NODE_OPTIONS='--max-old-space-size=12288' next dev -p 3001 --turbo",
+    "dev:webpack": "NODE_OPTIONS='--max-old-space-size=12288' next dev -p 3001",
+    "build": "NODE_OPTIONS='--max-old-space-size=12288' next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "clean": "rm -rf .next"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

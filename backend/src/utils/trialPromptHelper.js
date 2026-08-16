@@ -1,4 +1,5 @@
-const { formatIndustryFieldsForClient } = require('./industryHelper');
+const { formatIndustryFieldsForClient, resolveQuotationsModule } = require('./industryHelper');
+const { formatBillingConfigForClient } = require('../services/billingCalculationService');
 
 function shouldShowTrialPrompt(user, shop) {
   if (!user || !shop) {
@@ -58,9 +59,14 @@ function formatShopForLogin(shop) {
   delete data.otpExpiresAt;
   delete data.__v;
 
+  const quotationsModule = resolveQuotationsModule(data);
+  delete data.automotiveModule;
+
   return {
     ...data,
     ...formatIndustryFieldsForClient(data),
+    quotationsModule,
+    billingConfig: formatBillingConfigForClient(data.billingConfig),
   };
 }
 

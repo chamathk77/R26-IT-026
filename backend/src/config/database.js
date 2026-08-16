@@ -13,7 +13,9 @@ function resolveAppEnvironment() {
     throw new Error(`ENV must be DEV or LIVE (received: "${process.env.ENV}")`);
   }
 
-  return { env, dbName };
+  const overrideDbName = String(process.env.MONGODB_DB_NAME || '').trim();
+
+  return { env, dbName: overrideDbName || dbName };
 }
 
 function replaceMongoDatabase(uri, dbName) {

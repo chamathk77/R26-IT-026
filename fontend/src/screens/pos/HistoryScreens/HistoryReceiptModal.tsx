@@ -26,6 +26,7 @@ import {
 import { formatDisplayOrderNumber } from '../../../utils/orderNumber';
 import { buildReceiptShareMessage } from './historyReceiptShare';
 import { formatHistoryItemWarranty } from '../../../utils/warranty';
+import { formatHistoryOrderTypeLabel } from '../../../utils/historyReceiptOrder';
 
 type Props = {
   visible: boolean;
@@ -88,6 +89,7 @@ export default function HistoryReceiptModal({ visible, onClose, record, shop }: 
     : isReversed
       ? 'This receipt is reversed and is no longer valid.'
       : 'Thank you for shopping with us. Come again!';
+  const orderTypeLabel = formatHistoryOrderTypeLabel(record, shop);
 
   const shareTextFallback = useCallback(async () => {
     const { title, message, url } = buildReceiptShareMessage({ record, shop });
@@ -208,6 +210,9 @@ export default function HistoryReceiptModal({ visible, onClose, record, shop }: 
 
               <ReceiptRow label="Date" value={formatCheckoutTime(record.checkOutTime)} />
               <ReceiptRow label="Payment" value={getPaymentLabel(record.paymentOption)} />
+              {orderTypeLabel ? (
+                <ReceiptRow label="Order type" value={orderTypeLabel} />
+              ) : null}
               <ReceiptRow
                 label="Status"
                 value={getHistoryStatusLabel(record.status)}
@@ -275,6 +280,20 @@ export default function HistoryReceiptModal({ visible, onClose, record, shop }: 
                   value={`-${formatCheckoutAmount(record.discountedAmount)}`}
                 />
               ) : null}
+              {(record.serviceChargeBreakdown ?? []).map((entry) => (
+                <ReceiptRow
+                  key={entry.id}
+                  label={entry.label}
+                  value={formatCheckoutAmount(entry.amount)}
+                />
+              ))}
+              {(record.taxBreakdown ?? []).map((entry) => (
+                <ReceiptRow
+                  key={entry.id}
+                  label={entry.label}
+                  value={formatCheckoutAmount(entry.amount)}
+                />
+              ))}
               <ReceiptRow
                 label="Total"
                 value={formatCheckoutAmount(record.totalAmount)}

@@ -37,6 +37,7 @@ import {
 } from './analyticsPeriodOptions';
 import { AnalyticsOverviewSkeleton } from './analyticsSkeletonComponents';
 import { analyticsStyles as styles } from './analyticsStyles';
+import ForecastSection from './novelty01Forecasting/ForecastSection';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Analytics'>;
 
@@ -514,6 +515,8 @@ export default function AnalyticsScreen({ navigation }: Props) {
               </Text>
             </View>
           ) : null}
+
+          <ForecastSection />
         </ScrollView>
       </SafeAreaView>
 

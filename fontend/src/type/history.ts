@@ -1,4 +1,5 @@
 import { CheckoutPaymentMethod } from './checkoutPayment';
+import type { BillLineBreakdown } from './billing';
 import type { KitchenTicket } from './kitchen';
 
 export type HistoryPaymentOption = CheckoutPaymentMethod;
@@ -23,6 +24,10 @@ export interface HistoryRecord {
   amount: number;
   isDiscount: boolean;
   discountedAmount: number;
+  taxAmount?: number;
+  serviceChargeAmount?: number;
+  taxBreakdown?: BillLineBreakdown[];
+  serviceChargeBreakdown?: BillLineBreakdown[];
   items: HistoryItem[];
   totalAmount: number;
   customerName: string;
@@ -38,6 +43,8 @@ export interface HistoryRecord {
   reversedUserId?: string | null;
   reversedUserName?: string | null;
   salesPersonId?: string | null;
+  orderType?: 'takeaway' | 'dine_in' | 'delivery' | null;
+  orderLabel?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -85,7 +92,12 @@ export interface CheckoutCartSessionResponse {
   orderType?: string | null;
   isDiscount: boolean;
   discountedAmount: number;
+  taxAmount?: number;
+  serviceChargeAmount?: number;
+  taxBreakdown?: BillLineBreakdown[];
+  serviceChargeBreakdown?: BillLineBreakdown[];
   totalPrice: number;
+  grandTotal?: number;
   kitchenTicket?: KitchenTicket | null;
   message: string;
 }

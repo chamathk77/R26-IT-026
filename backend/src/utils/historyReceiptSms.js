@@ -50,6 +50,10 @@ function buildHistoryReceiptSmsMessage({
   totalAmount,
   isDiscount,
   discountedAmount,
+  taxAmount = 0,
+  serviceChargeAmount = 0,
+  taxBreakdown = [],
+  serviceChargeBreakdown = [],
   receiptUrl,
   items = [],
 }) {
@@ -67,10 +71,29 @@ function buildHistoryReceiptSmsMessage({
 
   if (isDiscount && Number(discountedAmount) > 0) {
     lines.push(`Discount: Rs.${formatMoneyLkr(discountedAmount)}`);
-    lines.push(`Total paid: Rs.${formatMoneyLkr(totalAmount)}`);
-  } else if (Number(totalAmount) !== Number(amount)) {
-    lines.push(`Total paid: Rs.${formatMoneyLkr(totalAmount)}`);
   }
+
+  for (const entry of serviceChargeBreakdown) {
+    if (Number(entry?.amount) > 0) {
+      lines.push(`${entry.label}: Rs.${formatMoneyLkr(entry.amount)}`);
+    }
+  }
+
+  if (!serviceChargeBreakdown.length && Number(serviceChargeAmount) > 0) {
+    lines.push(`Service charge: Rs.${formatMoneyLkr(serviceChargeAmount)}`);
+  }
+
+  for (const entry of taxBreakdown) {
+    if (Number(entry?.amount) > 0) {
+      lines.push(`${entry.label}: Rs.${formatMoneyLkr(entry.amount)}`);
+    }
+  }
+
+  if (!taxBreakdown.length && Number(taxAmount) > 0) {
+    lines.push(`Tax: Rs.${formatMoneyLkr(taxAmount)}`);
+  }
+
+  lines.push(`Total paid: Rs.${formatMoneyLkr(totalAmount)}`);
 
   if (Array.isArray(items) && items.length) {
     lines.push('', 'Items:');

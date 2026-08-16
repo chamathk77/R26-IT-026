@@ -380,6 +380,7 @@ export default function ShopTrialDetailsPage() {
                   <ModuleChip label="Cost" enabled={shop.costModule} />
                   <ModuleChip label="Marketing" enabled={shop.marketingModule} />
                   <ModuleChip label="Warranty" enabled={shop.warrantyModule} />
+                  <ModuleChip label="Quotations" enabled={shop.quotationsModule} />
                 </Stack>
                 <Divider sx={{ my: 2 }} />
                 <DetailRow label="Created" value={formatDate(shop.createdAt)} />

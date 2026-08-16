@@ -41,6 +41,7 @@ import ManageSmsFeatureScreen from '../screens/settings/paymentAndFeature/manage
 import ManageAddUsersScreen from '../screens/settings/paymentAndFeature/manageFeatures/manageUsersFeature/ManageAddUsersScreen';
 import ManageUserFormScreen from '../screens/settings/paymentAndFeature/manageAccounts/manageUserForm/ManageUserFormScreen';
 import ThemePreferenceScreen from '../screens/settings/preferences/theme/ThemePreferenceScreen';
+import UserBehaviorScreen from '../screens/settings/userBehavior/UserBehaviorScreen';
 import PrinterConnectionScreen from '../screens/settings/paymentAndFeature/receiptPrinter/PrinterConnectionScreen';
 import SubscriptionPaymentsScreen from '../screens/settings/paymentAndFeature/payment/SubscriptionPaymentsScreen';
 import ChangeSubscriptionScreen from '../screens/settings/paymentAndFeature/changeSubscription/ChangeSubscriptionScreen';
@@ -54,6 +55,9 @@ import ManageInventoryScreen from '../screens/pos/ManageInventory/ManageInventor
 import { AddProductScreen, EditProductScreen } from '../screens/pos/ManageInventory/ProductFormScreen';
 import ManageEmployeesScreen from '../screens/pos/ManageEmployes/ManageEmployeesScreen';
 import AddEmployeeScreen from '../screens/pos/ManageEmployes/AddEmployeeScreen';
+import QuotationsListScreen from '../screens/quotations/QuotationsListScreen';
+import QuotationFormScreen from '../screens/quotations/QuotationFormScreen';
+import QuotationDetailScreen from '../screens/quotations/QuotationDetailScreen';
 import { RootStackParamList } from './RootStackParamsList';
 
 
@@ -127,6 +131,7 @@ export default function AppNavigator() {
         <Stack.Screen name="ManageAddUsers" component={ManageAddUsersScreen} />
         <Stack.Screen name="ManageUserForm" component={ManageUserFormScreen} />
         <Stack.Screen name="ThemePreference" component={ThemePreferenceScreen} />
+        <Stack.Screen name="UserBehavior" component={UserBehaviorScreen} />
         <Stack.Screen name="PrinterConnection" component={PrinterConnectionScreen} />
         <Stack.Screen name="ChangeSubscription" component={ChangeSubscriptionScreen} />
         <Stack.Screen name="SubscriptionPayments" component={SubscriptionPaymentsScreen} />
@@ -134,6 +139,9 @@ export default function AppNavigator() {
         <Stack.Screen name="PayNow" component={PayNowScreen} />
         <Stack.Screen name="KpiDashboard" component={KpiScreen} />
         <Stack.Screen name="KpiUnassignedOrderDetail" component={UnassignedOrderDetailScreen} />
+        <Stack.Screen name="QuotationsList" component={QuotationsListScreen} />
+        <Stack.Screen name="QuotationForm" component={QuotationFormScreen} />
+        <Stack.Screen name="QuotationDetail" component={QuotationDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

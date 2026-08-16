@@ -28,6 +28,7 @@ import { fonts } from '../../../constants/fonts';
 import { fetchSettingsData_Service } from '../../../services/SettingsService';
 import { useShopIndustry } from '../../../hooks/useShopIndustry';
 import { hasKitchenOrders, hasTableManagement } from '../../../utils/industryHelper';
+import { hasQuotationsModule, resolveQuotationsModule } from '../../../utils/featureHelper';
 import { handleSessionExpiredApiError } from '../../../utils/apiErrorAlert';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
@@ -225,6 +226,7 @@ export default function SettingsScreen({ navigation }: Props) {
   const showAnalyticsModule = shop?.analyticsModule === true;
   const showCostModule = shop?.costModule === true;
   const showMarketingModule = shop?.marketingModule === true && !isTrialShop;
+  const showQuotationsModule = hasQuotationsModule(shop);
   const showManageTables =
     (displayRole === 'owner' || displayRole === 'admin') && hasTableManagement(industryShop ?? shop);
   const showKitchenPrinter = hasKitchenOrders(industryShop ?? shop);
@@ -236,7 +238,12 @@ export default function SettingsScreen({ navigation }: Props) {
       dispatch(
         setLoginSession({
           user: response.user,
-          shop: response.shop,
+          shop: response.shop
+            ? {
+                ...response.shop,
+                quotationsModule: resolveQuotationsModule(response.shop),
+              }
+            : null,
         }),
       );
     } catch (error: unknown) {
@@ -460,6 +467,28 @@ export default function SettingsScreen({ navigation }: Props) {
           },
         ]
       : []),
+    ...(showQuotationsModule
+      ? [
+          {
+            key: 'quotations',
+            title: 'Quotations',
+            description: 'Create and send price quotes to customers',
+            icon: 'clipboard-outline' as const,
+            iconBg: '#e0f2fe',
+            iconColor: '#0369a1',
+            onPress: () => navigation.navigate('QuotationsList'),
+          },
+        ]
+      : []),
+    {
+      key: 'user-behavior',
+      title: 'User behavior',
+      description: 'Team activity, feature usage & session insights',
+      icon: 'pulse-outline',
+      iconBg: '#ede9fe',
+      iconColor: '#6d28d9',
+      onPress: () => navigation.navigate('UserBehavior'),
+    },
     {
       key: 'reports',
       title: 'Reports',

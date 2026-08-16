@@ -292,17 +292,6 @@ const shopsDataSchema = new mongoose.Schema(
         default: false,
       },
     },
-    /** Set when industryType is automotive (created on onboarding). */
-    automotiveModule: {
-      quotations: {
-        type: Boolean,
-        default: false,
-      },
-      warranty: {
-        type: Boolean,
-        default: false,
-      },
-    },
     smsfeature: {
 
       senderId: {
@@ -384,6 +373,25 @@ const shopsDataSchema = new mongoose.Schema(
     warrantyModule: {
       type: Boolean,
       default: false,
+    },
+    /** Cross-industry quotations / estimates (dashboard toggle only). */
+    quotationsModule: {
+      type: Boolean,
+      default: false,
+    },
+    /** Per-shop taxes and percentage charges (VAT, service charge, etc.) — dashboard only. */
+    billingConfig: {
+      taxes: {
+        type: [
+          {
+            id: { type: String, required: true, trim: true },
+            label: { type: String, required: true, trim: true },
+            rate: { type: Number, min: 0, max: 100, default: 0 },
+            enabled: { type: Boolean, default: false },
+          },
+        ],
+        default: [],
+      },
     },
     maxUsers: {
       type: Number,
@@ -674,7 +682,7 @@ module.exports = ShopsData;
 // industryType: retail | restaurant | salon | automotive
 // restaurantModule: { kitchenOrders, tableManagement, portionSales } — populated when industryType is restaurant
 // salonModule: { appointments } — populated when industryType is salon
-// automotiveModule: { quotations, warranty } — populated when industryType is automotive
+// quotationsModule: boolean (cross-industry quotations — dashboard toggle only)
 
 // manageInventory removed — inventory is per product (Product.isInventoryAvailable)
 // sendReceiptSms: boolean
@@ -695,6 +703,7 @@ module.exports = ShopsData;
 // costModule: boolean
 // marketingModule: boolean
 // warrantyModule: boolean (product warranty on bills/history — dashboard toggle only)
+// quotationsModule: boolean (quotations / estimates — dashboard toggle only)
 // webModule: boolean (future — web portal add-on)
 // webModuleEnabledAt: date | null
 

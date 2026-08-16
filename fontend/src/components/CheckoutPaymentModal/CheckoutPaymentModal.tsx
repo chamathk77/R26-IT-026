@@ -22,12 +22,14 @@ import {
   formatCheckoutAmount,
   sanitizeCheckoutPhone,
 } from '../../type/checkoutPayment';
+import type { BillTotalsPreview } from '../../type/billing';
 import { getSalePersonFullName, SalePerson } from '../../type/salePerson';
 import { softShadow } from '../../screens/pos/ManageInventory/inventoryUiStyles';
 
 type CheckoutPaymentModalProps = {
   visible: boolean;
   amount: number;
+  billPreview?: BillTotalsPreview | null;
   customerName: string;
   customerPhone: string;
   selectedMethod: CheckoutPaymentMethod;
@@ -65,6 +67,7 @@ function getSalesPersonLabel(
 export default function CheckoutPaymentModal({
   visible,
   amount,
+  billPreview,
   customerName,
   customerPhone,
   selectedMethod,
@@ -263,12 +266,55 @@ export default function CheckoutPaymentModal({
               <View
                 style={[styles.totalCard, { backgroundColor: paperTheme.colors.primaryContainer }]}
               >
-                <Text style={[styles.totalLabel, { color: paperTheme.colors.onPrimaryContainer }]}>
-                  Amount to pay
+                <Text style={[styles.sectionTitle, { color: paperTheme.colors.onPrimaryContainer }]}>
+                  Bill summary
                 </Text>
-                <Text style={[styles.totalValue, { color: paperTheme.colors.primary }]}>
-                  {formatCheckoutAmount(amount)}
-                </Text>
+                {billPreview ? (
+                  <View style={styles.billSummary}>
+                    <View style={styles.billSummaryRow}>
+                      <Text style={[styles.billSummaryLabel, { color: paperTheme.colors.onPrimaryContainer }]}>
+                        Subtotal
+                      </Text>
+                      <Text style={[styles.billSummaryValue, { color: paperTheme.colors.onPrimaryContainer }]}>
+                        {formatCheckoutAmount(billPreview.subtotal)}
+                      </Text>
+                    </View>
+                    {billPreview.discountAmount > 0 ? (
+                      <View style={styles.billSummaryRow}>
+                        <Text style={[styles.billSummaryLabel, { color: paperTheme.colors.onPrimaryContainer }]}>
+                          Discount
+                        </Text>
+                        <Text style={[styles.billSummaryDiscount, { color: paperTheme.colors.error }]}>
+                          − {formatCheckoutAmount(billPreview.discountAmount)}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {billPreview.taxBreakdown.map((entry) => (
+                      <View key={entry.id} style={styles.billSummaryRow}>
+                        <Text style={[styles.billSummaryLabel, { color: paperTheme.colors.onPrimaryContainer }]}>
+                          {entry.label}
+                        </Text>
+                        <Text style={[styles.billSummaryValue, { color: paperTheme.colors.onPrimaryContainer }]}>
+                          {formatCheckoutAmount(entry.amount)}
+                        </Text>
+                      </View>
+                    ))}
+                    <View
+                      style={[
+                        styles.billSummaryDivider,
+                        { backgroundColor: `${paperTheme.colors.onPrimaryContainer}33` },
+                      ]}
+                    />
+                  </View>
+                ) : null}
+                <View style={styles.billSummaryTotalRow}>
+                  <Text style={[styles.totalLabel, { color: paperTheme.colors.onPrimaryContainer }]}>
+                    Amount to pay
+                  </Text>
+                  <Text style={[styles.totalValue, { color: paperTheme.colors.primary }]}>
+                    {formatCheckoutAmount(amount)}
+                  </Text>
+                </View>
               </View>
 
               <View style={styles.section}>
@@ -589,6 +635,35 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 12,
+    gap: 8,
+  },
+  billSummary: {
+    gap: 6,
+  },
+  billSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  billSummaryLabel: {
+    flex: 1,
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 13,
+  },
+  billSummaryValue: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 13,
+  },
+  billSummaryDiscount: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 13,
+  },
+  billSummaryDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginTop: 2,
+  },
+  billSummaryTotalRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

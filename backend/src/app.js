@@ -14,9 +14,11 @@ const salePersonRoutes = require('./routes/salePersonRoutes');
 const manageUsersRoutes = require('./routes/manageUsersRoutes');
 const costCategoryRoutes = require('./routes/costCategoryRoutes');
 const costExpenseRoutes = require('./routes/costExpenseRoutes');
+const quotationRoutes = require('./routes/quotationRoutes');
 const dashboardRoutes = require('./routes/dashboard');
 const kpiRoutes = require('./routes/kpiRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
+const forecastRoutes = require('./novelty/novelty01Forecasting/forecastRoutes');
 const receiptRoutes = require('./routes/receiptRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -45,9 +47,11 @@ app.use('/api/sale-persons', salePersonRoutes);
 app.use('/api/manage-users', manageUsersRoutes);
 app.use('/api/cost-categories', costCategoryRoutes);
 app.use('/api/cost-expenses', costExpenseRoutes);
+app.use('/api/quotations', quotationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/kpi', kpiRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/forecast', forecastRoutes);
 app.use('/receipt', receiptRoutes);
 app.use('/api', routes);
 

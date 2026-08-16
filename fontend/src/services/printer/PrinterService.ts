@@ -14,7 +14,7 @@ import {
   type UsbPrinterDevice,
 } from './printerTypes';
 import { createPrinterError, isValidIpv4, parsePrinterPort } from './printerValidation';
-import { getSavedPrinterConfig, savePrinterConfig } from './printerStorage';
+import { getSavedPrinterConfig, savePrinterConfig, setPrinterPrintingEnabled, isPrinterPrintingEnabled } from './printerStorage';
 
 type TcpSocketLike = {
   on: (event: string, listener: (...args: any[]) => void) => void;
@@ -282,6 +282,7 @@ class PrinterService {
 
   async disconnect(): Promise<PrinterActionResult> {
     const previousMode = this.mode;
+    const previousTarget = this.getStatus().target ?? '';
 
     if (previousMode === 'usb') {
       const usb = loadUsbPrinterModule();
@@ -311,12 +312,18 @@ class PrinterService {
     this.socket = null;
     this.lanBackend = null;
     this.state = 'disconnected';
+    this.mode = null;
+    this.currentIp = null;
+    this.currentPort = null;
+    this.currentUsbDevice = null;
     this.lastError = null;
+
+    await setPrinterPrintingEnabled(this.role, false);
 
     return {
       success: true,
       mode: previousMode ?? 'lan',
-      target: this.getStatus().target ?? '',
+      target: previousTarget,
       message: 'Printer disconnected',
     };
   }
@@ -411,6 +418,15 @@ class PrinterService {
       };
     }
 
+    const printingEnabled = await isPrinterPrintingEnabled(this.role);
+    if (!printingEnabled) {
+      const label = this.role === 'kitchen' ? 'Kitchen printer' : 'Receipt printer';
+      return createPrinterError(
+        'NOT_CONNECTED',
+        `${label} is disconnected. Connect it again in Settings.`,
+      );
+    }
+
     const saved = await getSavedPrinterConfig(this.role);
     if (!saved) {
       return createPrinterError(
@@ -468,6 +484,7 @@ class PrinterService {
 
       this.state = 'connected';
       void savePrinterConfig(this.role, { mode: 'usb', device }).catch(() => {});
+      void setPrinterPrintingEnabled(this.role, true).catch(() => {});
 
       const success: PrinterConnectResult = {
         success: true,
@@ -603,6 +620,7 @@ class PrinterService {
 
       this.state = 'connected';
       void savePrinterConfig(this.role, { mode: 'lan', ip, port }).catch(() => {});
+      void setPrinterPrintingEnabled(this.role, true).catch(() => {});
 
       return {
         success: true,
@@ -741,6 +759,7 @@ class PrinterService {
             this.lastError = null;
 
             void savePrinterConfig(this.role, { mode: 'lan', ip, port }).catch(() => {});
+            void setPrinterPrintingEnabled(this.role, true).catch(() => {});
 
             this.releaseSocket(socket);
 

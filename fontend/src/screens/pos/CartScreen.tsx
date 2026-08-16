@@ -55,7 +55,10 @@ import { getApiErrorMessage, handleSessionExpiredApiError } from '../../utils/ap
 import { cardShadow } from '../settings/shared/settingsDetailStyles';
 import { softShadow } from './ManageInventory/inventoryUiStyles';
 import { CheckoutPaymentMethod, isValidCheckoutPhone, sanitizeCheckoutPhone } from '../../type/checkoutPayment';
-import { printCheckoutReceiptIfConfigured } from '../../services/printer';
+import { printCheckoutReceiptIfConfigured, printKitchenTicketIfConfigured } from '../../services/printer';
+import type { BillTotalsPreview } from '../../type/billing';
+import { calculateBillTotalsPreview, hasEnabledShopTaxes } from '../../utils/billingCalculation';
+import { refreshShopModuleFlags } from '../../utils/refreshShopModuleFlags';
 
 type Props = BottomTabScreenProps<MainBottomTabParamList, 'Cart'>;
 
@@ -128,9 +131,8 @@ type CartOrderFooterProps = {
   onDiscountEnabledChange: (value: boolean) => void;
   onDiscountModeChange: (mode: DiscountMode) => void;
   onDiscountValueChange: (value: string) => void;
-  discountCheckoutTotal: number;
-  discountAmount: number;
-  totalAmount: number;
+  billPreview: BillTotalsPreview;
+  shopHasEnabledTaxes: boolean;
   checkoutLoading: boolean;
   onCheckout: () => void;
 };
@@ -144,12 +146,13 @@ const CartOrderFooter = React.memo(function CartOrderFooter({
   onDiscountEnabledChange,
   onDiscountModeChange,
   onDiscountValueChange,
-  discountCheckoutTotal,
-  discountAmount,
-  totalAmount,
+  billPreview,
+  shopHasEnabledTaxes,
   checkoutLoading,
   onCheckout,
 }: CartOrderFooterProps) {
+  const showTaxBreakdown = shopHasEnabledTaxes || billPreview.taxAmount > 0;
+
   return (
     <View style={styles.cartFooter}>
       <View
@@ -282,17 +285,29 @@ const CartOrderFooter = React.memo(function CartOrderFooter({
                   Subtotal
                 </Text>
                 <Text style={[styles.discountBreakdownValue, { color: paperTheme.colors.onSurface }]}>
-                  {formatCurrency(totalAmount)}
+                  {formatCurrency(billPreview.subtotal)}
                 </Text>
               </View>
-              <View style={styles.discountBreakdownRow}>
-                <Text style={[styles.discountBreakdownLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
-                  Discount
-                </Text>
-                <Text style={[styles.discountBreakdownDiscount, { color: paperTheme.colors.error }]}>
-                  − {formatCurrency(discountAmount)}
-                </Text>
-              </View>
+              {billPreview.discountAmount > 0 ? (
+                <View style={styles.discountBreakdownRow}>
+                  <Text style={[styles.discountBreakdownLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    Discount
+                  </Text>
+                  <Text style={[styles.discountBreakdownDiscount, { color: paperTheme.colors.error }]}>
+                    − {formatCurrency(billPreview.discountAmount)}
+                  </Text>
+                </View>
+              ) : null}
+              {billPreview.taxBreakdown.map((entry) => (
+                <View key={entry.id} style={styles.discountBreakdownRow}>
+                  <Text style={[styles.discountBreakdownLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                    {entry.label}
+                  </Text>
+                  <Text style={[styles.discountBreakdownValue, { color: paperTheme.colors.onSurface }]}>
+                    {formatCurrency(entry.amount)}
+                  </Text>
+                </View>
+              ))}
               <View
                 style={[
                   styles.discountBreakdownDivider,
@@ -304,9 +319,51 @@ const CartOrderFooter = React.memo(function CartOrderFooter({
                   Checkout total
                 </Text>
                 <Text style={[styles.discountBreakdownTotalValue, { color: paperTheme.colors.primary }]}>
-                  {formatCurrency(discountCheckoutTotal)}
+                  {formatCurrency(billPreview.totalAmount)}
                 </Text>
               </View>
+            </View>
+          </View>
+        ) : null}
+
+        {!discountEnabled && showTaxBreakdown ? (
+          <View
+            style={[
+              styles.discountBreakdown,
+              { backgroundColor: paperTheme.colors.surfaceVariant, marginTop: 12 },
+            ]}
+          >
+            <View style={styles.discountBreakdownRow}>
+              <Text style={[styles.discountBreakdownLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                Subtotal
+              </Text>
+              <Text style={[styles.discountBreakdownValue, { color: paperTheme.colors.onSurface }]}>
+                {formatCurrency(billPreview.subtotal)}
+              </Text>
+            </View>
+            {billPreview.taxBreakdown.map((entry) => (
+              <View key={entry.id} style={styles.discountBreakdownRow}>
+                <Text style={[styles.discountBreakdownLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
+                  {entry.label}
+                </Text>
+                <Text style={[styles.discountBreakdownValue, { color: paperTheme.colors.onSurface }]}>
+                  {formatCurrency(entry.amount)}
+                </Text>
+              </View>
+            ))}
+            <View
+              style={[
+                styles.discountBreakdownDivider,
+                { backgroundColor: paperTheme.colors.outlineVariant },
+              ]}
+            />
+            <View style={styles.discountBreakdownRow}>
+              <Text style={[styles.discountBreakdownTotalLabel, { color: paperTheme.colors.onSurface }]}>
+                Checkout total
+              </Text>
+              <Text style={[styles.discountBreakdownTotalValue, { color: paperTheme.colors.primary }]}>
+                {formatCurrency(billPreview.totalAmount)}
+              </Text>
             </View>
           </View>
         ) : null}
@@ -331,9 +388,7 @@ const CartOrderFooter = React.memo(function CartOrderFooter({
                 Checkout
               </Text>
               <Text style={[styles.checkoutSub, { color: paperTheme.colors.onPrimary }]}>
-                {formatCurrency(
-                  discountEnabled && discountAmount > 0 ? discountCheckoutTotal : totalAmount,
-                )}
+                {formatCurrency(billPreview.totalAmount)}
               </Text>
             </View>
             <View style={[styles.checkoutArrow, { backgroundColor: `${paperTheme.colors.onPrimary}22` }]}>
@@ -480,26 +535,42 @@ export default function CartScreen({ navigation }: Props) {
   const addedCartCount = shopAddedSessions.length;
   const itemCount = items.length;
 
-  const discountPreview = useMemo(() => {
-    if (!discountEnabled || totalAmount <= 0) {
-      return { discountAmount: 0, checkoutTotal: totalAmount };
-    }
-
+  const billPreview = useMemo(() => {
     const parsed = Number.parseFloat(discountValue.replace(/,/g, '').trim());
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      return { discountAmount: 0, checkoutTotal: totalAmount };
-    }
+    const discount =
+      discountEnabled && Number.isFinite(parsed) && parsed > 0
+        ? {
+            enabled: true,
+            type: discountMode === 'percentage' ? ('percent' as const) : ('amount' as const),
+            value: parsed,
+          }
+        : { enabled: false };
 
-    const discountAmount =
-      discountMode === 'percentage'
-        ? Math.min(totalAmount, (totalAmount * parsed) / 100)
-        : Math.min(totalAmount, parsed);
+    return calculateBillTotalsPreview({
+      subtotal: totalAmount,
+      discount,
+      billingConfig: shop?.billingConfig,
+    });
+  }, [discountEnabled, discountMode, discountValue, shop?.billingConfig, totalAmount]);
 
-    return {
-      discountAmount,
-      checkoutTotal: Math.max(0, totalAmount - discountAmount),
-    };
-  }, [discountEnabled, discountMode, discountValue, totalAmount]);
+  const shopHasEnabledTaxes = useMemo(
+    () => hasEnabledShopTaxes(shop?.billingConfig),
+    [shop?.billingConfig],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshShopModuleFlags(dispatch);
+    }, [dispatch]),
+  );
+
+  const discountPreview = useMemo(
+    () => ({
+      discountAmount: billPreview.discountAmount,
+      checkoutTotal: billPreview.totalAmount,
+    }),
+    [billPreview.discountAmount, billPreview.totalAmount],
+  );
 
   useEffect(() => {
     if (itemCount === 0) {
@@ -853,13 +924,7 @@ export default function CartScreen({ navigation }: Props) {
     showSlideToast,
   ]);
 
-  const checkoutTotal = useMemo(
-    () =>
-      discountEnabled && discountPreview.discountAmount > 0
-        ? discountPreview.checkoutTotal
-        : totalAmount,
-    [discountEnabled, discountPreview.checkoutTotal, discountPreview.discountAmount, totalAmount],
-  );
+  const checkoutTotal = billPreview.totalAmount;
 
   const closePaymentModal = useCallback(() => {
     if (checkoutLoading) return;
@@ -939,6 +1004,13 @@ export default function CartScreen({ navigation }: Props) {
         record: historyResponse.data,
         shop,
       });
+
+      if (checkoutResponse.kitchenTicket) {
+        void printKitchenTicketIfConfigured({
+          ticket: checkoutResponse.kitchenTicket,
+          shop,
+        });
+      }
 
       setPaymentModalVisible(false);
       setCustomerName('');
@@ -1474,9 +1546,8 @@ export default function CartScreen({ navigation }: Props) {
         onDiscountEnabledChange={setDiscountEnabled}
         onDiscountModeChange={setDiscountMode}
         onDiscountValueChange={setDiscountValue}
-        discountCheckoutTotal={discountPreview.checkoutTotal}
-        discountAmount={discountPreview.discountAmount}
-        totalAmount={totalAmount}
+        billPreview={billPreview}
+        shopHasEnabledTaxes={shopHasEnabledTaxes}
         checkoutLoading={checkoutLoading}
         onCheckout={() => {
           openPaymentModal();
@@ -1484,17 +1555,15 @@ export default function CartScreen({ navigation }: Props) {
       />
     ),
     [
+      billPreview,
       checkoutLoading,
       discountEnabled,
       discountMode,
-      discountPreview.checkoutTotal,
-      discountPreview.discountAmount,
       discountValue,
-      handleConfirmCheckout,
       openPaymentModal,
       paperTheme,
       resolvedTheme,
-      totalAmount,
+      shopHasEnabledTaxes,
     ],
   );
 
@@ -1598,11 +1667,7 @@ export default function CartScreen({ navigation }: Props) {
               style={[styles.summaryTotal, { color: paperTheme.colors.primary }]}
               numberOfLines={1}
             >
-              {formatCurrency(
-                discountEnabled && discountPreview.discountAmount > 0
-                  ? discountPreview.checkoutTotal
-                  : totalAmount,
-              )}
+              {formatCurrency(billPreview.totalAmount)}
             </Text>
           </View>
         ) : null}
@@ -1680,6 +1745,7 @@ export default function CartScreen({ navigation }: Props) {
         <CheckoutPaymentModal
           visible={paymentModalVisible}
           amount={checkoutTotal}
+          billPreview={billPreview}
           customerName={customerName}
           customerPhone={customerPhone}
           selectedMethod={selectedPaymentMethod}

@@ -109,6 +109,44 @@ const cartSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    taxAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    serviceChargeAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    taxBreakdown: {
+      type: [
+        {
+          id: { type: String, trim: true },
+          label: { type: String, trim: true },
+          rate: { type: Number, min: 0 },
+          amount: { type: Number, min: 0 },
+        },
+      ],
+      default: [],
+    },
+    serviceChargeBreakdown: {
+      type: [
+        {
+          id: { type: String, trim: true },
+          label: { type: String, trim: true },
+          type: { type: String, enum: ['percentage', 'fixed'] },
+          value: { type: Number, min: 0 },
+          amount: { type: Number, min: 0 },
+        },
+      ],
+      default: [],
+    },
+    grandTotal: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     orderType: {
       type: String,
       enum: CART_ORDER_TYPES,

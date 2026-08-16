@@ -7,6 +7,25 @@ function normalizeIndustryType(value) {
   return INDUSTRY_TYPES.includes(normalized) ? normalized : 'retail';
 }
 
+/** Legacy automotive shops stored quotations under automotiveModule.quotations. */
+function resolveQuotationsModule(shop) {
+  if (shop?.quotationsModule === true) {
+    return true;
+  }
+
+  if (shop?.quotationsModule === false) {
+    return false;
+  }
+
+  return Boolean(shop?.automotiveModule?.quotations);
+}
+
+/** Keep top-level and legacy automotive flags in sync when dashboard toggles quotations. */
+function applyQuotationsModuleUpdate(update, enabled) {
+  update.quotationsModule = enabled;
+  update['automotiveModule.quotations'] = enabled;
+}
+
 /** Industry module defaults — only the matching module object is returned. */
 function buildIndustryModulePayload(industryType) {
   switch (industryType) {
@@ -24,13 +43,6 @@ function buildIndustryModulePayload(industryType) {
           appointments: true,
         },
       };
-    case 'automotive':
-      return {
-        automotiveModule: {
-          quotations: true,
-          warranty: true,
-        },
-      };
     default:
       return {};
   }
@@ -38,10 +50,16 @@ function buildIndustryModulePayload(industryType) {
 
 function buildIndustryOnboardingFields(industryTypeInput) {
   const industryType = normalizeIndustryType(industryTypeInput);
-  return {
+  const payload = {
     industryType,
     ...buildIndustryModulePayload(industryType),
   };
+
+  if (industryType === 'automotive') {
+    payload.quotationsModule = true;
+  }
+
+  return payload;
 }
 
 /** Normalized industry + module flags for API clients (login, dashboard). */
@@ -63,19 +81,14 @@ function formatIndustryFieldsForClient(shop) {
             appointments: Boolean(shop.salonModule.appointments),
           }
         : null,
-    automotiveModule:
-      industryType === 'automotive' && shop?.automotiveModule
-        ? {
-            quotations: Boolean(shop.automotiveModule.quotations),
-            warranty: Boolean(shop.automotiveModule.warranty),
-          }
-        : null,
   };
 }
 
 module.exports = {
   INDUSTRY_TYPES,
   normalizeIndustryType,
+  resolveQuotationsModule,
+  applyQuotationsModuleUpdate,
   buildIndustryModulePayload,
   buildIndustryOnboardingFields,
   formatIndustryFieldsForClient,

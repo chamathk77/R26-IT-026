@@ -52,6 +52,7 @@ import { getCartNumberForSession, mapToActiveSession } from '../../utils/cartSes
 import { devLog } from '../../utils/devLog';
 import { hasKitchenOrders, hasTableManagement, isRestaurantShop } from '../../utils/industryHelper';
 import { useShopIndustry } from '../../hooks/useShopIndustry';
+import { printKitchenTicketIfConfigured } from '../../services/printer';
 import { getStockLimitToastMessage, isAtProductStockLimit } from '../../utils/productStock';
 import { resolveProductImageUri } from '../../utils/productImage';
 import CommonAlert from '../../components/CommonAlert/CommonAlert';
@@ -765,6 +766,10 @@ export default function ProductsScreen({ navigation }: Props) {
         if (showKitchenOrders) {
           void dispatch(fetchKitchenTickets_Service({}));
         }
+        void printKitchenTicketIfConfigured({
+          ticket: result.kitchenTicket,
+          shop,
+        });
         void dispatch(
           fetchCartItems_Service({
             sessionId: session.sessionId,
@@ -805,6 +810,7 @@ export default function ProductsScreen({ navigation }: Props) {
       dispatch,
       navigation,
       sendingKitchenSessionId,
+      shop,
       showKitchenOrders,
       show_Alert,
     ],

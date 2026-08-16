@@ -9,6 +9,7 @@ import {
 } from '../../screens/pos/HistoryScreens/historyFormat';
 import { formatDisplayOrderNumber } from '../../utils/orderNumber';
 import { formatHistoryItemWarranty } from '../../utils/warranty';
+import { formatHistoryOrderTypeLabel } from '../../utils/historyReceiptOrder';
 import { getPrinterService } from './PrinterService';
 import type { PrinterActionResult } from './printerTypes';
 
@@ -134,6 +135,7 @@ export function buildThermalReceiptBill(
   const isCanceled = normalizedStatus === 'canceled';
   const isReversed = normalizedStatus === 'reversed';
   const isVoided = isCanceled || isReversed;
+  const orderTypeLabel = formatHistoryOrderTypeLabel(record, shop);
 
   const lines: string[] = [
     ALIGN_CENTER,
@@ -166,6 +168,13 @@ export function buildThermalReceiptBill(
     ALIGN_LEFT,
     row('Date', formatCheckoutTime(record.checkOutTime)),
     row('Payment', getPaymentLabel(record.paymentOption)),
+  );
+
+  if (orderTypeLabel) {
+    lines.push(row('Order type', orderTypeLabel));
+  }
+
+  lines.push(
     row('Status', getHistoryStatusLabel(record.status)),
   );
 
@@ -218,6 +227,18 @@ export function buildThermalReceiptBill(
 
   if (hasDiscount) {
     lines.push(row('Discount', `-${formatCheckoutAmount(record.discountedAmount)}`));
+  }
+
+  for (const entry of record.serviceChargeBreakdown ?? []) {
+    if (Number(entry.amount) > 0) {
+      lines.push(row(entry.label, formatCheckoutAmount(entry.amount)));
+    }
+  }
+
+  for (const entry of record.taxBreakdown ?? []) {
+    if (Number(entry.amount) > 0) {
+      lines.push(row(entry.label, formatCheckoutAmount(entry.amount)));
+    }
   }
 
   // Double-width doubles the glyph size, so this row is laid out at half width.

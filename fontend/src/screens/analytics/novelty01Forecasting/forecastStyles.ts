@@ -1,0 +1,259 @@
+import { StyleSheet } from 'react-native';
+import { fonts } from '../../../constants/fonts';
+
+export const forecastStyles = StyleSheet.create({
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 26,
+    marginBottom: 12,
+  },
+  sectionIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionTitle: {
+    flex: 1,
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 17,
+  },
+  sectionSubtitle: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 14,
+  },
+  card: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 14,
+  },
+  horizonRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  horizonChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  horizonChipText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 12,
+  },
+  rangeCaption: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    marginBottom: 12,
+  },
+  predictionGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  predictionCard: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+  },
+  predictionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  predictionLabel: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  predictionValue: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 19,
+    lineHeight: 25,
+  },
+  predictionRange: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 10,
+    marginTop: 4,
+    lineHeight: 14,
+  },
+  profitCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 14,
+  },
+  profitLabel: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  profitValue: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 26,
+    lineHeight: 34,
+    marginTop: 4,
+  },
+  profitMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  profitBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  profitBadgeText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
+  },
+  chartTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  chartCaption: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 11,
+    marginBottom: 10,
+    lineHeight: 16,
+  },
+  chart: {
+    marginLeft: -16,
+    paddingRight: 8,
+    borderRadius: 12,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+    marginTop: 8,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  legendText: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 11,
+  },
+  monthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 11,
+    gap: 10,
+  },
+  monthLabel: {
+    width: 68,
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 12,
+  },
+  monthValues: {
+    flex: 1,
+    minWidth: 0,
+  },
+  monthPrimary: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 13,
+  },
+  monthSecondary: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 11,
+    marginTop: 1,
+  },
+  monthProfit: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 13,
+    textAlign: 'right',
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+  },
+  accuracyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    gap: 12,
+  },
+  accuracyLabel: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    flex: 1,
+  },
+  accuracyValue: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 12,
+    textAlign: 'right',
+  },
+  methodPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginTop: 8,
+  },
+  methodPillText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 10,
+    letterSpacing: 0.2,
+  },
+  noticeCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 14,
+  },
+  noticeText: {
+    flex: 1,
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  loadingWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 10,
+  },
+  loadingText: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 13,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 12,
+    paddingVertical: 11,
+    marginTop: 12,
+  },
+  retryBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 13,
+  },
+});

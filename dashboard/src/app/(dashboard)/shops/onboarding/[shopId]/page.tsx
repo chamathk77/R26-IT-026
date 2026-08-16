@@ -45,6 +45,7 @@ type EditableShopForm = {
   costModule: boolean;
   marketingModule: boolean;
   warrantyModule: boolean;
+  quotationsModule: boolean;
 };
 
 function toFormState(shop: OnboardingShopDetails): EditableShopForm {
@@ -64,6 +65,7 @@ function toFormState(shop: OnboardingShopDetails): EditableShopForm {
     costModule: Boolean(shop.costModule),
     marketingModule: Boolean(shop.marketingModule),
     warrantyModule: Boolean(shop.warrantyModule),
+    quotationsModule: Boolean(shop.quotationsModule),
   };
 }
 
@@ -82,7 +84,8 @@ function formsEqual(a: EditableShopForm, b: EditableShopForm): boolean {
     a.customerManualOrder === b.customerManualOrder &&
     a.costModule === b.costModule &&
     a.marketingModule === b.marketingModule &&
-    a.warrantyModule === b.warrantyModule
+    a.warrantyModule === b.warrantyModule &&
+    a.quotationsModule === b.quotationsModule
   );
 }
 
@@ -112,6 +115,7 @@ function buildUpdatePayload(form: EditableShopForm): UpdateOnboardingShopPayload
     costModule: form.costModule,
     marketingModule: form.marketingModule,
     warrantyModule: form.warrantyModule,
+    quotationsModule: form.quotationsModule,
   };
 }
 
@@ -412,6 +416,15 @@ export default function ShopOnboardingDetailsPage() {
                       />
                     }
                     label="Warranty"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={form.quotationsModule}
+                        onChange={(e) => updateField('quotationsModule', e.target.checked)}
+                      />
+                    }
+                    label="Quotations"
                   />
                 </Box>
               </CardContent>

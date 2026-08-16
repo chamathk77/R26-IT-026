@@ -5,6 +5,11 @@ export {
   printerService,
 } from './PrinterService';
 export {
+  buildKitchenTicketBill,
+  printKitchenTicket,
+  printKitchenTicketIfConfigured,
+} from './kitchenPrint';
+export {
   buildThermalReceiptBill,
   printCheckoutReceipt,
   printCheckoutReceiptIfConfigured,
@@ -31,6 +36,8 @@ export type {
 export {
   clearSavedPrinterConfig,
   getSavedPrinterConfig,
+  isPrinterPrintingEnabled,
   savePrinterConfig,
+  setPrinterPrintingEnabled,
 } from './printerStorage';
 export { isValidIpv4, parsePrinterPort } from './printerValidation';
