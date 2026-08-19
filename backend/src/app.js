@@ -19,6 +19,7 @@ const dashboardRoutes = require('./routes/dashboard');
 const kpiRoutes = require('./routes/kpiRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const forecastRoutes = require('./novelty/novelty01Forecasting/forecastRoutes');
+const customerBehaviorRoutes = require('./novelty/novelty02CustomerBehavior/behaviorRoutes');
 const receiptRoutes = require('./routes/receiptRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -52,6 +53,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/kpi', kpiRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/forecast', forecastRoutes);
+app.use('/api/customer-behavior', customerBehaviorRoutes);
 app.use('/receipt', receiptRoutes);
 app.use('/api', routes);
 

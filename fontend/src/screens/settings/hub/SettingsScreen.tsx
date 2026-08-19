@@ -483,7 +483,7 @@ export default function SettingsScreen({ navigation }: Props) {
     {
       key: 'user-behavior',
       title: 'User behavior',
-      description: 'Team activity, feature usage & session insights',
+      description: 'Peak hours, top products & customer purchasing insights',
       icon: 'pulse-outline',
       iconBg: '#ede9fe',
       iconColor: '#6d28d9',
