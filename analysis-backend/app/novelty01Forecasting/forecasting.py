@@ -138,7 +138,12 @@ def _holt_linear_forecast(series: List[float], horizon: int) -> Dict[str, Any]:
 
 def _select_model(series: List[float], horizon: int, season_length: int) -> Dict[str, Any]:
     n = len(series)
-    if n >= MIN_POINTS_FOR_SEASONAL:
+    # Two full cycles are needed before Holt-Winters can even attempt a
+    # seasonal decomposition. MIN_POINTS_FOR_SEASONAL (24) is the special
+    # case for monthly/12-month seasonality kept as the default floor; other
+    # season lengths (e.g. 7 for daily/weekly series) scale from 2x instead.
+    min_seasonal_points = max(MIN_POINTS_FOR_SEASONAL, 2 * season_length) if season_length == 12 else 2 * season_length
+    if n >= min_seasonal_points:
         return _holt_winters_forecast(series, horizon, season_length)
     if n >= MIN_POINTS_FOR_TREND:
         return _holt_linear_forecast(series, horizon)
@@ -148,9 +153,10 @@ def _select_model(series: List[float], horizon: int, season_length: int) -> Dict
 def _backtest(series: List[float], season_length: int) -> Optional[Dict[str, Any]]:
     n = len(series)
     holdout = min(6, n // 4)
+    min_seasonal_points = max(MIN_POINTS_FOR_SEASONAL, 2 * season_length) if season_length == 12 else 2 * season_length
 
-    if n >= MIN_POINTS_FOR_SEASONAL:
-        holdout = min(holdout, n - MIN_POINTS_FOR_SEASONAL)
+    if n >= min_seasonal_points:
+        holdout = min(holdout, n - min_seasonal_points)
 
     if holdout < 1 or n - holdout < MIN_POINTS_FOR_ANY_FORECAST:
         return None

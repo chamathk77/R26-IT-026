@@ -490,6 +490,15 @@ export default function SettingsScreen({ navigation }: Props) {
       onPress: () => navigation.navigate('UserBehavior'),
     },
     {
+      key: 'product-demand',
+      title: 'Product demand',
+      description: 'Forecasted stock demand for your best-selling products',
+      icon: 'cube-outline',
+      iconBg: '#dcfce7',
+      iconColor: '#15803d',
+      onPress: () => navigation.navigate('ProductDemand'),
+    },
+    {
       key: 'reports',
       title: 'Reports',
       description: 'Sales summaries, exports & business reports',

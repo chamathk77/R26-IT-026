@@ -42,6 +42,7 @@ import ManageAddUsersScreen from '../screens/settings/paymentAndFeature/manageFe
 import ManageUserFormScreen from '../screens/settings/paymentAndFeature/manageAccounts/manageUserForm/ManageUserFormScreen';
 import ThemePreferenceScreen from '../screens/settings/preferences/theme/ThemePreferenceScreen';
 import UserBehaviorScreen from '../screens/settings/userBehavior/UserBehaviorScreen';
+import ProductDemandScreen from '../screens/settings/productDemand/ProductDemandScreen';
 import PrinterConnectionScreen from '../screens/settings/paymentAndFeature/receiptPrinter/PrinterConnectionScreen';
 import SubscriptionPaymentsScreen from '../screens/settings/paymentAndFeature/payment/SubscriptionPaymentsScreen';
 import ChangeSubscriptionScreen from '../screens/settings/paymentAndFeature/changeSubscription/ChangeSubscriptionScreen';
@@ -132,6 +133,7 @@ export default function AppNavigator() {
         <Stack.Screen name="ManageUserForm" component={ManageUserFormScreen} />
         <Stack.Screen name="ThemePreference" component={ThemePreferenceScreen} />
         <Stack.Screen name="UserBehavior" component={UserBehaviorScreen} />
+        <Stack.Screen name="ProductDemand" component={ProductDemandScreen} />
         <Stack.Screen name="PrinterConnection" component={PrinterConnectionScreen} />
         <Stack.Screen name="ChangeSubscription" component={ChangeSubscriptionScreen} />
         <Stack.Screen name="SubscriptionPayments" component={SubscriptionPaymentsScreen} />

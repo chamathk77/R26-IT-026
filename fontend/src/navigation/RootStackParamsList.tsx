@@ -74,6 +74,7 @@ export type RootStackParamList = {
   ManageUserForm: { userId?: string } | undefined;
   ThemePreference: undefined;
   UserBehavior: undefined;
+  ProductDemand: undefined;
   PrinterConnection: { printerRole?: 'receipt' | 'kitchen' } | undefined;
   ChangeSubscription: undefined;
   SubscriptionPayments: undefined;

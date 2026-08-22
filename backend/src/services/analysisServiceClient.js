@@ -16,7 +16,13 @@ async function requestCustomerSegments({ customers, k, now }) {
   return response.data;
 }
 
+async function requestProductDemand({ products, horizonDays }) {
+  const response = await client.post('/product-demand', { products, horizonDays });
+  return response.data;
+}
+
 module.exports = {
   requestForecast,
   requestCustomerSegments,
+  requestProductDemand,
 };
