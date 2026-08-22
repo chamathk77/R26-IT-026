@@ -77,12 +77,16 @@ export interface CustomerSegment {
   avgMonetary: number;
 }
 
+/** Customer segmentation runs entirely on the Python analysis backend — no JS fallback. */
+export type PredictionEngine = 'python';
+
 export interface CustomerSegments {
   segmentationReady: boolean;
   method?: string;
   customersAnalyzed: number;
   minimumRequired?: number;
   segments: CustomerSegment[];
+  poweredBy?: PredictionEngine;
 }
 
 export type BehaviorInsightType =

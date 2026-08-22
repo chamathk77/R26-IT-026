@@ -55,11 +55,15 @@ export interface ForecastBacktest extends ForecastAccuracy {
   method: string;
 }
 
+/** Forecasting runs entirely on the Python analysis backend — no JS fallback. */
+export type PredictionEngine = 'python';
+
 export interface ForecastModelInfo {
   method: string;
   params: Record<string, number | string>;
   accuracy: ForecastAccuracy | null;
   backtest: ForecastBacktest | null;
+  poweredBy?: PredictionEngine;
 }
 
 export interface ForecastCurrentMonth {

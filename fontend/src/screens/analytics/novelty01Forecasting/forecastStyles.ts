@@ -218,6 +218,22 @@ export const forecastStyles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 0.2,
   },
+  engineBadgeRow: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
+  engineBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+  },
+  engineBadgeText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
+  },
   noticeCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',

@@ -543,6 +543,15 @@ export default function ForecastSection() {
             error means more reliable predictions.
           </Text>
 
+          <View style={styles.engineBadgeRow}>
+            <View style={[styles.engineBadge, { backgroundColor: '#dcfce7' }]}>
+              <Ionicons name="logo-python" size={13} color="#15803d" />
+              <Text style={[styles.engineBadgeText, { color: '#15803d' }]}>
+                Python · statsmodels
+              </Text>
+            </View>
+          </View>
+
           <View style={styles.accuracyRow}>
             <Text style={[styles.accuracyLabel, { color: onSurfaceVariant }]}>
               Sales error (MAPE)

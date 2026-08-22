@@ -1,4 +1,4 @@
-const { forecastSeries, MIN_POINTS_FOR_SEASONAL } = require('./forecastEngine');
+const { forecastSeriesViaMl } = require('./forecastSeriesViaMl');
 const {
   getMonthlySeries,
   addMonths,
@@ -7,6 +7,10 @@ const {
 } = require('./forecastDataService');
 
 const FORECAST_MONTHS = 12;
+// Two full 12-month seasons — the point at which the analysis backend's
+// Holt-Winters model switches on seasonal decomposition instead of a
+// simpler trend-only fit.
+const MIN_POINTS_FOR_SEASONAL = 24;
 const HORIZONS = [
   { key: 'next_month', label: 'Next month', monthCount: 1 },
   { key: 'next_3_months', label: 'Next 3 months', monthCount: 3 },
@@ -179,8 +183,10 @@ const getSalesCostForecast = async (req, res) => {
     const salesSeries = completeMonths.map((row) => row.sales);
     const costSeries = completeMonths.map((row) => row.costs);
 
-    const salesModel = forecastSeries(salesSeries, FORECAST_MONTHS + 1);
-    const costModel = forecastSeries(costSeries, FORECAST_MONTHS + 1);
+    const [salesModel, costModel] = await Promise.all([
+      forecastSeriesViaMl(salesSeries, FORECAST_MONTHS + 1),
+      forecastSeriesViaMl(costSeries, FORECAST_MONTHS + 1),
+    ]);
 
     const lastCompleteMonth = completeMonths[completeMonths.length - 1].month;
     const salesPoints = attachMonthLabels(salesModel.points, lastCompleteMonth);
@@ -241,12 +247,14 @@ const getSalesCostForecast = async (req, res) => {
             params: salesModel.params,
             accuracy: salesModel.accuracy,
             backtest: salesModel.backtest,
+            poweredBy: salesModel.poweredBy,
           },
           costs: {
             method: costModel.method,
             params: costModel.params,
             accuracy: costModel.accuracy,
             backtest: costModel.backtest,
+            poweredBy: costModel.poweredBy,
           },
         },
         dataQuality: describeDataQuality(completeMonths, salesModel.method),

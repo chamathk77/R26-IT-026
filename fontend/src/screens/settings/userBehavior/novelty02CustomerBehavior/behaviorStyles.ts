@@ -295,6 +295,22 @@ export const behaviorStyles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 0.2,
   },
+  engineBadgeRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
+  engineBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+  },
+  engineBadgeText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
+  },
 
   footNote: {
     fontFamily: fonts.PoppinsRegular,

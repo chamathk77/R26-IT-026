@@ -1,4 +1,4 @@
-const { fitLinearRegression } = require('../novelty01Forecasting/forecastEngine');
+const { fitLinearRegression } = require('./trendUtils');
 
 const REPORTING_TIMEZONE = process.env.FORECAST_TIMEZONE || 'Asia/Colombo';
 
@@ -17,10 +17,6 @@ const MIN_ORDERS_FOR_PATTERNS = 20;
 const MIN_ORDERS_PER_BUCKET = 3;
 const MIN_PRODUCT_ORDERS = 3;
 const MIN_PRODUCTS_FOR_RANKING = 5;
-const MIN_CUSTOMERS_FOR_SEGMENTS = 12;
-const SEGMENT_COUNT = 4;
-const KMEANS_MAX_ITERATIONS = 50;
-const KMEANS_CONVERGENCE_EPSILON = 1e-6;
 
 function round2(value) {
   if (!Number.isFinite(value)) return 0;
@@ -30,13 +26,6 @@ function round2(value) {
 function mean(values) {
   if (!values.length) return 0;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
-function standardDeviation(values) {
-  if (values.length < 2) return 0;
-  const avg = mean(values);
-  const variance = values.reduce((sum, value) => sum + (value - avg) ** 2, 0) / (values.length - 1);
-  return Math.sqrt(variance);
 }
 
 function localHour(date, timezone) {
@@ -220,9 +209,9 @@ function computeProductRankings(orders, products, options = {}) {
 }
 
 /**
- * Reuses novelty01's OLS trend fit rather than re-deriving slope math, then
- * classifies it against the series' own average level so "increasing" means
- * something proportional (not just slope > 0 on tiny numbers).
+ * OLS trend fit (trendUtils.js) classified against the series' own average
+ * level so "increasing" means something proportional, not just slope > 0 on
+ * tiny numbers.
  */
 function computeSalesTrend(monthlySeries) {
   if (!monthlySeries || monthlySeries.length < 3) {
@@ -243,173 +232,6 @@ function computeSalesTrend(monthlySeries) {
     monthlyChangePercent,
     monthsAnalyzed: monthlySeries.length,
     method: 'linear_regression',
-  };
-}
-
-function daysBetween(a, b) {
-  return Math.max(0, Math.round((a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24)));
-}
-
-function standardizeDimension(points, key) {
-  const values = points.map((point) => point[key]);
-  const avg = mean(values);
-  const sd = standardDeviation(values);
-  return points.map((point) => (sd === 0 ? 0 : (point[key] - avg) / sd));
-}
-
-function squaredDistance(point, centroid) {
-  return (
-    (point.recencyZ - centroid.recencyZ) ** 2 +
-    (point.frequencyZ - centroid.frequencyZ) ** 2 +
-    (point.monetaryZ - centroid.monetaryZ) ** 2
-  );
-}
-
-/**
- * From-scratch k-means over standardized RFM features. Centroids are seeded
- * deterministically (evenly spaced across a loyalty-score ordering) rather
- * than randomly, so re-running against the same data always yields the same
- * segments — no `Math.random()`, consistent with the rest of the analysis
- * pipeline being reproducible.
- */
-function kMeansRfm(points, k) {
-  const scored = [...points].sort(
-    (a, b) => a.monetaryZ + a.frequencyZ - a.recencyZ - (b.monetaryZ + b.frequencyZ - b.recencyZ),
-  );
-
-  let centroids = Array.from({ length: k }, (_, i) => {
-    const index = Math.min(scored.length - 1, Math.floor((i * scored.length) / k));
-    const seed = scored[index];
-    return { recencyZ: seed.recencyZ, frequencyZ: seed.frequencyZ, monetaryZ: seed.monetaryZ };
-  });
-
-  let assignments = new Array(points.length).fill(0);
-
-  for (let iteration = 0; iteration < KMEANS_MAX_ITERATIONS; iteration += 1) {
-    const nextAssignments = points.map((point) => {
-      let bestIndex = 0;
-      let bestDistance = Infinity;
-      centroids.forEach((centroid, index) => {
-        const distance = squaredDistance(point, centroid);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestIndex = index;
-        }
-      });
-      return bestIndex;
-    });
-
-    const nextCentroids = centroids.map((centroid, index) => {
-      const members = points.filter((_, pointIndex) => nextAssignments[pointIndex] === index);
-      if (!members.length) {
-        const farthest = points.reduce((worst, point, pointIndex) => {
-          const distance = squaredDistance(point, centroids[nextAssignments[pointIndex]]);
-          return distance > worst.distance ? { point, distance } : worst;
-        }, { point: centroid, distance: -1 });
-        return { recencyZ: farthest.point.recencyZ, frequencyZ: farthest.point.frequencyZ, monetaryZ: farthest.point.monetaryZ };
-      }
-      return {
-        recencyZ: mean(members.map((m) => m.recencyZ)),
-        frequencyZ: mean(members.map((m) => m.frequencyZ)),
-        monetaryZ: mean(members.map((m) => m.monetaryZ)),
-      };
-    });
-
-    const movement = mean(
-      nextCentroids.map((centroid, index) => Math.sqrt(squaredDistance(centroid, centroids[index]))),
-    );
-
-    centroids = nextCentroids;
-    assignments = nextAssignments;
-
-    if (movement < KMEANS_CONVERGENCE_EPSILON) break;
-  }
-
-  return { centroids, assignments };
-}
-
-const SEGMENT_LABELS = ['VIP / Loyal', 'Regular', 'Occasional', 'At risk / Lapsed'];
-
-/**
- * RFM (Recency/Frequency/Monetary) segmentation via k-means, reading
- * straight off fields the Customer schema already tracks. Skips
- * segmentation below a minimum sample size rather than forcing four
- * clusters onto a handful of customers.
- */
-function computeCustomerSegments(customers, options = {}) {
-  const now = options.now ?? new Date();
-  const withOrders = customers.filter((customer) => customer.totalOrders > 0);
-
-  if (withOrders.length < MIN_CUSTOMERS_FOR_SEGMENTS) {
-    return {
-      segmentationReady: false,
-      customersAnalyzed: withOrders.length,
-      minimumRequired: MIN_CUSTOMERS_FOR_SEGMENTS,
-      segments: [],
-    };
-  }
-
-  const points = withOrders.map((customer) => ({
-    mobileNumber: customer.mobileNumber,
-    name: customer.name,
-    recencyDays: daysBetween(now, new Date(customer.lastUpdate)),
-    frequency: customer.totalOrders,
-    monetary: customer.totalSales,
-  }));
-
-  const recencyZ = standardizeDimension(points, 'recencyDays');
-  const frequencyZ = standardizeDimension(points, 'frequency');
-  const monetaryZ = standardizeDimension(points, 'monetary');
-  const standardized = points.map((point, index) => ({
-    ...point,
-    recencyZ: recencyZ[index],
-    frequencyZ: frequencyZ[index],
-    monetaryZ: monetaryZ[index],
-  }));
-
-  const { assignments } = kMeansRfm(standardized, SEGMENT_COUNT);
-
-  const clusters = Array.from({ length: SEGMENT_COUNT }, () => []);
-  standardized.forEach((point, index) => clusters[assignments[index]].push(point));
-
-  const totalMonetary = mean(points.map((p) => p.monetary)) === 0 ? 1 : points.reduce((sum, p) => sum + p.monetary, 0);
-
-  const ranked = clusters
-    .map((members, index) => {
-      if (!members.length) return null;
-      const loyaltyScore = mean(members.map((m) => m.monetaryZ + m.frequencyZ - m.recencyZ));
-      const clusterMonetary = members.reduce((sum, m) => sum + m.monetary, 0);
-      return {
-        index,
-        loyaltyScore,
-        size: members.length,
-        sharePercent: round2((members.length / points.length) * 100),
-        revenueSharePercent: round2((clusterMonetary / totalMonetary) * 100),
-        avgRecencyDays: Math.round(mean(members.map((m) => m.recencyDays))),
-        avgFrequency: round2(mean(members.map((m) => m.frequency))),
-        avgMonetary: round2(mean(members.map((m) => m.monetary))),
-        members,
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => b.loyaltyScore - a.loyaltyScore);
-
-  const segments = ranked.map((cluster, rank) => ({
-    key: SEGMENT_LABELS[rank].toLowerCase().replace(/[^a-z]+/g, '_'),
-    label: SEGMENT_LABELS[rank] ?? `Segment ${rank + 1}`,
-    size: cluster.size,
-    sharePercent: cluster.sharePercent,
-    revenueSharePercent: cluster.revenueSharePercent,
-    avgRecencyDays: cluster.avgRecencyDays,
-    avgFrequency: cluster.avgFrequency,
-    avgMonetary: cluster.avgMonetary,
-  }));
-
-  return {
-    segmentationReady: true,
-    method: 'rfm_kmeans',
-    customersAnalyzed: withOrders.length,
-    segments,
   };
 }
 
@@ -460,10 +282,8 @@ function describeDataQuality(orders, lookbackDays) {
 
 /**
  * Turns the computed stats into the plain-English sentences the feature
- * leads with — the whole point being insights, not raw numbers.
- */
-/**
- * Each insight carries a `type` (what kind of finding) and a `tone`
+ * leads with — the whole point being insights, not raw numbers. Each
+ * insight carries a `type` (what kind of finding) and a `tone`
  * (positive/negative/warning/info/neutral) instead of just a sentence, so
  * the UI can pick an icon/color per insight without parsing English text.
  */
@@ -556,10 +376,7 @@ module.exports = {
   computeDailyPattern,
   computeProductRankings,
   computeSalesTrend,
-  computeCustomerSegments,
   describeDataQuality,
   generateInsights,
   MIN_ORDERS_FOR_PATTERNS,
-  MIN_CUSTOMERS_FOR_SEGMENTS,
-  SEGMENT_COUNT,
 };

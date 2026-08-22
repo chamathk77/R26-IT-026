@@ -433,6 +433,14 @@ export default function CustomerBehaviorSection() {
             'Customers grouped by recency, frequency and spend (RFM), clustered with k-means.',
           )}
           <View style={[styles.card, { backgroundColor: surface, borderColor: outline }]}>
+            <View style={styles.engineBadgeRow}>
+              <View style={[styles.engineBadge, { backgroundColor: '#dcfce7' }]}>
+                <Ionicons name="logo-python" size={13} color="#15803d" />
+                <Text style={[styles.engineBadgeText, { color: '#15803d' }]}>
+                  Python · scikit-learn
+                </Text>
+              </View>
+            </View>
             <View style={styles.pieRow}>
               <PieChart
                 data={pieData}

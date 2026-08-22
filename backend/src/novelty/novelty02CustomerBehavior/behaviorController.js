@@ -9,10 +9,10 @@ const {
   computeDailyPattern,
   computeProductRankings,
   computeSalesTrend,
-  computeCustomerSegments,
   describeDataQuality,
   generateInsights,
 } = require('./behaviorEngine');
+const { computeCustomerSegmentsViaMl } = require('./segmentClientViaMl');
 
 function normalizeId(value) {
   return value ? String(value).trim().toUpperCase() : '';
@@ -82,7 +82,7 @@ const getCustomerBehaviorInsights = async (req, res) => {
     const daily = computeDailyPattern(orders);
     const products_ = computeProductRankings(orders, products);
     const trend = computeSalesTrend(monthlySeries);
-    const segments = computeCustomerSegments(customers);
+    const segments = await computeCustomerSegmentsViaMl(customers);
 
     const identifiedOrders = orders.filter((order) => order.customerMobile).length;
     const identifiedShare = orders.length ? round2((identifiedOrders / orders.length) * 100) : 0;
