@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "NODE_OPTIONS='--max-old-space-size=12288' next dev -p 3001 --turbo",
-    "dev:webpack": "NODE_OPTIONS='--max-old-space-size=12288' next dev -p 3001",
-    "build": "NODE_OPTIONS='--max-old-space-size=12288' next build",
+    "dev": "cross-env NODE_OPTIONS=--max-old-space-size=12288 next dev -p 3001 --turbo",
+    "dev:webpack": "cross-env NODE_OPTIONS=--max-old-space-size=12288 next dev -p 3001",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=12288 next build",
     "start": "next start",
     "lint": "eslint",
     "clean": "rm -rf .next"
@@ -28,6 +28,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "typescript": "^5"
