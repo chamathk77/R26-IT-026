@@ -23,3 +23,8 @@ export function resolveQuotationsModule(shop: LoginShop | null | undefined): boo
 export function hasQuotationsModule(shop: LoginShop | null | undefined): boolean {
   return resolveQuotationsModule(shop);
 }
+
+/** Dashboard-controlled customer QR / manual order module (read-only on mobile). */
+export function hasCustomerManualOrder(shop: LoginShop | null | undefined): boolean {
+  return shop?.customerManualOrder === true;
+}

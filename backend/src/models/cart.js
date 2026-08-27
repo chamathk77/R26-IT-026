@@ -1,8 +1,11 @@
 const mongoose = require('mongoose');
 
-const CART_STATUSES = ['pending', 'added', 'proceed'];
+// 'manual' = customer QR order waiting for cashier review (not yet a POS cart).
+const CART_STATUSES = ['pending', 'added', 'proceed', 'manual'];
 const CART_ORDER_TYPES = ['takeaway', 'dine_in', 'delivery'];
 const OPEN_TABLE_CART_STATUSES = ['pending', 'added'];
+const MANUAL_CART_STATUS = 'manual';
+const CART_SOURCES = ['pos', 'customer_qr'];
 const BRANCH_ID_PATTERN = /^B\d{5}$/;
 
 const cartItemSchema = new mongoose.Schema(
@@ -58,10 +61,11 @@ const cartSchema = new mongoose.Schema(
       uppercase: true,
       index: true,
     },
+    /** POS owner of the cart. Null while a customer QR order waits for review. */
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      default: null,
     },
     sessionId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -163,11 +167,55 @@ const cartSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    /** 'pos' = staff created in app, 'customer_qr' = customer scanned the branch QR menu. */
+    source: {
+      type: String,
+      enum: CART_SOURCES,
+      default: 'pos',
+      index: true,
+    },
+    /** Customer mobile entered on the QR menu before submitting. */
+    customerPhone: {
+      type: String,
+      default: '',
+      trim: true,
+      index: true,
+    },
+    customerName: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    /** Table number typed by the customer (kept even when no ShopTable matches it). */
+    customerTableNumber: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    /** Cashier who accepted the manual order into the normal POS flow. */
+    acceptedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    acceptedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true },
 );
 
 cartSchema.pre('validate', function normalizeCartFields() {
+  // Only unreviewed customer QR orders may be ownerless.
+  if (this.status !== MANUAL_CART_STATUS && !this.user) {
+    throw new Error('user is required for POS carts');
+  }
+
+  if (this.customerPhone) {
+    this.customerPhone = String(this.customerPhone).replace(/\D/g, '');
+  }
+
   if (this.shopId) {
     this.shopId = String(this.shopId).trim().toUpperCase();
   }
@@ -197,11 +245,18 @@ cartSchema.index(
   },
 );
 
+// Manual order queue + badge count per branch.
+cartSchema.index({ shopId: 1, branchId: 1, status: 1, createdAt: -1 });
+// Customer "my orders today" lookup by mobile number.
+cartSchema.index({ shopId: 1, branchId: 1, customerPhone: 1, createdAt: -1 });
+
 const Cart = mongoose.model('Cart', cartSchema);
 
 Cart.CART_STATUSES = CART_STATUSES;
 Cart.CART_ORDER_TYPES = CART_ORDER_TYPES;
 Cart.OPEN_TABLE_CART_STATUSES = OPEN_TABLE_CART_STATUSES;
+Cart.MANUAL_CART_STATUS = MANUAL_CART_STATUS;
+Cart.CART_SOURCES = CART_SOURCES;
 Cart.BRANCH_ID_PATTERN = BRANCH_ID_PATTERN;
 
 module.exports = Cart;

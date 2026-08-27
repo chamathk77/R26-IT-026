@@ -15,6 +15,7 @@ import CostCategoryReducer from '../store/reducers/CostCategoryReducer';
 import CostExpenseReducer from '../store/reducers/CostExpenseReducer';
 import KpiReducer from '../store/reducers/KpiReducer';
 import KitchenReducer from '../store/reducers/KitchenReducer';
+import ManualOrderReducer from '../store/reducers/ManualOrderReducer';
 import AnalyticsReducer from '../store/reducers/AnalyticsReducer';
 
 export const store = configureStore({
@@ -34,6 +35,7 @@ export const store = configureStore({
     CostExpenseReducer,
     KpiReducer,
     KitchenReducer,
+    ManualOrderReducer,
     AnalyticsReducer,
   },
 });

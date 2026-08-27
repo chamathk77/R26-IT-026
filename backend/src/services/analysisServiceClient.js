@@ -21,8 +21,14 @@ async function requestProductDemand({ products, horizonDays }) {
   return response.data;
 }
 
+async function requestRecommendations(payload) {
+  const response = await client.post('/recommendations', payload);
+  return response.data;
+}
+
 module.exports = {
   requestForecast,
   requestCustomerSegments,
   requestProductDemand,
+  requestRecommendations,
 };

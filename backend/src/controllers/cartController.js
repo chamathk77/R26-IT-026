@@ -8,6 +8,7 @@ const ShopsData = require('../models/shopsData');
 const {
   calculateBillTotalsFromCart,
 } = require('../services/billingCalculationService');
+const { getNextCartNumber } = require('../services/cartNumberService');
 const {
   shopHasKitchenOrders,
   createKitchenTicketsFromCart,
@@ -19,6 +20,9 @@ const {
 const CART_STATUSES = Cart.CART_STATUSES;
 const CART_ORDER_TYPES = Cart.CART_ORDER_TYPES;
 const OPEN_TABLE_CART_STATUSES = Cart.OPEN_TABLE_CART_STATUSES;
+const MANUAL_CART_STATUS = Cart.MANUAL_CART_STATUS;
+/** Statuses reachable through the POS cart endpoints ('manual' is customer-order only). */
+const POS_CART_STATUSES = CART_STATUSES.filter((status) => status !== MANUAL_CART_STATUS);
 
 function normalizeShopId(value) {
   return value ? String(value).trim().toUpperCase() : '';
@@ -462,37 +466,6 @@ async function proceedCartSession(cart, options = {}) {
   return cart;
 }
 
-async function getNextCartNumber(shopId, branchId) {
-  const normalizedShopId = normalizeShopId(shopId);
-  const normalizedBranchId = normalizeBranchId(branchId);
-  if (!normalizedShopId) {
-    throw new Error('Shop id is required');
-  }
-  if (!normalizedBranchId) {
-    throw new Error('Branch id is required');
-  }
-
-  const scopeFilter = { shopId: normalizedShopId, branchId: normalizedBranchId };
-
-  const [latestCart, latestHistory] = await Promise.all([
-    Cart.findOne(scopeFilter).sort({ cartNumber: -1 }).select('cartNumber').lean(),
-    History.findOne(scopeFilter).sort({ cartNumber: -1 }).select('cartNumber').lean(),
-  ]);
-
-  let candidate =
-    Math.max(latestCart?.cartNumber ?? 0, latestHistory?.cartNumber ?? 0) + 1;
-
-  // Cart numbers are unique per branch within a shop.
-  while (
-    (await Cart.exists({ ...scopeFilter, cartNumber: candidate })) ||
-    (await History.exists({ ...scopeFilter, cartNumber: candidate }))
-  ) {
-    candidate += 1;
-  }
-
-  return candidate;
-}
-
 async function createPendingCart({ shopId, branchId, userId, sessionId, orderMeta = {} }) {
   const normalizedShopId = normalizeShopId(shopId);
   const normalizedBranchId = normalizeBranchId(branchId);
@@ -575,6 +548,10 @@ function mapCartSessionSummary(cart) {
     orderType: cart.orderType ?? null,
     tableId: cart.tableId ?? null,
     orderLabel: cart.orderLabel ?? '',
+    source: cart.source ?? 'pos',
+    customerPhone: cart.customerPhone ?? '',
+    customerName: cart.customerName ?? '',
+    customerTableNumber: cart.customerTableNumber ?? '',
     createdAt: cart.createdAt,
     updatedAt: cart.updatedAt,
   };
@@ -788,10 +765,10 @@ const getCartSessions = async (req, res) => {
         ? null
         : String(statusRaw).trim().toLowerCase();
 
-    if (statusFilter && !CART_STATUSES.includes(statusFilter)) {
+    if (statusFilter && !POS_CART_STATUSES.includes(statusFilter)) {
       return res.status(400).json({
         success: false,
-        message: `Status must be one of: ${CART_STATUSES.join(', ')}`,
+        message: `Status must be one of: ${POS_CART_STATUSES.join(', ')}`,
       });
     }
 
@@ -837,10 +814,10 @@ const getCartItems = async (req, res) => {
     }
 
     if (statusFilter) {
-      if (!CART_STATUSES.includes(statusFilter)) {
+      if (!POS_CART_STATUSES.includes(statusFilter)) {
         return res.status(400).json({
           success: false,
-          message: `Status must be one of: ${CART_STATUSES.join(', ')}`,
+          message: `Status must be one of: ${POS_CART_STATUSES.join(', ')}`,
         });
       }
       filter.status = statusFilter;
@@ -1003,10 +980,10 @@ const updateCartSessionStatus = async (req, res) => {
     }
 
     const statusNormalized = String(statusRaw).trim().toLowerCase();
-    if (!CART_STATUSES.includes(statusNormalized)) {
+    if (!POS_CART_STATUSES.includes(statusNormalized)) {
       return res.status(400).json({
         success: false,
-        message: `Status must be one of: ${CART_STATUSES.join(', ')}`,
+        message: `Status must be one of: ${POS_CART_STATUSES.join(', ')}`,
       });
     }
 
@@ -1563,6 +1540,8 @@ const deleteCartSession = async (req, res) => {
 };
 
 module.exports = {
+  mapCartSessionSummary,
+  flattenCartItems,
   createCartSession,
   getCartSessions,
   getCartSessionDetail,

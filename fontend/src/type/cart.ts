@@ -39,12 +39,18 @@ export interface CartSessionSummary {
   sessionId: string;
   cartNumber?: number;
   shopId?: string;
+  branchId?: string;
   status: CartStatus;
   itemCount: number;
   totalAmount: number;
   orderType?: CartOrderType | null;
   tableId?: string | null;
   orderLabel?: string;
+  /** 'customer_qr' when the cart started as a customer manual order. */
+  source?: 'pos' | 'customer_qr';
+  customerPhone?: string;
+  customerName?: string;
+  customerTableNumber?: string;
   createdAt: string;
   updatedAt: string;
 }

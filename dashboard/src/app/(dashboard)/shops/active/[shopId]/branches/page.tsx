@@ -22,7 +22,9 @@ import {
 } from '@mui/material';
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import RestaurantMenuOutlinedIcon from '@mui/icons-material/RestaurantMenuOutlined';
 import axios from 'axios';
 import DashboardShell from '@/components/layout/DashboardShell';
 import { fetchActiveShopBranches } from '@/lib/api/shops';
@@ -51,6 +53,10 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
     return error.message;
   }
   return fallback;
+}
+
+function customerOrderPath(shopId: string, branchId: string, suffix = ''): string {
+  return `/order/${encodeURIComponent(shopId)}/${encodeURIComponent(branchId)}${suffix}`;
 }
 
 function StatCard({
@@ -213,6 +219,12 @@ export default function ActiveShopBranchesPage() {
         </Alert>
       ) : null}
 
+      <Alert severity="info" sx={{ mb: 2 }}>
+        <strong>Place order</strong> opens the same page a customer reaches by scanning the
+        branch QR — use it to test orders without a phone. The shop needs the{' '}
+        <strong>Manual order</strong> module enabled.
+      </Alert>
+
       <Card sx={{ borderRadius: 3, overflow: 'hidden' }}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -234,6 +246,7 @@ export default function ActiveShopBranchesPage() {
                   <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Created</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Customer order</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -260,6 +273,32 @@ export default function ActiveShopBranchesPage() {
                       />
                     </TableCell>
                     <TableCell>{formatDate(branch.createdAt)}</TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={1}>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          startIcon={<RestaurantMenuOutlinedIcon />}
+                          onClick={() =>
+                            window.open(customerOrderPath(shopId, branch.branchId), '_blank')
+                          }
+                          sx={{ borderRadius: 2, whiteSpace: 'nowrap' }}
+                        >
+                          Place order
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<QrCode2OutlinedIcon />}
+                          onClick={() =>
+                            window.open(customerOrderPath(shopId, branch.branchId, '/qr'), '_blank')
+                          }
+                          sx={{ borderRadius: 2, whiteSpace: 'nowrap' }}
+                        >
+                          QR
+                        </Button>
+                      </Stack>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

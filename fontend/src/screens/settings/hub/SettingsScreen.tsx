@@ -499,6 +499,15 @@ export default function SettingsScreen({ navigation }: Props) {
       onPress: () => navigation.navigate('ProductDemand'),
     },
     {
+      key: 'recommendations',
+      title: 'Recommendations',
+      description: 'Buy-together patterns behind the suggestions customers see',
+      icon: 'sparkles-outline',
+      iconBg: '#e0e7ff',
+      iconColor: '#4338ca',
+      onPress: () => navigation.navigate('Recommendations'),
+    },
+    {
       key: 'reports',
       title: 'Reports',
       description: 'Sales summaries, exports & business reports',

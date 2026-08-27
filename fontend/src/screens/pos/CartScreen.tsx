@@ -458,6 +458,12 @@ export default function CartScreen({ navigation }: Props) {
     [addedSessions, shopId],
   );
 
+  /** Selected cart, used to prefill customer details from a QR manual order. */
+  const selectedAddedSession = useMemo(
+    () => shopAddedSessions.find((session) => session.sessionId === sessionId) ?? null,
+    [shopAddedSessions, sessionId],
+  );
+
   const cartOrderStatusLabel = useMemo(
     () =>
       isRestaurant
@@ -940,11 +946,19 @@ export default function CartScreen({ navigation }: Props) {
 
     setSelectedPaymentMethod('cash');
     setSelectedSalesPersonId(null);
-    setCustomerName('');
-    setCustomerPhone('');
+    // Carts that started as customer QR orders already carry the customer's details.
+    setCustomerName(selectedAddedSession?.customerName ?? '');
+    setCustomerPhone(selectedAddedSession?.customerPhone ?? '');
     setPaymentModalVisible(true);
     void loadSalePersons();
-  }, [buildCheckoutPayload, checkoutLoading, items.length, loadSalePersons, sessionId]);
+  }, [
+    buildCheckoutPayload,
+    checkoutLoading,
+    items.length,
+    loadSalePersons,
+    selectedAddedSession,
+    sessionId,
+  ]);
 
   const handleConfirmCheckout = useCallback(async () => {
     if (!sessionId || items.length === 0 || checkoutLoading) return;

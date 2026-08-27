@@ -1,3 +1,5 @@
+import type { NavigatorScreenParams } from '@react-navigation/native';
+import type { MainBottomTabParamList } from './MainBottomTabParamList';
 import type { Category } from '../type/category';
 import type { InventoryProductFormParams } from '../type/inventory';
 import type {
@@ -34,8 +36,10 @@ export type RootStackParamList = {
     shopId?: string;
   };
   SignUpScreen: undefined;
-  PosMain: undefined;
+  PosMain: NavigatorScreenParams<MainBottomTabParamList> | undefined;
   ManageCatogory: undefined;
+  ManualOrders: undefined;
+  BranchOrderQr: undefined;
   ManageInventory: undefined;
   ManageEmployees: undefined;
   AddEmployee: { salePersonId?: string } | undefined;
@@ -75,6 +79,7 @@ export type RootStackParamList = {
   ThemePreference: undefined;
   UserBehavior: undefined;
   ProductDemand: undefined;
+  Recommendations: undefined;
   PrinterConnection: { printerRole?: 'receipt' | 'kitchen' } | undefined;
   ChangeSubscription: undefined;
   SubscriptionPayments: undefined;

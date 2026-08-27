@@ -43,6 +43,7 @@ import ManageUserFormScreen from '../screens/settings/paymentAndFeature/manageAc
 import ThemePreferenceScreen from '../screens/settings/preferences/theme/ThemePreferenceScreen';
 import UserBehaviorScreen from '../screens/settings/userBehavior/UserBehaviorScreen';
 import ProductDemandScreen from '../screens/settings/productDemand/ProductDemandScreen';
+import RecommendationsScreen from '../screens/settings/recommendations/RecommendationsScreen';
 import PrinterConnectionScreen from '../screens/settings/paymentAndFeature/receiptPrinter/PrinterConnectionScreen';
 import SubscriptionPaymentsScreen from '../screens/settings/paymentAndFeature/payment/SubscriptionPaymentsScreen';
 import ChangeSubscriptionScreen from '../screens/settings/paymentAndFeature/changeSubscription/ChangeSubscriptionScreen';
@@ -53,6 +54,8 @@ import UnassignedOrderDetailScreen from '../screens/kpi/unassignedOrder/Unassign
 import ManageCatogoryScreen from '../screens/pos/ManageCatogory/ManageCatogoryScreen';
 import CreateCatogoryScreen from '../screens/pos/ManageCatogory/CreateCatogoryScreen';
 import ManageInventoryScreen from '../screens/pos/ManageInventory/ManageInventoryScreen';
+import ManualOrdersScreen from '../screens/pos/manualOrders/ManualOrdersScreen';
+import BranchOrderQrScreen from '../screens/pos/manualOrders/BranchOrderQrScreen';
 import { AddProductScreen, EditProductScreen } from '../screens/pos/ManageInventory/ProductFormScreen';
 import ManageEmployeesScreen from '../screens/pos/ManageEmployes/ManageEmployeesScreen';
 import AddEmployeeScreen from '../screens/pos/ManageEmployes/AddEmployeeScreen';
@@ -110,6 +113,8 @@ export default function AppNavigator() {
         <Stack.Screen name="PosMain" component={MainBottomTabNavigator} />
         <Stack.Screen name="ManageCatogory" component={ManageCatogoryScreen} />
         <Stack.Screen name="ManageInventory" component={ManageInventoryScreen} />
+        <Stack.Screen name="ManualOrders" component={ManualOrdersScreen} />
+        <Stack.Screen name="BranchOrderQr" component={BranchOrderQrScreen} />
         <Stack.Screen name="ManageEmployees" component={ManageEmployeesScreen} />
         <Stack.Screen name="AddEmployee" component={AddEmployeeScreen} />
         <Stack.Screen name="AddProduct" component={AddProductScreen} />
@@ -134,6 +139,7 @@ export default function AppNavigator() {
         <Stack.Screen name="ThemePreference" component={ThemePreferenceScreen} />
         <Stack.Screen name="UserBehavior" component={UserBehaviorScreen} />
         <Stack.Screen name="ProductDemand" component={ProductDemandScreen} />
+        <Stack.Screen name="Recommendations" component={RecommendationsScreen} />
         <Stack.Screen name="PrinterConnection" component={PrinterConnectionScreen} />
         <Stack.Screen name="ChangeSubscription" component={ChangeSubscriptionScreen} />
         <Stack.Screen name="SubscriptionPayments" component={SubscriptionPaymentsScreen} />

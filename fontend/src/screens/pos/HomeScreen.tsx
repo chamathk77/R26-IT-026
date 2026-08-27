@@ -25,7 +25,7 @@ import TablePickerGrid from '../../components/restaurant/TablePickerGrid';
 import TableOrderDetailModal from '../../components/restaurant/TableOrderDetailModal';
 import { useShopIndustry } from '../../hooks/useShopIndustry';
 import { hasTableManagement } from '../../utils/industryHelper';
-import { hasQuotationsModule } from '../../utils/featureHelper';
+import { hasCustomerManualOrder, hasQuotationsModule } from '../../utils/featureHelper';
 import { refreshShopModuleFlags } from '../../utils/refreshShopModuleFlags';
 import { ShopTable, TablePickerItem, toTablePickerItems } from '../../type/table';
 import { fetchTables_Service } from '../../services/TableService';
@@ -39,6 +39,7 @@ import {
   fetchAllSalesSummaryDashboard_Service,
   fetchBranchLoggedUserDashboard_Service,
 } from '../../services/HomeStatsService';
+import { fetchManualOrderCount_Service } from '../../services/ManualOrderService';
 import { AllSalesSummaryDashboard, TodaySalesStats } from '../../type/dashboard';
 import {
   getApiErrorMessage,
@@ -46,6 +47,9 @@ import {
 } from '../../utils/apiErrorAlert';
 
 type Props = BottomTabScreenProps<MainBottomTabParamList, 'Home'>;
+
+/** How often Home re-checks for new customer QR orders while focused. */
+const MANUAL_ORDER_POLL_MS = 20000;
 
 const EMPTY_USER_STATS: TodaySalesStats = { totalSales: 0, orderCount: 0 };
 const EMPTY_ALL_SUMMARY: AllSalesSummaryDashboard = {
@@ -176,6 +180,10 @@ export default function HomeScreen({ navigation }: Props) {
   const showTablePicker = hasTableManagement(shop);
   const showOwnerSummary = isOwner(userRole);
   const showQuotationsModule = hasQuotationsModule(shop);
+  const showManualOrders = hasCustomerManualOrder(shop);
+  const manualOrderCount = useSelector(
+    (state: RootState) => state.ManualOrderReducer.pendingCount.count,
+  );
 
   const [tableItems, setTableItems] = useState<TablePickerItem[]>([]);
   const [tablesLoading, setTablesLoading] = useState(false);
@@ -275,6 +283,16 @@ export default function HomeScreen({ navigation }: Props) {
       setTablesLoading(false);
     }
   }, [dispatch, showTablePicker, show_Alert]);
+
+  const loadManualOrderCount = useCallback(async () => {
+    if (!showManualOrders) return;
+
+    try {
+      await dispatch(fetchManualOrderCount_Service()).unwrap();
+    } catch {
+      // Badge is best-effort; failures must not block the dashboard.
+    }
+  }, [dispatch, showManualOrders]);
 
   const handleTablePress = useCallback((table: TablePickerItem) => {
     setSelectedTable(table);
@@ -376,18 +394,29 @@ export default function HomeScreen({ navigation }: Props) {
         refreshShopModuleFlags(dispatch),
         loadDashboardStats({ silent: true }),
         loadTables(),
+        loadManualOrderCount(),
       ]);
     } finally {
       setRefreshing(false);
     }
-  }, [dispatch, loadDashboardStats, loadTables]);
+  }, [dispatch, loadDashboardStats, loadManualOrderCount, loadTables]);
 
   useFocusEffect(
     useCallback(() => {
       void refreshShopModuleFlags(dispatch);
       void loadDashboardStats();
       void loadTables();
-    }, [dispatch, loadDashboardStats, loadTables]),
+      void loadManualOrderCount();
+
+      if (!showManualOrders) return;
+
+      // New customer orders arrive without a push channel — poll while Home is open.
+      const interval = setInterval(() => {
+        void loadManualOrderCount();
+      }, MANUAL_ORDER_POLL_MS);
+
+      return () => clearInterval(interval);
+    }, [dispatch, loadDashboardStats, loadManualOrderCount, loadTables, showManualOrders]),
   );
 
   const confirmLogout = () => {
@@ -617,6 +646,53 @@ export default function HomeScreen({ navigation }: Props) {
             </View>
           ) : null}
 
+          {showManualOrders ? (
+            <View style={styles.manualOrderRow}>
+              <TouchableOpacity
+                style={[
+                  styles.manualOrderBtn,
+                  { backgroundColor: '#fef3c7', borderColor: '#b45309' },
+                ]}
+                onPress={() => {
+                  if (navigationRef.isReady()) {
+                    navigationRef.navigate('ManualOrders');
+                  }
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  manualOrderCount > 0
+                    ? `See manual orders, ${manualOrderCount} waiting`
+                    : 'See manual orders'
+                }
+              >
+                <Ionicons name="receipt-outline" size={18} color="#b45309" />
+                <Text style={[styles.manualOrderBtnText, { color: '#b45309' }]}>
+                  See manual orders
+                </Text>
+                {manualOrderCount > 0 ? (
+                  <View style={styles.manualOrderBadge}>
+                    <Text style={styles.manualOrderBadgeText}>
+                      {manualOrderCount > 99 ? '99+' : manualOrderCount}
+                    </Text>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.manualOrderQrBtn, { backgroundColor: '#fef3c7', borderColor: '#b45309' }]}
+                onPress={() => {
+                  if (navigationRef.isReady()) {
+                    navigationRef.navigate('BranchOrderQr');
+                  }
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Show branch order QR code"
+              >
+                <Ionicons name="qr-code-outline" size={20} color="#b45309" />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           {showQuotationsModule ? (
             <TouchableOpacity
               style={[styles.manageInventoryBtn, { backgroundColor: '#e0f2fe', borderColor: '#0369a1' }]}
@@ -832,6 +908,47 @@ const styles = StyleSheet.create({
     fontFamily: fonts.PoppinsRegular,
     fontSize: 12,
     lineHeight: 16,
+  },
+  manualOrderRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  manualOrderBtn: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    borderWidth: 2,
+  },
+  manualOrderBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 15,
+  },
+  manualOrderBadge: {
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    backgroundColor: '#dc2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  manualOrderBadgeText: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 12,
+    color: '#ffffff',
+  },
+  manualOrderQrBtn: {
+    width: 52,
+    borderRadius: 14,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   manageCategoryBtn: {
     marginTop: 10,

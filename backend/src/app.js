@@ -7,6 +7,8 @@ const productRoutes = require('./routes/productRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const restaurantRoutes = require('./routes/restaurant');
 const cartRoutes = require('./routes/cartRoutes');
+const manualOrderRoutes = require('./routes/manualOrderRoutes');
+const customerOrderRoutes = require('./routes/customerOrderRoutes');
 const historyRoutes = require('./routes/historyRoutes');
 const shopsDataRoutes = require('./routes/shopsDataRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
@@ -21,6 +23,7 @@ const analyticsRoutes = require('./routes/analyticsRoutes');
 const forecastRoutes = require('./novelty/novelty01Forecasting/forecastRoutes');
 const customerBehaviorRoutes = require('./novelty/novelty02CustomerBehavior/behaviorRoutes');
 const productDemandRoutes = require('./novelty/novelty03ProductDemand/productDemandRoutes');
+const recommendationRoutes = require('./novelty/novelty04RecommendationSystem/recommendationRoutes');
 const receiptRoutes = require('./routes/receiptRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -42,6 +45,9 @@ app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api', restaurantRoutes);
 app.use('/api/cart', cartRoutes);
+app.use('/api/manual-orders', manualOrderRoutes);
+// Public (no auth) — customer QR menu + order placement.
+app.use('/api/customer-orders', customerOrderRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/shops', shopsDataRoutes);
 app.use('/api/payments', paymentRoutes);
@@ -56,6 +62,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/forecast', forecastRoutes);
 app.use('/api/customer-behavior', customerBehaviorRoutes);
 app.use('/api/product-demand', productDemandRoutes);
+app.use('/api/recommendations', recommendationRoutes);
 app.use('/receipt', receiptRoutes);
 app.use('/api', routes);
 

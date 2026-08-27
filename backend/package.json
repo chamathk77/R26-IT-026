@@ -17,6 +17,7 @@
     "migrate:customer-past-orders": "node src/scripts/backfillCustomerPastOrders.js",
     "seed:forecast": "node src/novelty/novelty01Forecasting/seed/seedForecastData.js",
     "seed:customer-behavior": "node src/novelty/novelty02CustomerBehavior/seed/seedCustomerData.js",
+    "seed:recommendations": "node src/novelty/novelty04RecommendationSystem/seed/seedRecommendationData.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
