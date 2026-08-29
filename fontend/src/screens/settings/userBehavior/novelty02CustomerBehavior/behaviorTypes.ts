@@ -59,11 +59,21 @@ export interface ProductRankings {
   slowProducts: ProductRankingEntry[];
 }
 
+export interface TrendPoint {
+  label: string;
+  sales: number;
+  orders: number;
+  rollingAvg?: number;
+}
+
 export interface SalesTrend {
   direction: 'increasing' | 'decreasing' | 'stable' | 'unknown';
   monthlyChangePercent: number;
   monthsAnalyzed: number;
   method?: string;
+  baselineAverage?: number;
+  target?: number;
+  points?: TrendPoint[];
 }
 
 export interface CustomerSegment {
@@ -107,6 +117,15 @@ export interface BehaviorInsight {
   text: string;
 }
 
+export interface UpcomingSellingItem {
+  productId: string | null;
+  productName: string;
+  demandLevel: 'very_high' | 'high' | 'steady';
+  peakWindow: string;
+  expectedShiftQty: string;
+  prepAdvice: string;
+}
+
 export interface CustomerBehaviorData {
   generatedAt: string;
   lookbackDays: number;
@@ -116,6 +135,7 @@ export interface CustomerBehaviorData {
   productRankings: ProductRankings | null;
   salesTrend: SalesTrend | null;
   customerSegments: CustomerSegments | null;
+  upcomingSellingItems?: UpcomingSellingItem[];
   identifiedOrderSharePercent?: number;
   insights: BehaviorInsight[];
 }

@@ -213,9 +213,61 @@ function computeProductRankings(orders, products, options = {}) {
  * level so "increasing" means something proportional, not just slope > 0 on
  * tiny numbers.
  */
-function computeSalesTrend(monthlySeries) {
+function computeSalesTrend(monthlySeries, orders = [], lookbackDays = 180) {
+  let points = [];
+
+  if (lookbackDays <= 14 && orders && orders.length > 0) {
+    const dailyMap = new Map();
+    for (const order of orders) {
+      const d = new Date(order.checkOutTime).toLocaleDateString('en-US', {
+        month: 'numeric',
+        day: 'numeric',
+        timeZone: REPORTING_TIMEZONE,
+      });
+      if (!dailyMap.has(d)) {
+        dailyMap.set(d, { label: d, sales: 0, orders: 0 });
+      }
+      const entry = dailyMap.get(d);
+      entry.sales += order.totalAmount ?? 0;
+      entry.orders += 1;
+    }
+    points = Array.from(dailyMap.values()).map((p) => ({ ...p, sales: round2(p.sales) }));
+  } else if (monthlySeries && monthlySeries.length > 0) {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    points = monthlySeries.map((row) => {
+      const parts = (row.month || '').split('-');
+      const monthIdx = parts[1] ? parseInt(parts[1], 10) - 1 : -1;
+      const label = monthIdx >= 0 && monthIdx < 12 ? monthNames[monthIdx] : row.month;
+      return {
+        label,
+        sales: round2(row.sales ?? 0),
+        orders: row.orders ?? 0,
+      };
+    });
+  }
+
+  // Calculate rolling moving average for each point
+  const windowSize = Math.min(3, points.length);
+  for (let i = 0; i < points.length; i++) {
+    const start = Math.max(0, i - windowSize + 1);
+    const subset = points.slice(start, i + 1);
+    const sum = subset.reduce((acc, p) => acc + p.sales, 0);
+    points[i].rollingAvg = round2(sum / subset.length);
+  }
+
+  const salesValues = points.map((p) => p.sales);
+  const baselineAverage = salesValues.length > 0 ? round2(mean(salesValues)) : 0;
+  const target = baselineAverage > 0 ? round2(baselineAverage * 1.12) : 100;
+
   if (!monthlySeries || monthlySeries.length < 3) {
-    return { direction: 'unknown', monthlyChangePercent: 0, monthsAnalyzed: monthlySeries?.length ?? 0 };
+    return {
+      direction: 'unknown',
+      monthlyChangePercent: 0,
+      monthsAnalyzed: monthlySeries?.length ?? 0,
+      baselineAverage,
+      target,
+      points,
+    };
   }
 
   const salesSeries = monthlySeries.map((row) => row.sales);
@@ -232,6 +284,9 @@ function computeSalesTrend(monthlySeries) {
     monthlyChangePercent,
     monthsAnalyzed: monthlySeries.length,
     method: 'linear_regression',
+    baselineAverage,
+    target,
+    points,
   };
 }
 
@@ -251,23 +306,26 @@ function describeDataQuality(orders, lookbackDays) {
     };
   }
 
-  if (ordersAnalyzed < MIN_ORDERS_FOR_PATTERNS || distinctDays < 7) {
+  const minOrders = lookbackDays <= 3 ? 1 : lookbackDays <= 7 ? 3 : lookbackDays <= 14 ? 5 : MIN_ORDERS_FOR_PATTERNS;
+  const minDays = lookbackDays <= 3 ? 1 : lookbackDays <= 7 ? 2 : lookbackDays <= 14 ? 3 : 7;
+
+  if (ordersAnalyzed < minOrders || (lookbackDays > 3 && distinctDays < minDays)) {
     return {
       level: 'insufficient',
       ordersAnalyzed,
       daysOfHistory: distinctDays,
       lookbackDays,
-      message: `Only ${ordersAnalyzed} order(s) across ${distinctDays} day(s) so far. At least ${MIN_ORDERS_FOR_PATTERNS} orders across a week are needed for reliable patterns.`,
+      message: `Only ${ordersAnalyzed} order(s) in the selected ${lookbackDays}-day period. More orders are needed for reliable insights.`,
     };
   }
 
-  if (distinctDays < 30) {
+  if (distinctDays < Math.min(30, lookbackDays)) {
     return {
       level: 'limited',
       ordersAnalyzed,
       daysOfHistory: distinctDays,
       lookbackDays,
-      message: `Based on ${ordersAnalyzed} orders across ${distinctDays} days. Patterns will sharpen with a full month or more of history.`,
+      message: `Based on ${ordersAnalyzed} order(s) across ${distinctDays} day(s) in this ${lookbackDays}-day period.`,
     };
   }
 
@@ -371,6 +429,74 @@ function generateInsights({ hourly, daily, products, trend, segments, identified
   return insights;
 }
 
+/**
+ * Identifies high-demand items expected to sell during upcoming business hours
+ * based on learned time-of-day purchase patterns.
+ */
+function computeUpcomingSellingItems(orders, products, timezone = REPORTING_TIMEZONE) {
+  if (!orders || orders.length === 0 || !products || products.length === 0) {
+    return [];
+  }
+
+  const currentHour = localHour(new Date(), timezone);
+  const windowHours = Array.from({ length: 6 }, (_, i) => (currentHour + i) % 24);
+  const windowSet = new Set(windowHours);
+
+  const windowOrders = orders.filter((order) => {
+    const h = localHour(new Date(order.checkOutTime), timezone);
+    return windowSet.has(h);
+  });
+
+  const pool = windowOrders.length >= 3 ? windowOrders : orders;
+  const productDemandMap = new Map();
+
+  for (const order of pool) {
+    for (const item of order.items ?? []) {
+      const key = item.productId ? String(item.productId) : `name:${item.productName}`;
+      if (!productDemandMap.has(key)) {
+        productDemandMap.set(key, {
+          productId: item.productId ?? null,
+          productName: item.productName,
+          totalQty: 0,
+          orderCount: 0,
+        });
+      }
+      const entry = productDemandMap.get(key);
+      entry.totalQty += item.qty ?? 0;
+      entry.orderCount += 1;
+    }
+  }
+
+  const sorted = Array.from(productDemandMap.values())
+    .sort((a, b) => b.totalQty - a.totalQty)
+    .slice(0, 4);
+
+  const startLabel = hourRangeLabel(currentHour).split('–')[0];
+  const endLabel = hourRangeLabel((currentHour + 5) % 24).split('–')[1];
+  const windowStr = `${startLabel} – ${endLabel}`;
+
+  return sorted.map((item, idx) => {
+    const demandLevel = idx === 0 ? 'very_high' : idx === 1 ? 'high' : 'steady';
+    const distinctDaysCount = Math.max(1, new Set(orders.map((o) => new Date(o.checkOutTime).toISOString().slice(0, 10))).size);
+    const avgDailyQty = Math.max(1, Math.round(item.totalQty / distinctDaysCount));
+    const minQty = Math.max(1, Math.round(avgDailyQty * 0.7));
+    const maxQty = Math.max(minQty + 1, Math.round(avgDailyQty * 1.3));
+
+    return {
+      productId: item.productId,
+      productName: item.productName,
+      demandLevel,
+      peakWindow: windowStr,
+      expectedShiftQty: `${minQty}–${maxQty} units`,
+      prepAdvice: idx === 0
+        ? `Top-selling item during the ${windowStr} window. Ensure kitchen preps before peak surge.`
+        : idx === 1
+        ? `High customer demand expected in this shift. Check inventory and prep station.`
+        : `Steady seller during upcoming hours. Keep standard prep levels.`,
+    };
+  });
+}
+
 module.exports = {
   computeHourlyPattern,
   computeDailyPattern,
@@ -378,5 +504,6 @@ module.exports = {
   computeSalesTrend,
   describeDataQuality,
   generateInsights,
+  computeUpcomingSellingItems,
   MIN_ORDERS_FOR_PATTERNS,
 };

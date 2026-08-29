@@ -11,12 +11,17 @@ function isHttpSuccess(status: number): boolean {
  * Deliberately plain (no Redux slice), matching novelty01's forecastService —
  * keeps this novelty conflict-free to merge alongside the others.
  */
-export async function fetchCustomerBehaviorInsights(): Promise<CustomerBehaviorData> {
+export async function fetchCustomerBehaviorInsights(
+  lookbackDays?: number,
+): Promise<CustomerBehaviorData> {
   try {
     await ensureInternetConnection();
 
     const response = await apiClient.get<GetCustomerBehaviorInsightsResponse>(
       '/api/customer-behavior/insights',
+      {
+        params: lookbackDays ? { lookbackDays } : undefined,
+      },
     );
 
     if (isHttpSuccess(response.status) && response.data?.success) {

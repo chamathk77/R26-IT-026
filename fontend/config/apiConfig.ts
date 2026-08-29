@@ -51,6 +51,10 @@ function resolveDevMachineHost(): string | undefined {
 }
 
 function resolveLocalDevApiBaseUrl(): string {
+  if (Platform.OS === 'web') {
+    return `http://localhost:${LOCAL_BACKEND_PORT}`;
+  }
+
   const explicitDevUrl = trimEnv(process.env.EXPO_PUBLIC_DEV_API_URL);
 
   const devMachineHost = resolveDevMachineHost();

@@ -11,6 +11,7 @@ const {
   computeSalesTrend,
   describeDataQuality,
   generateInsights,
+  computeUpcomingSellingItems,
 } = require('./behaviorEngine');
 const { computeCustomerSegmentsViaMl } = require('./segmentClientViaMl');
 
@@ -49,8 +50,10 @@ const getCustomerBehaviorInsights = async (req, res) => {
     if (!context) return;
     const { shopId, branchId } = context;
 
-    const [{ orders, lookbackDays }, customers, products, monthlySeries] = await Promise.all([
-      getRecentOrders(shopId, branchId),
+    const lookbackDays = Math.max(1, Math.min(730, Number(req.query.lookbackDays) || 180));
+
+    const [{ orders }, customers, products, monthlySeries] = await Promise.all([
+      getRecentOrders(shopId, branchId, { lookbackDays }),
       getShopCustomers(shopId),
       getShopProducts(shopId),
       getSalesTrendSeries(shopId, branchId),
@@ -81,7 +84,7 @@ const getCustomerBehaviorInsights = async (req, res) => {
     const hourly = computeHourlyPattern(orders);
     const daily = computeDailyPattern(orders);
     const products_ = computeProductRankings(orders, products);
-    const trend = computeSalesTrend(monthlySeries);
+    const trend = computeSalesTrend(monthlySeries, orders, lookbackDays);
     const segments = await computeCustomerSegmentsViaMl(customers);
 
     const identifiedOrders = orders.filter((order) => order.customerMobile).length;
@@ -96,6 +99,8 @@ const getCustomerBehaviorInsights = async (req, res) => {
       identifiedShare,
     });
 
+    const upcoming = computeUpcomingSellingItems(orders, products);
+
     return res.status(200).json({
       success: true,
       shopId,
@@ -109,6 +114,7 @@ const getCustomerBehaviorInsights = async (req, res) => {
         productRankings: products_,
         salesTrend: trend,
         customerSegments: segments,
+        upcomingSellingItems: upcoming,
         identifiedOrderSharePercent: identifiedShare,
         insights,
       },
