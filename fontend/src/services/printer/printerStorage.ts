@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import { safeDeleteItem, safeGetItem, safeSetItem } from '../../utils/safeSecureStorage';
 import type { PrinterConfig, PrinterRole } from './printerTypes';
 import { DEFAULT_PRINTER_PORT } from './printerTypes';
 
@@ -55,20 +55,20 @@ export async function savePrinterConfig(
   role: PrinterRole,
   config: PrinterConfig,
 ): Promise<void> {
-  await SecureStore.setItemAsync(STORAGE_KEYS[role], JSON.stringify(config));
+  await safeSetItem(STORAGE_KEYS[role], JSON.stringify(config));
 }
 
 export async function getSavedPrinterConfig(
   role: PrinterRole,
 ): Promise<PrinterConfig | null> {
-  const raw = await SecureStore.getItemAsync(STORAGE_KEYS[role]);
+  const raw = await safeGetItem(STORAGE_KEYS[role]);
   if (raw) {
     return parseStoredConfig(raw);
   }
 
   // Migrate legacy single-printer config to receipt role.
   if (role === 'receipt') {
-    const legacyRaw = await SecureStore.getItemAsync(LEGACY_STORAGE_KEY);
+    const legacyRaw = await safeGetItem(LEGACY_STORAGE_KEY);
     if (!legacyRaw) {
       return null;
     }
@@ -76,7 +76,7 @@ export async function getSavedPrinterConfig(
     const migrated = parseStoredConfig(legacyRaw);
     if (migrated) {
       await savePrinterConfig('receipt', migrated);
-      await SecureStore.deleteItemAsync(LEGACY_STORAGE_KEY);
+      await safeDeleteItem(LEGACY_STORAGE_KEY);
     }
     return migrated;
   }
@@ -85,12 +85,12 @@ export async function getSavedPrinterConfig(
 }
 
 export async function clearSavedPrinterConfig(role: PrinterRole): Promise<void> {
-  await SecureStore.deleteItemAsync(STORAGE_KEYS[role]);
+  await safeDeleteItem(STORAGE_KEYS[role]);
 }
 
 /** When false, checkout must not auto-reconnect after the user taps Disconnect. */
 export async function isPrinterPrintingEnabled(role: PrinterRole): Promise<boolean> {
-  const raw = await SecureStore.getItemAsync(ENABLED_KEYS[role]);
+  const raw = await safeGetItem(ENABLED_KEYS[role]);
   if (raw == null) {
     return true;
   }
@@ -101,5 +101,5 @@ export async function setPrinterPrintingEnabled(
   role: PrinterRole,
   enabled: boolean,
 ): Promise<void> {
-  await SecureStore.setItemAsync(ENABLED_KEYS[role], enabled ? 'true' : 'false');
+  await safeSetItem(ENABLED_KEYS[role], enabled ? 'true' : 'false');
 }
