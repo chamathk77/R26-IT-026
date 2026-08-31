@@ -56,8 +56,12 @@ async function getShopProducts(shopId) {
 /** Reuses novelty01's monthly sales aggregation so trend detection doesn't duplicate that query. */
 async function getSalesTrendSeries(shopId, branchId, options = {}) {
   const lookbackMonths = options.lookbackMonths ?? DEFAULT_TREND_LOOKBACK_MONTHS;
-  const series = await getMonthlySeries(shopId, branchId, { lookbackMonths, now: options.now });
-  return series.months.filter((row) => !row.partial);
+  const series = await getMonthlySeries(shopId, branchId, {
+    lookbackMonths,
+    keepEmptyMonths: true,
+    now: options.now,
+  });
+  return series.months;
 }
 
 module.exports = {
