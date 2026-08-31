@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Modal,
   Pressable,
@@ -546,6 +547,7 @@ export default function CustomerBehaviorSection() {
     try {
       const result = await fetchCustomerBehaviorInsights(days);
       setData(result);
+      setSelectedTrendPoint(null);
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'Could not load customer behavior insights. Please try again.'));
     } finally {
@@ -567,20 +569,36 @@ export default function CustomerBehaviorSection() {
     setShowPrintModal(true);
   };
 
-  const handleSharePdf = () => {
-    setShowPrintModal(true);
-  };
+  const [isProcessingPrint, setIsProcessingPrint] = useState(false);
 
   const executePrintA4 = () => {
-    if (!data) return;
+    if (!data || isProcessingPrint) return;
+    setIsProcessingPrint(true);
     setShowPrintModal(false);
-    void printCustomerBehaviorA4Report(data, undefined, printOptions);
+    setTimeout(async () => {
+      try {
+        await printCustomerBehaviorA4Report(data, undefined, printOptions);
+      } catch (err: unknown) {
+        console.warn('executePrintA4 error:', err);
+      } finally {
+        setIsProcessingPrint(false);
+      }
+    }, 350);
   };
 
   const executeSharePdf = () => {
-    if (!data) return;
+    if (!data || isProcessingPrint) return;
+    setIsProcessingPrint(true);
     setShowPrintModal(false);
-    void shareCustomerBehaviorPdfReport(data, undefined, printOptions);
+    setTimeout(async () => {
+      try {
+        await shareCustomerBehaviorPdfReport(data, undefined, printOptions);
+      } catch (err: unknown) {
+        console.warn('executeSharePdf error:', err);
+      } finally {
+        setIsProcessingPrint(false);
+      }
+    }, 350);
   };
 
   const togglePrintOption = (key: keyof ReportPrintOptions) => {

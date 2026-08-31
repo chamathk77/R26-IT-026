@@ -51,12 +51,13 @@ const getCustomerBehaviorInsights = async (req, res) => {
     const { shopId, branchId } = context;
 
     const lookbackDays = Math.max(1, Math.min(730, Number(req.query.lookbackDays) || 180));
+    const lookbackMonths = lookbackDays >= 210 ? 12 : lookbackDays >= 60 ? 6 : Math.max(1, Math.ceil(lookbackDays / 30));
 
     const [{ orders }, customers, products, monthlySeries] = await Promise.all([
       getRecentOrders(shopId, branchId, { lookbackDays }),
       getShopCustomers(shopId),
       getShopProducts(shopId),
-      getSalesTrendSeries(shopId, branchId),
+      getSalesTrendSeries(shopId, branchId, { lookbackMonths }),
     ]);
 
     const dataQuality = describeDataQuality(orders, lookbackDays);

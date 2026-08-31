@@ -211,37 +211,107 @@ function computeProductRankings(orders, products, options = {}) {
 /**
  * OLS trend fit (trendUtils.js) classified against the series' own average
  * level so "increasing" means something proportional, not just slope > 0 on
- * tiny numbers.
+ * tiny numbers. Dynamically supports all timeframe filters (1D, 3D, 7D, 2W, 1M, 6M, 1Y).
  */
-function computeSalesTrend(monthlySeries, orders = [], lookbackDays = 180) {
+function computeSalesTrend(monthlySeries = [], orders = [], lookbackDays = 180) {
   let points = [];
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-  if (lookbackDays <= 14 && orders && orders.length > 0) {
-    const dailyMap = new Map();
+  if (lookbackDays === 1) {
+    // 1 Day (Today): 8 time slots across daytime business hours
+    const slotHours = [8, 10, 12, 14, 16, 18, 20, 22];
+    const slotLabels = ['8am', '10am', '12pm', '2pm', '4pm', '6pm', '8pm', '10pm'];
+    const slotData = slotLabels.map((label) => ({ label, sales: 0, orders: 0 }));
+
     for (const order of orders) {
-      const d = new Date(order.checkOutTime).toLocaleDateString('en-US', {
-        month: 'numeric',
-        day: 'numeric',
-        timeZone: REPORTING_TIMEZONE,
-      });
-      if (!dailyMap.has(d)) {
-        dailyMap.set(d, { label: d, sales: 0, orders: 0 });
+      const h = localHour(new Date(order.checkOutTime), REPORTING_TIMEZONE);
+      let slotIdx = slotHours.findIndex((sh) => h < sh + 2);
+      if (slotIdx === -1) slotIdx = slotHours.length - 1;
+      if (h < 8) slotIdx = 0;
+      slotData[slotIdx].sales += order.totalAmount ?? 0;
+      slotData[slotIdx].orders += 1;
+    }
+    points = slotData.map((p) => ({ ...p, sales: round2(p.sales) }));
+  } else if (lookbackDays <= 7) {
+    // 3D / 7D: Daily points for each day in range
+    const now = new Date();
+    const dailyMap = new Map();
+
+    for (let i = lookbackDays - 1; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 86400000);
+      const isoDate = new Intl.DateTimeFormat('en-CA', { timeZone: REPORTING_TIMEZONE }).format(d);
+      const label =
+        lookbackDays <= 3
+          ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: REPORTING_TIMEZONE }).format(d)
+          : new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: REPORTING_TIMEZONE }).format(d);
+      dailyMap.set(isoDate, { label, sales: 0, orders: 0 });
+    }
+
+    for (const order of orders) {
+      const isoDate = new Intl.DateTimeFormat('en-CA', { timeZone: REPORTING_TIMEZONE }).format(new Date(order.checkOutTime));
+      if (dailyMap.has(isoDate)) {
+        const entry = dailyMap.get(isoDate);
+        entry.sales += order.totalAmount ?? 0;
+        entry.orders += 1;
       }
-      const entry = dailyMap.get(d);
-      entry.sales += order.totalAmount ?? 0;
-      entry.orders += 1;
     }
     points = Array.from(dailyMap.values()).map((p) => ({ ...p, sales: round2(p.sales) }));
-  } else if (monthlySeries && monthlySeries.length > 0) {
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    points = monthlySeries.map((row) => {
+  } else if (lookbackDays <= 14) {
+    // 2W: 14 daily points
+    const now = new Date();
+    const dailyMap = new Map();
+
+    for (let i = lookbackDays - 1; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 86400000);
+      const isoDate = new Intl.DateTimeFormat('en-CA', { timeZone: REPORTING_TIMEZONE }).format(d);
+      const label = new Intl.DateTimeFormat('en-US', { month: 'numeric', day: 'numeric', timeZone: REPORTING_TIMEZONE }).format(d);
+      dailyMap.set(isoDate, { label, sales: 0, orders: 0 });
+    }
+
+    for (const order of orders) {
+      const isoDate = new Intl.DateTimeFormat('en-CA', { timeZone: REPORTING_TIMEZONE }).format(new Date(order.checkOutTime));
+      if (dailyMap.has(isoDate)) {
+        const entry = dailyMap.get(isoDate);
+        entry.sales += order.totalAmount ?? 0;
+        entry.orders += 1;
+      }
+    }
+    points = Array.from(dailyMap.values()).map((p) => ({ ...p, sales: round2(p.sales) }));
+  } else if (lookbackDays <= 45) {
+    // 1M (30 days): 4 weekly periods (W1, W2, W3, W4)
+    const now = new Date();
+    const weeks = [
+      { label: 'W1', sales: 0, orders: 0 },
+      { label: 'W2', sales: 0, orders: 0 },
+      { label: 'W3', sales: 0, orders: 0 },
+      { label: 'W4', sales: 0, orders: 0 },
+    ];
+    const totalMs = lookbackDays * 86400000;
+    const startTime = now.getTime() - totalMs;
+
+    for (const order of orders) {
+      const t = new Date(order.checkOutTime).getTime();
+      const elapsed = t - startTime;
+      let wIdx = Math.floor((elapsed / totalMs) * 4);
+      if (wIdx < 0) wIdx = 0;
+      if (wIdx > 3) wIdx = 3;
+      weeks[wIdx].sales += order.totalAmount ?? 0;
+      weeks[wIdx].orders += 1;
+    }
+    points = weeks.map((p) => ({ ...p, sales: round2(p.sales) }));
+  } else {
+    // 6M (180 days -> 6 months) or 1Y (365 days -> 12 months)
+    const targetMonths = lookbackDays <= 210 ? 6 : 12;
+    const seriesSlice = (monthlySeries || []).slice(-targetMonths);
+
+    points = seriesSlice.map((row) => {
       const parts = (row.month || '').split('-');
       const monthIdx = parts[1] ? parseInt(parts[1], 10) - 1 : -1;
       const label = monthIdx >= 0 && monthIdx < 12 ? monthNames[monthIdx] : row.month;
       return {
         label,
         sales: round2(row.sales ?? 0),
-        orders: row.orders ?? 0,
+        orders: row.orderCount ?? row.orders ?? 0,
       };
     });
   }
@@ -259,30 +329,29 @@ function computeSalesTrend(monthlySeries, orders = [], lookbackDays = 180) {
   const baselineAverage = salesValues.length > 0 ? round2(mean(salesValues)) : 0;
   const target = baselineAverage > 0 ? round2(baselineAverage * 1.12) : 100;
 
-  if (!monthlySeries || monthlySeries.length < 3) {
+  if (points.length < 2) {
     return {
-      direction: 'unknown',
+      direction: 'stable',
       monthlyChangePercent: 0,
-      monthsAnalyzed: monthlySeries?.length ?? 0,
+      monthsAnalyzed: points.length,
       baselineAverage,
       target,
       points,
     };
   }
 
-  const salesSeries = monthlySeries.map((row) => row.sales);
-  const { slope } = fitLinearRegression(salesSeries);
-  const level = mean(salesSeries) || 1;
-  const monthlyChangePercent = round2((slope / level) * 100);
+  const { slope } = fitLinearRegression(salesValues);
+  const level = mean(salesValues) || 1;
+  const changePercent = round2((slope / level) * 100);
 
   let direction = 'stable';
-  if (monthlyChangePercent >= 3) direction = 'increasing';
-  else if (monthlyChangePercent <= -3) direction = 'decreasing';
+  if (changePercent >= 2) direction = 'increasing';
+  else if (changePercent <= -2) direction = 'decreasing';
 
   return {
     direction,
-    monthlyChangePercent,
-    monthsAnalyzed: monthlySeries.length,
+    monthlyChangePercent: changePercent,
+    monthsAnalyzed: points.length,
     method: 'linear_regression',
     baselineAverage,
     target,
@@ -392,10 +461,20 @@ function generateInsights({ hourly, daily, products, trend, segments, identified
   }
 
   if (trend.direction === 'increasing' || trend.direction === 'decreasing') {
+    const periodUnit =
+      trend.monthsAnalyzed === 1
+        ? 'period'
+        : (trend.points?.[0]?.label?.includes('am') || trend.points?.[0]?.label?.includes('pm'))
+          ? 'time slots'
+          : (trend.points?.[0]?.label?.startsWith('W'))
+            ? 'weeks'
+            : (trend.points?.[0]?.label?.includes('/') || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].includes(trend.points?.[0]?.label))
+              ? 'days'
+              : 'months';
     insights.push({
       type: 'trend',
       tone: trend.direction === 'increasing' ? 'positive' : 'negative',
-      text: `Overall sales are trending ${trend.direction} — about ${Math.abs(trend.monthlyChangePercent)}% per month over the last ${trend.monthsAnalyzed} months.`,
+      text: `Overall sales are trending ${trend.direction} — about ${Math.abs(trend.monthlyChangePercent)}% pace across the last ${trend.monthsAnalyzed} ${periodUnit}.`,
     });
   }
 

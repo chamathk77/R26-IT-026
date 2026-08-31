@@ -127,9 +127,11 @@ async function getMonthlySeries(shopId, branchId, options = {}) {
     });
   }
 
-  const firstActivityIndex = months.findIndex(
-    (row) => row.orderCount > 0 || row.expenseCount > 0,
-  );
+  const firstActivityIndex = options.keepEmptyMonths
+    ? 0
+    : months.findIndex(
+        (row) => row.orderCount > 0 || row.expenseCount > 0,
+      );
 
   return {
     months: firstActivityIndex === -1 ? [] : months.slice(firstActivityIndex),
