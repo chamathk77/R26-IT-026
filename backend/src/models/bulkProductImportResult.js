@@ -16,7 +16,7 @@ const bulkImportFailedRowSchema = new mongoose.Schema(
     warrantyMonths: { type: mongoose.Schema.Types.Mixed, default: '' },
     errors: { type: [String], default: [] },
   },
-  { _id: false },
+  { _id: false, suppressReservedKeysWarning: true },
 );
 
 const bulkImportCategoryCreatedSchema = new mongoose.Schema(

@@ -1,4 +1,6 @@
+const path = require('path');
 require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
 const app = require('./app');
 const config = require('./config');
 const { connectDatabase } = require('./config/database');

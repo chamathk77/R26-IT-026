@@ -68,9 +68,17 @@ export const productDemandStyles = StyleSheet.create({
     fontSize: 13,
   },
 
+  liveHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+    gap: 10,
+  },
   engineBadgeRow: {
     flexDirection: 'row',
-    marginBottom: 14,
+    alignItems: 'center',
+    gap: 8,
   },
   engineBadge: {
     flexDirection: 'row',
@@ -83,6 +91,162 @@ export const productDemandStyles = StyleSheet.create({
   engineBadgeText: {
     fontFamily: fonts.PoppinsSemiBold,
     fontSize: 11,
+  },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#22c55e',
+  },
+  refreshLiveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  refreshLiveBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
+  },
+
+  viewModeRow: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 3,
+    marginBottom: 14,
+    gap: 4,
+  },
+  viewModeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 11,
+  },
+  viewModeBtnActive: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  viewModeText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 12,
+  },
+
+  horizonPillRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  horizonPill: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  horizonPillText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
+  },
+
+  productChipScroll: {
+    marginBottom: 14,
+  },
+  productChipContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  productChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  productChipText: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 11,
+  },
+
+  chartCardContainer: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  chartTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  chartTitle: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 15,
+  },
+  chartSubtitle: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 11,
+    marginBottom: 12,
+  },
+  chartWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: -16,
+    marginBottom: 12,
+  },
+  chartLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    marginTop: 6,
+    flexWrap: 'wrap',
+  },
+  chartLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  chartLegendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  chartLegendText: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 11,
+  },
+
+  chartStatRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  chartStatCard: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 10,
+    alignItems: 'center',
+  },
+  chartStatValue: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 16,
+  },
+  chartStatLabel: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 10,
+    marginTop: 2,
   },
 
   searchWrap: {
@@ -181,30 +345,6 @@ export const productDemandStyles = StyleSheet.create({
     fontFamily: fonts.PoppinsRegular,
     fontSize: 12,
     marginBottom: 14,
-  },
-
-  miniBarRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 6,
-    height: 64,
-    marginBottom: 6,
-  },
-  miniBarWrap: {
-    flex: 1,
-    alignItems: 'center',
-    height: '100%',
-    justifyContent: 'flex-end',
-    gap: 4,
-  },
-  miniBar: {
-    width: '100%',
-    borderRadius: 5,
-    minHeight: 3,
-  },
-  miniBarLabel: {
-    fontFamily: fonts.PoppinsRegular,
-    fontSize: 9,
   },
 
   methodPill: {
