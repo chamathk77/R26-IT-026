@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+
+# Build / cache
+.next/
+out/
+dist/
+.expo/
+web-build/
+.metro-health-check*
+*.tsbuildinfo
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Environment
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# OS / editor
+.DS_Store
+*.pem
+
+# Logs
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Uploads & generated exports
+backend/uploads/products/*
+!backend/uploads/products/.gitkeep
+backend/uploads/receipts/*
+!backend/uploads/receipts/.gitkeep
+backend/uploads/cost-expenses/*
+!backend/uploads/cost-expenses/.gitkeep
+backend/uploads/sale-persons/*
+!backend/uploads/sale-persons/.gitkeep
+backend/exports/
+
+# Vercel
+.vercel
