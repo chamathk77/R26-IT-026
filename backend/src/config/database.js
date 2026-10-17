@@ -60,11 +60,20 @@ async function connectDatabase() {
     await mongoose.connect(uri);
   } catch (err) {
     if (err.message && err.message.includes('querySrv')) {
-      console.error(
-        'DNS SRV lookup failed. In Atlas: use the standard mongodb:// connection string, or fix DNS/firewall.',
-      );
+      console.log('DNS SRV lookup failed with local DNS. Retrying with public DNS (8.8.8.8, 1.1.1.1)...');
+      try {
+        const dns = require('dns');
+        dns.setServers(['8.8.8.8', '1.1.1.1']);
+        await mongoose.connect(uri);
+      } catch (retryErr) {
+        console.error(
+          'DNS SRV lookup failed. In Atlas: use the standard mongodb:// connection string, or fix DNS/firewall.',
+        );
+        throw retryErr;
+      }
+    } else {
+      throw err;
     }
-    throw err;
   }
 
   console.log(

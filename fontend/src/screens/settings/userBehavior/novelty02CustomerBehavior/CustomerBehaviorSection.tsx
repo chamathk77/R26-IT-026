@@ -89,7 +89,6 @@ const PRINTABLE_FEATURES = [
   { key: 'includeKpis' as keyof ReportPrintOptions, title: 'Executive KPIs', sub: 'Revenue, orders, AOV & link rate', icon: 'speedometer-outline' as keyof typeof Ionicons.glyphMap, tint: '#ea580c' },
   { key: 'includeInsights' as keyof ReportPrintOptions, title: 'Executive Findings', sub: 'Plain-language bullet summaries', icon: 'bulb-outline' as keyof typeof Ionicons.glyphMap, tint: '#f59e0b' },
   { key: 'includeHourly' as keyof ReportPrintOptions, title: 'Busiest Hours Chart', sub: '24-hour distribution bar chart & peak', icon: 'time-outline' as keyof typeof Ionicons.glyphMap, tint: '#2563eb' },
-  { key: 'includeWeekendWeekday' as keyof ReportPrintOptions, title: 'Weekend vs Weekday', sub: 'Proportional sales comparison split', icon: 'calendar-outline' as keyof typeof Ionicons.glyphMap, tint: '#7c3aed' },
   { key: 'includeProducts' as keyof ReportPrintOptions, title: 'Top & Slow Products', sub: 'Volume progress bars leaderboard', icon: 'trending-up-outline' as keyof typeof Ionicons.glyphMap, tint: '#16a34a' },
   { key: 'includeUpcoming' as keyof ReportPrintOptions, title: 'Upcoming Selling Items', sub: 'Shift customer demand prep advice', icon: 'flame-outline' as keyof typeof Ionicons.glyphMap, tint: '#f97316' },
   { key: 'includeSegments' as keyof ReportPrintOptions, title: 'Customer Segmentation', sub: 'RFM + k-means clustering donut chart', icon: 'people-outline' as keyof typeof Ionicons.glyphMap, tint: '#0284c7' },
@@ -518,7 +517,6 @@ export default function CustomerBehaviorSection() {
 
   // Modals for popups
   const [selectedHour, setSelectedHour] = useState<HourBucket | null>(null);
-  const [showWeekendModal, setShowWeekendModal] = useState<boolean>(false);
   const [selectedProduct, setSelectedProduct] = useState<{ product: ProductRankingEntry; rank?: number; isTop: boolean } | null>(null);
   const [selectedSegment, setSelectedSegment] = useState<CustomerSegment | null>(null);
   const [showTrendModal, setShowTrendModal] = useState<boolean>(false);
@@ -529,7 +527,6 @@ export default function CustomerBehaviorSection() {
     includeKpis: true,
     includeInsights: true,
     includeHourly: true,
-    includeWeekendWeekday: true,
     includeProducts: true,
     includeUpcoming: true,
     includeSegments: true,
@@ -613,7 +610,6 @@ export default function CustomerBehaviorSection() {
       includeKpis: value,
       includeInsights: value,
       includeHourly: value,
-      includeWeekendWeekday: value,
       includeProducts: value,
       includeUpcoming: value,
       includeSegments: value,
@@ -972,53 +968,7 @@ export default function CustomerBehaviorSection() {
             </>
           ) : null}
 
-          {/* Weekend vs Weekday Chart */}
-          {weekendVsWeekday ? (
-            <>
-              {renderSectionHeader('calendar-outline', '#7c3aed', 'Weekend vs weekday', 'Tap card to view detailed breakdown')}
-              <TouchableOpacity
-                style={[styles.card, { backgroundColor: surface, borderColor: outline }]}
-                activeOpacity={0.8}
-                onPress={() => setShowWeekendModal(true)}
-              >
-                <View style={styles.splitBarLabelsRow}>
-                  <View>
-                    <Text style={[styles.splitBarSideLabel, { color: onSurfaceVariant }]}>WEEKDAY</Text>
-                    <Text style={[styles.splitBarValue, { color: onSurface }]}>
-                      {formatCurrency(weekendVsWeekday.weekdayAvg)}
-                    </Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={[styles.splitBarSideLabel, { color: '#7c3aed' }]}>WEEKEND</Text>
-                    <Text style={[styles.splitBarValue, { color: '#7c3aed' }]}>
-                      {formatCurrency(weekendVsWeekday.weekendAvg)}
-                    </Text>
-                  </View>
-                </View>
-                <View style={[styles.splitBarTrack, { backgroundColor: outline }]}>
-                  <View
-                    style={[
-                      styles.splitBarSegment,
-                      {
-                        flex: Math.max(weekendVsWeekday.weekdayAvg, 1),
-                        backgroundColor: onSurfaceVariant,
-                      },
-                    ]}
-                  />
-                  <View
-                    style={[
-                      styles.splitBarSegment,
-                      { flex: Math.max(weekendVsWeekday.weekendAvg, 1), backgroundColor: '#7c3aed' },
-                    ]}
-                  />
-                </View>
-                <Text style={[styles.splitBarCaption, { color: onSurfaceVariant }]}>
-                  {weekendVsWeekday.higher === 'weekend' ? 'Weekend' : 'Weekday'} sales average{' '}
-                  {weekendVsWeekday.diffPercent}% higher. (Tap for details)
-                </Text>
-              </TouchableOpacity>
-            </>
-          ) : null}
+
 
           {/* Top Products */}
           {topProducts.length ? (
@@ -1338,77 +1288,7 @@ export default function CustomerBehaviorSection() {
         </TouchableOpacity>
       </Modal>
 
-      {/* 2. Weekend vs Weekday Detail Modal */}
-      <Modal
-        visible={showWeekendModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowWeekendModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowWeekendModal(false)}
-        >
-          <TouchableOpacity
-            style={[styles.modalCard, { backgroundColor: surface, borderColor: outline }]}
-            activeOpacity={1}
-          >
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderLeft}>
-                <View style={[styles.modalIconWrap, { backgroundColor: '#7c3aed1f' }]}>
-                  <Ionicons name="calendar" size={22} color="#7c3aed" />
-                </View>
-                <View>
-                  <Text style={[styles.modalTitle, { color: onSurface }]}>
-                    Weekend vs Weekday
-                  </Text>
-                  <Text style={[styles.modalSubtitle, { color: onSurfaceVariant }]}>
-                    Revenue comparison
-                  </Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                style={[styles.modalCloseBtn, { backgroundColor: outline }]}
-                onPress={() => setShowWeekendModal(false)}
-              >
-                <Ionicons name="close" size={18} color={onSurface} />
-              </TouchableOpacity>
-            </View>
 
-            <View style={styles.modalStatsGrid}>
-              <View style={[styles.modalStatBox, { backgroundColor: `${onSurfaceVariant}0f`, borderColor: outline }]}>
-                <Text style={[styles.modalStatLabel, { color: onSurfaceVariant }]}>Weekday Avg (Mon-Fri)</Text>
-                <Text style={[styles.modalStatValue, { color: onSurface }]}>
-                  {formatCurrency(weekendVsWeekday?.weekdayAvg ?? 0)}
-                </Text>
-              </View>
-              <View style={[styles.modalStatBox, { backgroundColor: '#7c3aed15', borderColor: '#7c3aed33' }]}>
-                <Text style={[styles.modalStatLabel, { color: '#7c3aed' }]}>Weekend Avg (Sat-Sun)</Text>
-                <Text style={[styles.modalStatValue, { color: '#7c3aed' }]}>
-                  {formatCurrency(weekendVsWeekday?.weekendAvg ?? 0)}
-                </Text>
-              </View>
-            </View>
-
-            <View style={[styles.modalTipCard, { backgroundColor: '#ede9fe' }]}>
-              <Ionicons name="stats-chart" size={16} color="#6d28d9" />
-              <Text style={[styles.modalTipText, { color: '#6d28d9' }]}>
-                {weekendVsWeekday?.higher === 'weekend'
-                  ? `Weekend sales outpace weekdays by ${weekendVsWeekday?.diffPercent}%. Stock up inventory before Friday!`
-                  : `Weekday sales are higher by ${weekendVsWeekday?.diffPercent}%. Focus weekday lunch/working hours.`}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.modalDoneBtn, { backgroundColor: '#7c3aed' }]}
-              onPress={() => setShowWeekendModal(false)}
-            >
-              <Text style={[styles.modalDoneBtnText, { color: '#ffffff' }]}>Got it</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
 
       {/* 3. Product Detail Modal */}
       <Modal
