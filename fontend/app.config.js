@@ -16,6 +16,9 @@ module.exports = ({ config }) => ({
   plugins: [
     'expo-font',
     'expo-secure-store',
+    '@react-native-community/datetimepicker',
+    'expo-sharing',
+    'expo-status-bar',
     [
       'expo-splash-screen',
       {
@@ -47,16 +50,6 @@ module.exports = ({ config }) => ({
       },
     ],
   ],
-  splash: {
-    image: APP_ICON,
-    resizeMode: 'contain',
-    backgroundColor: '#000000',
-    dark: {
-      image: APP_ICON,
-      resizeMode: 'contain',
-      backgroundColor: '#000000',
-    },
-  },
   ios: {
     ...config.ios,
     bundleIdentifier: config.ios?.bundleIdentifier ?? 'com.chamath.smartcost',
@@ -65,11 +58,6 @@ module.exports = ({ config }) => ({
     config: {
       ...config.ios?.config,
       usesNonExemptEncryption: false,
-    },
-    splash: {
-      image: APP_ICON,
-      resizeMode: 'contain',
-      backgroundColor: '#000000',
     },
     infoPlist: {
       ...config.ios?.infoPlist,
@@ -82,11 +70,6 @@ module.exports = ({ config }) => ({
     icon: APP_ICON,
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
-      backgroundColor: '#000000',
-    },
-    splash: {
-      image: APP_ICON,
-      resizeMode: 'contain',
       backgroundColor: '#000000',
     },
     permissions: [
