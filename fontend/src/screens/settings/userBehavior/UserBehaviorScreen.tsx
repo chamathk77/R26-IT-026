@@ -7,6 +7,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import CommonHeader from '../../../components/CommonHeader/CommonHeader';
 import { SettingsHeroCard } from '../shared/SettingsDetailComponents';
 import CustomerBehaviorSection from './novelty02CustomerBehavior/CustomerBehaviorSection';
+import RetentionActionsSection from './novelty02CustomerBehavior/RetentionActionsSection';
 import { userBehaviorStyles as styles } from './userBehaviorStyles';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'UserBehavior'>;
@@ -37,10 +38,12 @@ export default function UserBehaviorScreen({ navigation }: Props) {
             resolvedTheme={resolvedTheme}
             icon="analytics-outline"
             title="Customer behavior & sales insights"
-            subtitle="Peak hours, top products, weekend trends and customer purchasing patterns — learned from your sales history."
+            subtitle="Peak hours, top products and customer purchasing patterns — learned from your sales history."
           />
 
           <CustomerBehaviorSection />
+
+          <RetentionActionsSection />
         </ScrollView>
       </SafeAreaView>
     </>
