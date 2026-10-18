@@ -274,11 +274,11 @@ export async function printCheckoutReceiptIfConfigured(params: {
   try {
     const result = await printCheckoutReceipt(params);
     if (!result.success && __DEV__) {
-      console.warn('[Receipt print]', result.message);
+      console.log('[Receipt print]', result.message);
     }
   } catch (error) {
     if (__DEV__) {
-      console.warn('[Receipt print]', error);
+      console.log('[Receipt print]', error);
     }
   }
 }

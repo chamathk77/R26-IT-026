@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Clipboard,
   Dimensions,
   ScrollView,
   Text,
@@ -23,7 +24,14 @@ import {
 } from './productDemandPdf';
 import { productDemandStyles as styles } from './productDemandStyles';
 import { clearSavedToken } from '../../../../utils/secureStorage';
-import type { DemandHorizonKey, ProductDemandData, ProductDemandResult } from './productDemandTypes';
+import type {
+  DemandHorizonKey,
+  DemandTrend,
+  PeakDay,
+  ProductDemandData,
+  ProductDemandResult,
+  StockStatus,
+} from './productDemandTypes';
 
 type ViewMode = 'line' | 'bar' | 'pie' | 'cards';
 
@@ -46,8 +54,79 @@ function describeMethod(method: string): string {
   return method;
 }
 
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Feature 1: Stock Status Badge                                            */
+/* ────────────────────────────────────────────────────────────────────────── */
+function StockBadge({ stockStatus }: { stockStatus?: StockStatus }) {
+  if (!stockStatus) return null;
+  const cfg = {
+    stockout_risk: { bg: '#fef2f2', color: '#dc2626', icon: 'warning' as const },
+    overstock: { bg: '#fffbeb', color: '#d97706', icon: 'alert-circle' as const },
+    sufficient: { bg: '#f0fdf4', color: '#16a34a', icon: 'checkmark-circle' as const },
+  }[stockStatus.status] ?? { bg: '#f0fdf4', color: '#16a34a', icon: 'checkmark-circle' as const };
+
+  return (
+    <View style={[styles.stockBadge, { backgroundColor: cfg.bg }]}>
+      <Ionicons name={cfg.icon} size={11} color={cfg.color} />
+      <Text style={[styles.stockBadgeText, { color: cfg.color }]}>
+        Stock: {stockStatus.currentStock} · {stockStatus.label}
+      </Text>
+    </View>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Feature 2: Demand Trend Badge                                            */
+/* ────────────────────────────────────────────────────────────────────────── */
+function TrendBadge({ demandTrend }: { demandTrend?: DemandTrend }) {
+  if (!demandTrend) return null;
+  const cfg = {
+    surging: { bg: '#f0fdf4', color: '#16a34a', icon: 'trending-up' as const, label: 'Surging' },
+    declining: { bg: '#fef2f2', color: '#dc2626', icon: 'trending-down' as const, label: 'Declining' },
+    steady: { bg: '#eff6ff', color: '#2563eb', icon: 'remove-outline' as const, label: 'Steady' },
+  }[demandTrend.trend] ?? { bg: '#eff6ff', color: '#2563eb', icon: 'remove-outline' as const, label: 'Steady' };
+
+  const sign = demandTrend.percentChange >= 0 ? '+' : '';
+  return (
+    <View style={[styles.trendBadge, { backgroundColor: cfg.bg }]}>
+      <Ionicons name={cfg.icon} size={11} color={cfg.color} />
+      <Text style={[styles.trendBadgeText, { color: cfg.color }]}>
+        {cfg.label} ({sign}{demandTrend.percentChange}%)
+      </Text>
+    </View>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Feature 4: Peak Day Badge                                                */
+/* ────────────────────────────────────────────────────────────────────────── */
+function PeakDayBadge({ peakDay }: { peakDay?: PeakDay | null }) {
+  if (!peakDay) return null;
+  return (
+    <View style={[styles.peakDayBadge, { backgroundColor: '#fdf4ff' }]}>
+      <Ionicons name="flame-outline" size={11} color="#9333ea" />
+      <Text style={[styles.peakDayBadgeText, { color: '#9333ea' }]}>
+        Peak: {peakDay.dayName} (~{peakDay.predictedUnits} units)
+      </Text>
+    </View>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Format LKR Currency                                                      */
+/* ────────────────────────────────────────────────────────────────────────── */
+function formatLKR(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return String(value);
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Enhanced Product Card with all features                                  */
+/* ────────────────────────────────────────────────────────────────────────── */
 function ProductDemandCard({
   result,
+  selectedHorizon,
   surface,
   outline,
   onSurface,
@@ -56,6 +135,7 @@ function ProductDemandCard({
   primary,
 }: {
   result: ProductDemandResult;
+  selectedHorizon: DemandHorizonKey;
   surface: string;
   outline: string;
   onSurface: string;
@@ -63,6 +143,7 @@ function ProductDemandCard({
   surfaceVariant: string;
   primary: string;
 }) {
+  const rev = result.revenueProjection?.[selectedHorizon];
   return (
     <View style={[styles.productCard, { backgroundColor: surface, borderColor: outline }]}>
       <View style={styles.productTopRow}>
@@ -74,6 +155,24 @@ function ProductDemandCard({
         </Text>
       </View>
 
+      {/* Feature 1, 2, 4: Badges */}
+      <View style={styles.badgeRow}>
+        <StockBadge stockStatus={result.stockStatus} />
+        <TrendBadge demandTrend={result.demandTrend} />
+        <PeakDayBadge peakDay={result.peakDay} />
+      </View>
+
+      {/* Feature 1: Reorder Suggestion */}
+      {result.stockStatus?.status === 'stockout_risk' && result.stockStatus.suggestedReorder > 0 && (
+        <View style={[styles.reorderRow, { backgroundColor: '#fef2f2' }]}>
+          <Ionicons name="cart-outline" size={13} color="#dc2626" />
+          <Text style={[styles.reorderText, { color: '#dc2626' }]}>
+            Suggested reorder: {result.stockStatus.suggestedReorder} units
+          </Text>
+        </View>
+      )}
+
+      {/* Horizons */}
       <View style={styles.horizonRow}>
         {(
           [
@@ -97,6 +196,32 @@ function ProductDemandCard({
         })}
       </View>
 
+      {/* Feature 3: Revenue Projection for selected horizon */}
+      {rev && result.sellingPrice > 0 && (
+        <View style={styles.revenueRow}>
+          <View style={[styles.revenueCard, { backgroundColor: '#eff6ff' }]}>
+            <Text style={[styles.revenueCardValue, { color: '#2563eb' }]}>
+              LKR {formatLKR(rev.expectedRevenue)}
+            </Text>
+            <Text style={[styles.revenueCardLabel, { color: '#3b82f6' }]}>Expected Revenue</Text>
+          </View>
+          <View style={[styles.revenueCard, { backgroundColor: '#f0fdf4' }]}>
+            <Text style={[styles.revenueCardValue, { color: '#16a34a' }]}>
+              LKR {formatLKR(rev.grossProfit)}
+            </Text>
+            <Text style={[styles.revenueCardLabel, { color: '#22c55e' }]}>Gross Profit</Text>
+          </View>
+          {rev.marginPercent > 0 && (
+            <View style={[styles.revenueCard, { backgroundColor: '#fdf4ff' }]}>
+              <Text style={[styles.revenueCardValue, { color: '#9333ea' }]}>
+                {rev.marginPercent}%
+              </Text>
+              <Text style={[styles.revenueCardLabel, { color: '#a855f7' }]}>Margin</Text>
+            </View>
+          )}
+        </View>
+      )}
+
       <View style={[styles.methodPill, { backgroundColor: `${primary}1a` }]}>
         <Text style={[styles.methodPillText, { color: primary }]}>{describeMethod(result.method)}</Text>
       </View>
@@ -104,6 +229,9 @@ function ProductDemandCard({
   );
 }
 
+/* ════════════════════════════════════════════════════════════════════════════ */
+/*  MAIN SECTION COMPONENT                                                    */
+/* ════════════════════════════════════════════════════════════════════════════ */
 export default function ProductDemandSection() {
   const { paperTheme } = useTheme();
   const { shop } = useShopIndustry();
@@ -119,6 +247,9 @@ export default function ProductDemandSection() {
   const [viewMode, setViewMode] = useState<ViewMode>('line');
   const [selectedHorizon, setSelectedHorizon] = useState<DemandHorizonKey>('next7Days');
   const [selectedProductId, setSelectedProductId] = useState<string>('ALL');
+
+  // Feature 5: Restock filter
+  const [restockOnly, setRestockOnly] = useState(false);
 
   const screenWidth = Dimensions.get('window').width;
 
@@ -151,12 +282,19 @@ export default function ProductDemandSection() {
   const surfaceVariant = paperTheme.colors.surfaceVariant;
   const primary = paperTheme.colors.primary;
 
+  // Apply search + restock filter
   const filteredResults = useMemo(() => {
     if (!data) return [];
+    let list = data.results;
     const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return data.results;
-    return data.results.filter((result) => result.productName.toLowerCase().includes(normalizedQuery));
-  }, [data, query]);
+    if (normalizedQuery) {
+      list = list.filter((r) => r.productName.toLowerCase().includes(normalizedQuery));
+    }
+    if (restockOnly) {
+      list = list.filter((r) => r.stockStatus?.status === 'stockout_risk');
+    }
+    return list;
+  }, [data, query, restockOnly]);
 
   // Selected product for chart focus
   const activeProduct = useMemo(() => {
@@ -273,6 +411,24 @@ export default function ProductDemandSection() {
     }));
   }, [data, filteredResults, selectedHorizon, onSurfaceVariant]);
 
+  // Feature 5: Export restock list
+  const handleExportRestockList = useCallback(() => {
+    if (!data) return;
+    const restockItems = data.results.filter(
+      (r) => r.stockStatus?.status === 'stockout_risk' && r.stockStatus.suggestedReorder > 0,
+    );
+    if (!restockItems.length) {
+      Alert.alert('No Restock Needed', 'All products have sufficient stock for the coming week.');
+      return;
+    }
+    const lines = restockItems.map(
+      (r) => `• ${r.productName}: Reorder ${r.stockStatus.suggestedReorder} units (Stock: ${r.stockStatus.currentStock}, 7-day demand: ${r.horizons.next7Days.totalPredictedUnits})`,
+    );
+    const text = `📋 Restock Order List\n${new Date().toLocaleDateString('en-LK')}\n\n${lines.join('\n')}`;
+    Clipboard.setString(text);
+    Alert.alert('Copied!', 'Restock list has been copied to clipboard.');
+  }, [data]);
+
   // Separate report downloads for each view mode
   const handleDownloadReportForMode = useCallback(async (modeToExport: ViewMode) => {
     if (!data || !data.results.length) return;
@@ -365,6 +521,8 @@ export default function ProductDemandSection() {
 
   // Horizon label helper
   const horizonTitle = selectedHorizon === 'next7Days' ? '7-Day' : selectedHorizon === 'next14Days' ? '14-Day' : '30-Day';
+  const summary = data.summary;
+  const summaryRev = summary?.revenue?.[selectedHorizon];
 
   return (
     <>
@@ -391,6 +549,84 @@ export default function ProductDemandSection() {
           )}
           <Text style={[styles.refreshLiveBtnText, { color: primary }]}>
             {refreshing ? 'Updating…' : 'Live Refresh'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ═══ Feature 3 & 5: Summary KPI Cards ═══ */}
+      {summary && (
+        <View style={styles.summaryRow}>
+          <View style={[styles.summaryCard, { backgroundColor: '#eff6ff' }]}>
+            <Ionicons name="cash-outline" size={16} color="#2563eb" style={styles.summaryCardIcon} />
+            <Text style={[styles.summaryCardValue, { color: '#2563eb' }]}>
+              LKR {formatLKR(summaryRev?.expectedRevenue ?? 0)}
+            </Text>
+            <Text style={[styles.summaryCardLabel, { color: '#3b82f6' }]}>
+              {horizonTitle} Revenue
+            </Text>
+          </View>
+          <View style={[styles.summaryCard, { backgroundColor: '#f0fdf4' }]}>
+            <Ionicons name="trending-up" size={16} color="#16a34a" style={styles.summaryCardIcon} />
+            <Text style={[styles.summaryCardValue, { color: '#16a34a' }]}>
+              LKR {formatLKR(summaryRev?.grossProfit ?? 0)}
+            </Text>
+            <Text style={[styles.summaryCardLabel, { color: '#22c55e' }]}>
+              {horizonTitle} Profit
+            </Text>
+          </View>
+          <View style={[styles.summaryCard, { backgroundColor: summary.restockNeededCount > 0 ? '#fef2f2' : '#f0fdf4' }]}>
+            <Ionicons
+              name={summary.restockNeededCount > 0 ? 'warning' : 'checkmark-circle'}
+              size={16}
+              color={summary.restockNeededCount > 0 ? '#dc2626' : '#16a34a'}
+              style={styles.summaryCardIcon}
+            />
+            <Text style={[styles.summaryCardValue, { color: summary.restockNeededCount > 0 ? '#dc2626' : '#16a34a' }]}>
+              {summary.restockNeededCount}
+            </Text>
+            <Text style={[styles.summaryCardLabel, { color: summary.restockNeededCount > 0 ? '#ef4444' : '#22c55e' }]}>
+              Need Restock
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* ═══ Feature 5: Restock Filter & Export ═══ */}
+      <View style={styles.restockFilterRow}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => setRestockOnly(!restockOnly)}
+          style={[
+            styles.restockFilterBtn,
+            {
+              backgroundColor: restockOnly ? '#fef2f2' : surface,
+              borderColor: restockOnly ? '#dc2626' : outline,
+            },
+          ]}
+        >
+          <Ionicons
+            name={restockOnly ? 'filter' : 'filter-outline'}
+            size={13}
+            color={restockOnly ? '#dc2626' : onSurfaceVariant}
+          />
+          <Text style={[styles.restockFilterBtnText, { color: restockOnly ? '#dc2626' : onSurfaceVariant }]}>
+            {restockOnly ? 'Showing Restock Only' : 'Need Restock Only'}
+          </Text>
+          {(summary?.restockNeededCount ?? 0) > 0 && (
+            <View style={[styles.restockBadge, { backgroundColor: '#dc2626' }]}>
+              <Text style={styles.restockBadgeText}>{summary?.restockNeededCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={handleExportRestockList}
+          style={[styles.restockFilterBtn, { backgroundColor: surface, borderColor: outline }]}
+        >
+          <Ionicons name="clipboard-outline" size={13} color={onSurfaceVariant} />
+          <Text style={[styles.restockFilterBtnText, { color: onSurfaceVariant }]}>
+            Copy Restock List
           </Text>
         </TouchableOpacity>
       </View>
@@ -778,6 +1014,7 @@ export default function ProductDemandSection() {
           <Text style={[styles.resultsCount, { color: onSurfaceVariant }]}>
             Showing {filteredResults.length} of {data.results.length} product
             {data.results.length === 1 ? '' : 's'}
+            {restockOnly ? ' (restock filter active)' : ''}
           </Text>
 
           {filteredResults.length ? (
@@ -785,6 +1022,7 @@ export default function ProductDemandSection() {
               <ProductDemandCard
                 key={result.productId ?? result.productName}
                 result={result}
+                selectedHorizon={selectedHorizon}
                 surface={surface}
                 outline={outline}
                 onSurface={onSurface}
@@ -797,7 +1035,9 @@ export default function ProductDemandSection() {
             <View style={[styles.noticeCard, { backgroundColor: surfaceVariant, borderColor: outline }]}>
               <Ionicons name="search-outline" size={18} color={onSurfaceVariant} />
               <Text style={[styles.noticeText, { color: onSurfaceVariant }]}>
-                No products match &ldquo;{query}&rdquo;.
+                {restockOnly
+                  ? 'No products need restocking — all stock levels are sufficient!'
+                  : `No products match \u201c${query}\u201d.`}
               </Text>
             </View>
           )}

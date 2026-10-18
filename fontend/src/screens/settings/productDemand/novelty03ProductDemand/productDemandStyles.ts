@@ -112,6 +112,65 @@ export const productDemandStyles = StyleSheet.create({
     fontSize: 11,
   },
 
+  /* ── Feature 3 & 5: Summary KPI Row ── */
+  summaryRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  summaryCard: {
+    flex: 1,
+    borderRadius: 16,
+    padding: 12,
+    alignItems: 'center',
+  },
+  summaryCardIcon: {
+    marginBottom: 4,
+  },
+  summaryCardValue: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 15,
+  },
+  summaryCardLabel: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 9,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+
+  /* ── Feature 5: Restock Filter Toggle ── */
+  restockFilterRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  restockFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  restockFilterBtnText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 11,
+  },
+  restockBadge: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  restockBadgeText: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 9,
+    color: '#ffffff',
+  },
+
   viewModeRow: {
     flexDirection: 'row',
     borderRadius: 14,
@@ -303,6 +362,93 @@ export const productDemandStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
+  /* ── Feature 1 & 2: Stock & Trend Badges Row ── */
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  stockBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  stockBadgeText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 9,
+    letterSpacing: 0.2,
+  },
+  trendBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  trendBadgeText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 9,
+    letterSpacing: 0.2,
+  },
+  peakDayBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  peakDayBadgeText: {
+    fontFamily: fonts.PoppinsSemiBold,
+    fontSize: 9,
+    letterSpacing: 0.2,
+  },
+
+  /* ── Feature 1: Reorder suggestion row ── */
+  reorderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  reorderText: {
+    fontFamily: fonts.PoppinsMedium,
+    fontSize: 10,
+  },
+
+  /* ── Feature 3: Revenue row on card ── */
+  revenueRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  revenueCard: {
+    flex: 1,
+    borderRadius: 10,
+    padding: 8,
+    alignItems: 'center',
+  },
+  revenueCardValue: {
+    fontFamily: fonts.PoppinsBold,
+    fontSize: 12,
+  },
+  revenueCardLabel: {
+    fontFamily: fonts.PoppinsRegular,
+    fontSize: 8,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+
   horizonRow: {
     flexDirection: 'row',
     gap: 10,

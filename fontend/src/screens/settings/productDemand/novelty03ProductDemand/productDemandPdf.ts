@@ -1,7 +1,23 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import type { LoginShop } from '../../../../type/auth';
 import type { DemandHorizonKey, ProductDemandResult } from './productDemandTypes';
+
+/**
+ * Generate a shareable PDF from HTML. expo-print saves to a directory that
+ * expo-sharing often cannot access on Android / Expo Go. The permanent fix
+ * is to request base64 output, then write it ourselves to documentDirectory
+ * which is always accessible.
+ */
+async function generateShareablePdf(html: string, filename: string): Promise<string> {
+  const { base64 } = await Print.printToFileAsync({ html, base64: true });
+  const dest = `${FileSystem.documentDirectory}${filename}`;
+  await FileSystem.writeAsStringAsync(dest, base64!, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  return dest;
+}
 
 const BRAND = {
   primary: '#15803d',
@@ -178,9 +194,9 @@ export async function shareLineChartReport({
     </html>
   `;
 
-  const { uri } = await Print.printToFileAsync({ html, base64: false });
+  const pdfUri = await generateShareablePdf(html, 'demand_line_chart.pdf');
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, {
+    await Sharing.shareAsync(pdfUri, {
       mimeType: 'application/pdf',
       dialogTitle: 'Line Chart Demand Report',
       UTI: 'com.adobe.pdf',
@@ -266,9 +282,9 @@ export async function shareBarChartReport({
     </html>
   `;
 
-  const { uri } = await Print.printToFileAsync({ html, base64: false });
+  const pdfUri = await generateShareablePdf(html, 'demand_bar_chart.pdf');
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, {
+    await Sharing.shareAsync(pdfUri, {
       mimeType: 'application/pdf',
       dialogTitle: `${horizonLabel} Bar Chart Demand Report`,
       UTI: 'com.adobe.pdf',
@@ -351,9 +367,9 @@ export async function sharePieChartReport({
     </html>
   `;
 
-  const { uri } = await Print.printToFileAsync({ html, base64: false });
+  const pdfUri = await generateShareablePdf(html, 'demand_pie_chart.pdf');
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, {
+    await Sharing.shareAsync(pdfUri, {
       mimeType: 'application/pdf',
       dialogTitle: `${horizonLabel} Market Share Report`,
       UTI: 'com.adobe.pdf',
@@ -457,10 +473,9 @@ export async function shareAllProductsDemandReport({
     </html>
   `;
 
-  const { uri } = await Print.printToFileAsync({ html, base64: false });
-
+  const pdfUri = await generateShareablePdf(html, 'demand_all_products.pdf');
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, {
+    await Sharing.shareAsync(pdfUri, {
       mimeType: 'application/pdf',
       dialogTitle: 'Product demand forecast — all products',
       UTI: 'com.adobe.pdf',

@@ -66,11 +66,6 @@ module.exports = ({ config }) => ({
       ...config.ios?.config,
       usesNonExemptEncryption: false,
     },
-    splash: {
-      image: APP_ICON,
-      resizeMode: 'contain',
-      backgroundColor: '#000000',
-    },
     infoPlist: {
       ...config.ios?.infoPlist,
       ...IOS_INFO_PLIST,

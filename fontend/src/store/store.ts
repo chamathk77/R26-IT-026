@@ -38,6 +38,11 @@ export const store = configureStore({
     ManualOrderReducer,
     AnalyticsReducer,
   },
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware({
+      serializableCheck: false,
+      immutableCheck: false,
+    }),
 });
 
 // Infer types
