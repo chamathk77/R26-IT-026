@@ -128,6 +128,7 @@ type CartOrderFooterProps = {
   discountEnabled: boolean;
   discountMode: DiscountMode;
   discountValue: string;
+  cartComboDiscount?: number;
   onDiscountEnabledChange: (value: boolean) => void;
   onDiscountModeChange: (mode: DiscountMode) => void;
   onDiscountValueChange: (value: string) => void;
@@ -143,6 +144,7 @@ const CartOrderFooter = React.memo(function CartOrderFooter({
   discountEnabled,
   discountMode,
   discountValue,
+  cartComboDiscount = 0,
   onDiscountEnabledChange,
   onDiscountModeChange,
   onDiscountValueChange,
@@ -151,7 +153,8 @@ const CartOrderFooter = React.memo(function CartOrderFooter({
   checkoutLoading,
   onCheckout,
 }: CartOrderFooterProps) {
-  const showTaxBreakdown = shopHasEnabledTaxes || billPreview.taxAmount > 0;
+  const showTaxBreakdown =
+    shopHasEnabledTaxes || billPreview.taxAmount > 0 || (!discountEnabled && cartComboDiscount > 0);
 
   return (
     <View style={styles.cartFooter}>
@@ -341,6 +344,16 @@ const CartOrderFooter = React.memo(function CartOrderFooter({
                 {formatCurrency(billPreview.subtotal)}
               </Text>
             </View>
+            {cartComboDiscount > 0 ? (
+              <View style={styles.discountBreakdownRow}>
+                <Text style={[styles.discountBreakdownLabel, { color: '#2E7D32', fontWeight: '600' }]}>
+                  Meal-Time Combo Offer
+                </Text>
+                <Text style={[styles.discountBreakdownDiscount, { color: '#2E7D32', fontWeight: 'bold' }]}>
+                  − {formatCurrency(cartComboDiscount)}
+                </Text>
+              </View>
+            ) : null}
             {billPreview.taxBreakdown.map((entry) => (
               <View key={entry.id} style={styles.discountBreakdownRow}>
                 <Text style={[styles.discountBreakdownLabel, { color: paperTheme.colors.onSurfaceVariant }]}>
@@ -541,23 +554,61 @@ export default function CartScreen({ navigation }: Props) {
   const addedCartCount = shopAddedSessions.length;
   const itemCount = items.length;
 
+  const cartComboDiscount = useMemo(() => {
+    if (discountEnabled) return 0;
+    const disc = order?.discountedAmount ?? selectedAddedSession?.discountedAmount;
+    if (disc && disc > 0) return Number(disc.toFixed(2));
+    if (
+      (order?.isDiscount || selectedAddedSession?.isDiscount) &&
+      order?.totalPrice &&
+      order.totalPrice < totalAmount
+    ) {
+      return Number((totalAmount - order.totalPrice).toFixed(2));
+    }
+    return 0;
+  }, [
+    discountEnabled,
+    order?.discountedAmount,
+    order?.isDiscount,
+    order?.totalPrice,
+    selectedAddedSession?.discountedAmount,
+    selectedAddedSession?.isDiscount,
+    totalAmount,
+  ]);
+
   const billPreview = useMemo(() => {
     const parsed = Number.parseFloat(discountValue.replace(/,/g, '').trim());
-    const discount =
-      discountEnabled && Number.isFinite(parsed) && parsed > 0
-        ? {
-            enabled: true,
-            type: discountMode === 'percentage' ? ('percent' as const) : ('amount' as const),
-            value: parsed,
-          }
-        : { enabled: false };
+    let discount: { enabled: boolean; type?: 'percent' | 'amount'; value?: number };
+
+    if (discountEnabled && Number.isFinite(parsed) && parsed > 0) {
+      discount = {
+        enabled: true,
+        type: discountMode === 'percentage' ? ('percent' as const) : ('amount' as const),
+        value: parsed,
+      };
+    } else if (!discountEnabled && cartComboDiscount > 0) {
+      discount = {
+        enabled: true,
+        type: 'amount' as const,
+        value: cartComboDiscount,
+      };
+    } else {
+      discount = { enabled: false };
+    }
 
     return calculateBillTotalsPreview({
       subtotal: totalAmount,
       discount,
       billingConfig: shop?.billingConfig,
     });
-  }, [discountEnabled, discountMode, discountValue, shop?.billingConfig, totalAmount]);
+  }, [
+    cartComboDiscount,
+    discountEnabled,
+    discountMode,
+    discountValue,
+    shop?.billingConfig,
+    totalAmount,
+  ]);
 
   const shopHasEnabledTaxes = useMemo(
     () => hasEnabledShopTaxes(shop?.billingConfig),
@@ -898,7 +949,7 @@ export default function CartScreen({ navigation }: Props) {
 
     const payload: CheckoutCartRequest = {
       sessionId,
-      isDiscount: discountEnabled,
+      isDiscount: discountEnabled || cartComboDiscount > 0,
     };
 
     if (Object.keys(itemUnitCosts).length > 0) {
@@ -913,12 +964,20 @@ export default function CartScreen({ navigation }: Props) {
         value: parsedDiscount,
       };
       payload.discountedAmount = discountPreview.discountAmount;
+    } else if (cartComboDiscount > 0) {
+      payload.discount = {
+        enabled: true,
+        type: 'amount',
+        value: cartComboDiscount,
+      };
+      payload.discountedAmount = cartComboDiscount;
     } else {
       payload.discountedAmount = 0;
     }
 
     return payload;
   }, [
+    cartComboDiscount,
     discountEnabled,
     discountMode,
     discountPreview.discountAmount,
@@ -1557,6 +1616,7 @@ export default function CartScreen({ navigation }: Props) {
         discountEnabled={discountEnabled}
         discountMode={discountMode}
         discountValue={discountValue}
+        cartComboDiscount={cartComboDiscount}
         onDiscountEnabledChange={setDiscountEnabled}
         onDiscountModeChange={setDiscountMode}
         onDiscountValueChange={setDiscountValue}
@@ -1570,6 +1630,7 @@ export default function CartScreen({ navigation }: Props) {
     ),
     [
       billPreview,
+      cartComboDiscount,
       checkoutLoading,
       discountEnabled,
       discountMode,
@@ -1677,12 +1738,42 @@ export default function CartScreen({ navigation }: Props) {
                 </Text>
               </View>
             </View>
-            <Text
-              style={[styles.summaryTotal, { color: paperTheme.colors.primary }]}
-              numberOfLines={1}
-            >
-              {formatCurrency(billPreview.totalAmount)}
-            </Text>
+            <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+              {cartComboDiscount > 0 && !discountEnabled ? (
+                <Text
+                  style={{
+                    fontSize: 12,
+                    textDecorationLine: 'line-through',
+                    color: paperTheme.colors.onSurfaceVariant,
+                    opacity: 0.75,
+                    marginBottom: 2,
+                  }}
+                >
+                  {formatCurrency(totalAmount)}
+                </Text>
+              ) : null}
+              <Text
+                style={[styles.summaryTotal, { color: paperTheme.colors.primary }]}
+                numberOfLines={1}
+              >
+                {formatCurrency(billPreview.totalAmount)}
+              </Text>
+              {cartComboDiscount > 0 && !discountEnabled ? (
+                <View
+                  style={{
+                    backgroundColor: '#E8F5E9',
+                    borderRadius: 4,
+                    paddingHorizontal: 5,
+                    paddingVertical: 1,
+                    marginTop: 3,
+                  }}
+                >
+                  <Text style={{ fontSize: 10, color: '#2E7D32', fontWeight: 'bold' }}>
+                    SAVE {formatCurrency(cartComboDiscount)}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           </View>
         ) : null}
 

@@ -426,9 +426,23 @@ async function finalizeCartForProceed(cart, options = {}) {
     item.unitCost = product?.amount != null ? Number(product.amount) : null;
   });
 
-  applyDiscountFlags(cart, discount ?? { enabled: false });
-  cart.totalPrice = calculateTotalFromItemUnitCosts(cart.items);
-  cart.discountedAmount = calculateDiscountedAmount(cart.totalPrice, discount);
+  // If explicit discount options were provided in checkout, apply them.
+  // Otherwise, preserve any existing combo / bundle discount already attached to the cart.
+  const hasExplicitDiscountOption = options.isDiscount !== undefined || Boolean(options.discount);
+  if (hasExplicitDiscountOption) {
+    applyDiscountFlags(cart, discount ?? { enabled: false });
+    cart.totalPrice = calculateTotalFromItemUnitCosts(cart.items);
+    cart.discountedAmount = calculateDiscountedAmount(cart.totalPrice, discount);
+  } else if (cart.isDiscount && (cart.discountedAmount > 0 || cart.discount > 0)) {
+    const rawSubtotal = calculateTotalFromItemUnitCosts(cart.items);
+    const existingDiscount = cart.discountedAmount || cart.discount || 0;
+    cart.totalPrice = roundMoney(Math.max(0, rawSubtotal - existingDiscount));
+    cart.discountedAmount = roundMoney(existingDiscount);
+  } else {
+    applyDiscountFlags(cart, { enabled: false });
+    cart.totalPrice = calculateTotalFromItemUnitCosts(cart.items);
+    cart.discountedAmount = 0;
+  }
 
   const shop = await ShopsData.findOne({ shopId }).select('billingConfig').lean();
   const billingTotals = calculateBillTotalsFromCart(cart, shop?.billingConfig);
@@ -552,6 +566,11 @@ function mapCartSessionSummary(cart) {
     customerPhone: cart.customerPhone ?? '',
     customerName: cart.customerName ?? '',
     customerTableNumber: cart.customerTableNumber ?? '',
+    isDiscount: Boolean(cart.isDiscount),
+    isDiscountPercentage: Boolean(cart.isDiscountPercentage),
+    isDiscountAmount: Boolean(cart.isDiscountAmount),
+    discount: Number((cart.discount ?? 0).toFixed(2)),
+    discountedAmount: Number((cart.discountedAmount ?? 0).toFixed(2)),
     createdAt: cart.createdAt,
     updatedAt: cart.updatedAt,
   };
@@ -691,6 +710,12 @@ async function flattenCartItems(carts, shopId) {
         unitCost: item.unitCost ?? null,
         totalPrice: Number((unitPrice * item.quantity).toFixed(2)),
         status: cart.status,
+        isDiscount: Boolean(cart.isDiscount),
+        isDiscountPercentage: Boolean(cart.isDiscountPercentage),
+        isDiscountAmount: Boolean(cart.isDiscountAmount),
+        discount: Number((cart.discount ?? 0).toFixed(2)),
+        discountedAmount: Number((cart.discountedAmount ?? 0).toFixed(2)),
+        cartTotalPrice: Number((cart.totalPrice ?? 0).toFixed(2)),
         createdAt: cart.createdAt,
         updatedAt: cart.updatedAt,
       };

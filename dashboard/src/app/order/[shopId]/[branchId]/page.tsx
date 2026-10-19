@@ -33,6 +33,7 @@ import CustomerOrderShell from '@/components/customerOrder/CustomerOrderShell';
 import {
   fetchCustomerMenu,
   fetchCustomerRecommendations,
+  fetchCustomerBundles,
   placeCustomerOrder,
 } from '@/lib/api/customerOrders';
 import { resolveUploadUrl } from '@/lib/api/publicApi';
@@ -41,6 +42,8 @@ import type {
   CustomerMenuItem,
   CustomerRecommendation,
   RecommendationReasonCode,
+  SmartBundleItem,
+  CustomerBundlesResponse,
 } from '@/lib/api/customerOrders.types';
 import {
   formatLkr,
@@ -272,6 +275,8 @@ export default function CustomerOrderMenuPage() {
   const [recommendations, setRecommendations] = useState<CustomerRecommendation[]>([]);
   const [acceptedRecommendations, setAcceptedRecommendations] = useState<string[]>([]);
 
+  const [bundlesData, setBundlesData] = useState<CustomerBundlesResponse | null>(null);
+
   const [reviewOpen, setReviewOpen] = useState(false);
   const [tableNumber, setTableNumber] = useState('');
   const [phone, setPhone] = useState('');
@@ -286,8 +291,20 @@ export default function CustomerOrderMenuPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const data = await fetchCustomerMenu(shopId, branchId);
-      setMenu(data);
+      const [data, bundles] = await Promise.allSettled([
+        fetchCustomerMenu(shopId, branchId),
+        fetchCustomerBundles(shopId, branchId),
+      ]);
+
+      if (data.status === 'fulfilled') {
+        setMenu(data.value);
+      } else {
+        throw data.reason;
+      }
+
+      if (bundles.status === 'fulfilled' && bundles.value) {
+        setBundlesData(bundles.value);
+      }
     } catch (error) {
       setMenu(null);
       setLoadError(getCustomerApiErrorMessage(error, 'Could not load the menu'));
@@ -320,10 +337,41 @@ export default function CustomerOrderMenuPage() {
   }, [menu, quantities]);
 
   const totalQuantity = selectedLines.reduce((sum, line) => sum + line.quantity, 0);
-  const totalAmount = selectedLines.reduce(
+
+  // Calculate regular total
+  const regularTotal = selectedLines.reduce(
     (sum, line) => sum + line.item.amount * line.quantity,
     0,
   );
+
+  // Calculate dynamic bundle discount savings when bundle items are in the cart
+  const bundleDiscountSavings = useMemo(() => {
+    if (!bundlesData?.bundles?.length) return 0;
+
+    let totalSavings = 0;
+    // Track remaining quantities to prevent double-discounting overlapping bundles
+    const remainingQty = { ...quantities };
+
+    for (const bundle of bundlesData.bundles) {
+      // Find how many complete bundle packs exist in the cart
+      const packCount = Math.min(
+        ...bundle.items.map((it) => remainingQty[it.productId] ?? 0),
+      );
+
+      if (packCount > 0) {
+        totalSavings += bundle.savingAmount * packCount;
+        // Deduct applied items
+        bundle.items.forEach((it) => {
+          remainingQty[it.productId] = (remainingQty[it.productId] ?? 0) - packCount;
+        });
+      }
+    }
+
+    return Math.max(0, totalSavings);
+  }, [bundlesData, quantities]);
+
+  // Net payable amount after bundle combo savings
+  const totalAmount = Math.max(0, regularTotal - bundleDiscountSavings);
 
   const visibleItems = useMemo(() => {
     if (!menu) return [];
@@ -548,6 +596,115 @@ export default function CustomerOrderMenuPage() {
         </Box>
       ) : null}
 
+      {bundlesData?.bundles?.length ? (
+        <Card
+          sx={{
+            borderRadius: 3,
+            mb: 2,
+            border: '2px solid',
+            borderColor: 'success.main',
+            background: 'linear-gradient(135deg, rgba(236,253,245,0.85) 0%, rgba(255,255,255,1) 100%)',
+          }}
+        >
+          <CardContent sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <AutoAwesomeOutlinedIcon color="success" />
+                <Typography variant="subtitle1" sx={{ fontWeight: 800, color: 'success.dark' }}>
+                  {bundlesData.sessionLabel}
+                </Typography>
+              </Box>
+              <Chip
+                size="small"
+                label={bundlesData.timeWindow}
+                color="success"
+                variant="outlined"
+                sx={{ fontWeight: 700 }}
+              />
+            </Box>
+
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Special context-aware combinations. Bundle price is strictly cheaper than individual items!
+            </Typography>
+
+            <Stack spacing={1.5}>
+              {bundlesData.bundles.slice(0, 3).map((bundle) => {
+                const isAllInCart = bundle.items.every((it) => (quantities[it.productId] ?? 0) > 0);
+
+                return (
+                  <Box
+                    key={bundle.bundleId}
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 2,
+                      bgcolor: 'background.paper',
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      display: 'flex',
+                      flexDirection: { xs: 'column', sm: 'row' },
+                      alignItems: { xs: 'flex-start', sm: 'center' },
+                      justifyContent: 'space-between',
+                      gap: 1.5,
+                    }}
+                  >
+                    <Box sx={{ flex: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                        <Typography sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                          {bundle.bundleName}
+                        </Typography>
+                        <Chip
+                          size="small"
+                          label={`SAVE ${bundle.discountPercent}%`}
+                          sx={{
+                            bgcolor: '#ecfdf5',
+                            color: '#059669',
+                            fontWeight: 800,
+                            fontSize: '0.7rem',
+                            height: 20,
+                          }}
+                        />
+                      </Box>
+
+                      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                        <Typography sx={{ fontWeight: 800, color: 'success.dark' }}>
+                          {formatLkr(bundle.bundlePrice)}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          sx={{ color: 'text.secondary', textDecoration: 'line-through' }}
+                        >
+                          {formatLkr(bundle.regularPrice)}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 700 }}>
+                          (Save {formatLkr(bundle.savingAmount)})
+                        </Typography>
+                      </Box>
+                      <Typography variant="caption" color="text.secondary">
+                        💡 {bundle.reason}
+                      </Typography>
+                    </Box>
+
+                    <Button
+                      size="small"
+                      variant={isAllInCart ? 'outlined' : 'contained'}
+                      color="success"
+                      onClick={() => {
+                        bundle.items.forEach((it) => {
+                          setQuantity(it.productId, (quantities[it.productId] ?? 0) + 1);
+                        });
+                      }}
+                      sx={{ borderRadius: 2, fontWeight: 700, flexShrink: 0 }}
+                    >
+                      {isAllInCart ? '+ Add Another Pack' : 'Add Bundle to Cart'}
+                    </Button>
+                  </Box>
+                );
+              })}
+            </Stack>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card sx={{ borderRadius: 3, mb: totalQuantity > 0 ? 12 : 4 }}>
         {visibleItems.length === 0 ? (
           <CardContent>
@@ -591,8 +748,28 @@ export default function CustomerOrderMenuPage() {
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography variant="caption" color="text.secondary">
                 {totalQuantity} item{totalQuantity === 1 ? '' : 's'}
+                {bundleDiscountSavings > 0 ? (
+                  <Chip
+                    size="small"
+                    label={`Save ${formatLkr(bundleDiscountSavings)} with Combo Deal`}
+                    color="success"
+                    sx={{ ml: 1, height: 20, fontSize: '0.7rem', fontWeight: 800 }}
+                  />
+                ) : null}
               </Typography>
-              <Typography sx={{ fontWeight: 800 }}>{formatLkr(totalAmount)}</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                <Typography sx={{ fontWeight: 800, fontSize: '1.2rem', color: bundleDiscountSavings > 0 ? 'success.dark' : 'text.primary' }}>
+                  {formatLkr(totalAmount)}
+                </Typography>
+                {bundleDiscountSavings > 0 ? (
+                  <Typography
+                    variant="caption"
+                    sx={{ color: 'text.secondary', textDecoration: 'line-through' }}
+                  >
+                    {formatLkr(regularTotal)}
+                  </Typography>
+                ) : null}
+              </Box>
             </Box>
             <Button
               variant="contained"
@@ -684,10 +861,30 @@ export default function CustomerOrderMenuPage() {
                 </Typography>
               </Stack>
             ))}
+            {bundleDiscountSavings > 0 ? (
+              <>
+                <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">Regular subtotal</Typography>
+                  <Typography variant="body2" sx={{ textDecoration: 'line-through', color: 'text.secondary' }}>
+                    {formatLkr(regularTotal)}
+                  </Typography>
+                </Stack>
+                <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="success.main" sx={{ fontWeight: 700 }}>
+                    ⚡ Meal-time combo savings
+                  </Typography>
+                  <Typography variant="body2" color="success.main" sx={{ fontWeight: 700 }}>
+                    -{formatLkr(bundleDiscountSavings)}
+                  </Typography>
+                </Stack>
+              </>
+            ) : null}
             <Divider />
             <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
               <Typography sx={{ fontWeight: 800 }}>Total</Typography>
-              <Typography sx={{ fontWeight: 800 }}>{formatLkr(totalAmount)}</Typography>
+              <Typography sx={{ fontWeight: 800, color: bundleDiscountSavings > 0 ? 'success.dark' : 'text.primary' }}>
+                {formatLkr(totalAmount)}
+              </Typography>
             </Stack>
             <Typography variant="caption" color="text.secondary">
               Taxes or service charges, if any, are added by the cashier on the final bill.

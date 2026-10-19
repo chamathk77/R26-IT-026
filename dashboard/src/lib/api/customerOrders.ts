@@ -63,3 +63,14 @@ export async function fetchCustomerRecommendations(
   );
   return data.data;
 }
+
+export async function fetchCustomerBundles(
+  shopId: string,
+  branchId: string,
+): Promise<CustomerBundlesResponse> {
+  const { data } = await publicApi.get<ApiEnvelope<CustomerBundlesResponse>>(
+    `${basePath(shopId, branchId)}/bundles`,
+  );
+  return data.data;
+}
+

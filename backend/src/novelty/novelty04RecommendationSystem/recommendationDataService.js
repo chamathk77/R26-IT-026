@@ -92,12 +92,66 @@ async function getOrderableCatalog(shopId, branchId) {
       categoryId: product.categoryId ? String(product.categoryId) : null,
       categoryName: product.categoryName ?? '',
       amount: Number(product.amount) || 0,
+      cost: product.cost != null ? Number(product.cost) : null,
       image: product.image ?? '',
       isInventoryAvailable: tracked,
       qty,
       available: tracked ? qty > 0 : true,
     };
   });
+}
+
+/**
+ * Historical order baskets tagged with local meal session (BREAKFAST, LUNCH, etc.)
+ */
+const { resolveMealSession } = require('./temporalHelper');
+
+async function getTimedOrderBaskets(shopId, branchId, options = {}) {
+  const lookbackDays = options.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
+  const now = options.now ?? new Date();
+  const timeZone = options.timeZone ?? 'Asia/Colombo';
+  const rangeStart = new Date(now.getTime() - lookbackDays * ONE_DAY_MS);
+
+  const rows = await History.aggregate([
+    {
+      $match: {
+        shopId,
+        branchId,
+        status: 'submited',
+        checkOutTime: { $gte: rangeStart },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        checkOutTime: 1,
+        productIds: {
+          $setUnion: [{ $map: { input: '$items', as: 'item', in: '$$item.productId' } }, []],
+        },
+      },
+    },
+  ]);
+
+  const timedTransactions = [];
+  for (const row of rows) {
+    const items = (row.productIds ?? [])
+      .filter(Boolean)
+      .map((productId) => String(productId));
+    if (items.length) {
+      const orderDate = row.checkOutTime ? new Date(row.checkOutTime) : now;
+      const sessionInfo = resolveMealSession(orderDate, timeZone);
+      timedTransactions.push({
+        items,
+        session: sessionInfo.key,
+      });
+    }
+  }
+
+  return {
+    timedTransactions,
+    transactionCount: timedTransactions.length,
+    lookbackDays,
+  };
 }
 
 /**
@@ -128,7 +182,9 @@ async function getCustomerFavouriteProductIds(shopId, branchId, phone, limit = D
 
 module.exports = {
   getOrderBaskets,
+  getTimedOrderBaskets,
   getOrderableCatalog,
   getCustomerFavouriteProductIds,
   DEFAULT_LOOKBACK_DAYS,
 };
+

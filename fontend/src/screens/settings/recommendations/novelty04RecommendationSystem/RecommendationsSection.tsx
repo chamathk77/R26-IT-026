@@ -1,14 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../context/ThemeContext';
 import { getApiErrorMessage } from '../../../../utils/apiErrorAlert';
-import { fetchRecommendationInsights } from './recommendationsService';
+import { fetchRecommendationInsights, fetchTemporalBundles } from './recommendationsService';
 import { recommendationsStyles as styles } from './recommendationsStyles';
 import type {
   CategoryAttachRate,
   RecommendationInsightsData,
   RecommendationRule,
+  SmartBundleItem,
 } from './recommendationsTypes';
 
 const METHOD_LABELS: Record<string, string> = {
@@ -164,6 +165,22 @@ export default function RecommendationsSection() {
   const { paperTheme } = useTheme();
 
   const [data, setData] = useState<RecommendationInsightsData | null>(null);
+  const [temporalData, setTemporalData] = useState<{
+    session: string;
+    sessionLabel: string;
+    timeWindow: string;
+    currentSession?: string;
+    currentSessionLabel?: string;
+    currentTimeWindow?: string;
+    sessions?: Array<{
+      session: string;
+      sessionLabel: string;
+      timeWindow: string;
+      bundles: SmartBundleItem[];
+    }>;
+    bundles: SmartBundleItem[];
+  } | null>(null);
+  const [selectedSessionKey, setSelectedSessionKey] = useState<string>('CURRENT');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -171,8 +188,21 @@ export default function RecommendationsSection() {
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchRecommendationInsights();
-      setData(result);
+      const [insightsResult, bundlesResult] = await Promise.allSettled([
+        fetchRecommendationInsights(),
+        fetchTemporalBundles('ALL'),
+      ]);
+
+      if (insightsResult.status === 'fulfilled') {
+        setData(insightsResult.value);
+      }
+      if (bundlesResult.status === 'fulfilled' && bundlesResult.value) {
+        setTemporalData(bundlesResult.value as any);
+      }
+
+      if (insightsResult.status === 'rejected') {
+        throw insightsResult.reason;
+      }
     } catch (err: unknown) {
       setError(
         getApiErrorMessage(err, 'Could not load the recommendation insights. Please try again.'),
@@ -336,6 +366,184 @@ export default function RecommendationsSection() {
           </Text>
         </View>
       </View>
+
+      {renderSectionHeader(
+        'fast-food-outline',
+        '#059669',
+        'Meal-Time Dynamic Combo Offers',
+        'Timezone-partitioned smart bundles mined by Apriori Lift. Dynamic bundle prices are strictly less than regular totals.',
+      )}
+
+      {/* Timezone Filter Chips */}
+      {temporalData?.sessions && temporalData.sessions.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8, paddingVertical: 8, marginBottom: 8 }}
+        >
+          <TouchableOpacity
+            key="CURRENT"
+            activeOpacity={0.8}
+            onPress={() => setSelectedSessionKey('CURRENT')}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 5,
+              paddingHorizontal: 12,
+              paddingVertical: 7,
+              borderRadius: 20,
+              backgroundColor: selectedSessionKey === 'CURRENT' ? '#059669' : surfaceVariant,
+              borderWidth: 1,
+              borderColor: selectedSessionKey === 'CURRENT' ? '#059669' : outline,
+            }}
+          >
+            <Ionicons
+              name="time-outline"
+              size={14}
+              color={selectedSessionKey === 'CURRENT' ? '#ffffff' : onSurfaceVariant}
+            />
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: '600',
+                color: selectedSessionKey === 'CURRENT' ? '#ffffff' : onSurface,
+              }}
+            >
+              Now: {temporalData.currentSessionLabel || temporalData.sessionLabel}
+            </Text>
+          </TouchableOpacity>
+
+          {temporalData.sessions.map((s) => {
+            const isSelected = selectedSessionKey === s.session;
+            return (
+              <TouchableOpacity
+                key={s.session}
+                activeOpacity={0.8}
+                onPress={() => setSelectedSessionKey(s.session)}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  borderRadius: 20,
+                  backgroundColor: isSelected ? '#059669' : surfaceVariant,
+                  borderWidth: 1,
+                  borderColor: isSelected ? '#059669' : outline,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: isSelected ? '700' : '500',
+                    color: isSelected ? '#ffffff' : onSurface,
+                  }}
+                >
+                  {s.sessionLabel} ({s.timeWindow})
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      ) : null}
+
+      {(() => {
+        let activeBundles: SmartBundleItem[] = [];
+        let activeSessionLabel = temporalData?.sessionLabel || 'Current Session';
+        let activeTimeWindow = temporalData?.timeWindow || '';
+
+        if (selectedSessionKey === 'CURRENT' || !temporalData?.sessions) {
+          activeBundles = temporalData?.bundles || [];
+          activeSessionLabel = temporalData?.currentSessionLabel || temporalData?.sessionLabel || 'Current Time';
+          activeTimeWindow = temporalData?.currentTimeWindow || temporalData?.timeWindow || '';
+        } else {
+          const matched = temporalData.sessions.find((s) => s.session === selectedSessionKey);
+          if (matched) {
+            activeBundles = matched.bundles;
+            activeSessionLabel = matched.sessionLabel;
+            activeTimeWindow = matched.timeWindow;
+          }
+        }
+
+        if (activeBundles.length > 0) {
+          return activeBundles.map((bundle) => (
+            <View
+              key={bundle.bundleId}
+              style={[
+                styles.ruleCard,
+                {
+                  backgroundColor: surface,
+                  borderColor: '#10b981',
+                  borderLeftWidth: 4,
+                  marginBottom: 12,
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: onSurface, flex: 1 }}>
+                  {bundle.bundleName}
+                </Text>
+                <View
+                  style={{
+                    backgroundColor: '#ecfdf5',
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: 6,
+                  }}
+                >
+                  <Text style={{ color: '#059669', fontWeight: '700', fontSize: 12 }}>
+                    SAVE {bundle.discountPercent}%
+                  </Text>
+                </View>
+              </View>
+
+              {/* Items included in bundle */}
+              {bundle.items && bundle.items.length > 0 ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                  {bundle.items.map((prod) => (
+                    <View
+                      key={prod.productId}
+                      style={{
+                        backgroundColor: `${primary}12`,
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                        borderRadius: 6,
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, color: primary, fontWeight: '500' }}>
+                        + {prod.productName}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#059669' }}>
+                  LKR {bundle.bundlePrice.toLocaleString()}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: onSurfaceVariant,
+                    textDecorationLine: 'line-through',
+                  }}
+                >
+                  LKR {bundle.regularPrice.toLocaleString()}
+                </Text>
+                <Text style={{ fontSize: 12, color: onSurfaceVariant }}>
+                  (Save LKR {bundle.savingAmount.toLocaleString()})
+                </Text>
+              </View>
+
+              <Text style={{ fontSize: 12, color: onSurfaceVariant, marginTop: 4 }}>
+                💡 {bundle.reason}
+              </Text>
+            </View>
+          ));
+        }
+
+        return renderEmptyNotice(
+          `No active bundles generated for ${activeSessionLabel} (${activeTimeWindow}) yet. Bundles appear when historical orders contain complementary items during this time window.`,
+        );
+      })()}
 
       {renderSectionHeader(
         'git-network-outline',

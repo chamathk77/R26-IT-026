@@ -4,6 +4,7 @@ const {
   createCustomerOrder,
   getCustomerOrders,
   getCustomerOrderRecommendations,
+  getCustomerOrderBundles,
 } = require('../controllers/customerOrderController');
 
 // Public routes — reached from the branch QR code, no login.
@@ -13,5 +14,6 @@ router.get('/:shopId/:branchId/menu', getCustomerMenu);
 router.post('/:shopId/:branchId/orders', createCustomerOrder);
 router.get('/:shopId/:branchId/orders', getCustomerOrders);
 router.post('/:shopId/:branchId/recommendations', getCustomerOrderRecommendations);
+router.get('/:shopId/:branchId/bundles', getCustomerOrderBundles);
 
 module.exports = router;

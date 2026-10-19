@@ -1,4 +1,7 @@
-const { requestRecommendations } = require('../../services/analysisServiceClient');
+const {
+  requestRecommendations,
+  requestTemporalBundles,
+} = require('../../services/analysisServiceClient');
 
 /**
  * Basket-association mining is fully owned by the Python analysis backend
@@ -12,4 +15,12 @@ async function computeRecommendationsViaMl(payload) {
   return { ...result, poweredBy: 'python' };
 }
 
-module.exports = { computeRecommendationsViaMl };
+async function computeTemporalBundlesViaMl(payload) {
+  const result = await requestTemporalBundles(payload);
+  return { ...result, poweredBy: 'python' };
+}
+
+module.exports = {
+  computeRecommendationsViaMl,
+  computeTemporalBundlesViaMl,
+};

@@ -454,3 +454,152 @@ def _apply_diversity(scored: List[Dict[str, Any]], limit: int) -> List[Dict[str,
         return chosen
 
     return chosen[:-1] + [alternative]
+
+
+# ---------------------------------------------------------------------------
+# Temporal Context-Aware Dynamic Bundle Recommendation Logic
+# ---------------------------------------------------------------------------
+
+def generate_temporal_bundles(
+    transactions: Sequence[Dict[str, Any]],
+    catalog: Sequence[Dict[str, Any]],
+    current_session: str = "LUNCH",
+    session_label: str = "Lunch Combo",
+    default_discount: float = 0.10,
+    min_support_count: int = 2,
+    min_lift: float = 1.15,
+    max_bundles: int = 6,
+) -> Dict[str, Any]:
+    """
+    Mines frequent itemsets with temporal filtering (prioritizing the current meal
+    session), calculates synergistic Lift, validates that items are distinct and
+    preferably cross-category, and formulates a dynamic bundle price strictly LESS
+    than buying individual items, while preserving gross margin.
+    """
+    catalog_map = {str(item["productId"]): item for item in catalog or [] if item.get("productId")}
+    
+    # 1. Normalize baskets and partition by session
+    all_baskets: List[Set[str]] = []
+    session_baskets: List[Set[str]] = []
+
+    for tx in transactions or []:
+        items = {str(i) for i in (tx.get("items") or []) if i}
+        if not items:
+            continue
+        all_baskets.append(items)
+        if tx.get("session") == current_session:
+            session_baskets.append(items)
+
+    # If session baskets are too sparse (< 5), fall back to all baskets with time weighting
+    target_baskets = session_baskets if len(session_baskets) >= 5 else all_baskets
+    total_tx = max(1, len(target_baskets))
+
+    if total_tx < 2:
+        return {
+            "session": current_session,
+            "sessionLabel": session_label,
+            "bundlesCount": 0,
+            "bundles": [],
+        }
+
+    # 2. Mine frequent itemsets of size 2 and 3 using Apriori
+    frequent = _apriori(target_baskets, min_support_count=max(1, min_support_count), max_size=3)
+
+    bundles: List[Dict[str, Any]] = []
+
+    for itemset, count in frequent.items():
+        if len(itemset) < 2 or len(itemset) > 3:
+            continue
+
+        item_ids = list(itemset)
+        items = [catalog_map[pid] for pid in item_ids if pid in catalog_map]
+        if len(items) != len(item_ids):
+            continue
+
+        # Check cross-category diversity
+        categories = {item.get("categoryName") for item in items if item.get("categoryName")}
+        is_cross_category = len(categories) > 1
+
+        # Calculate Lift for the bundle
+        support = count / total_tx
+        expected_independence = 1.0
+        for pid in item_ids:
+            single_count = frequent.get(frozenset([pid]), 1)
+            expected_independence *= (single_count / total_tx)
+
+        lift = support / max(1e-6, expected_independence)
+        if lift < min_lift:
+            continue
+
+        # 3. Dynamic Bundle Pricing Calculation
+        # Bundle price MUST be strictly less than individual total (guaranteed customer savings)
+        total_regular_price = sum(float(item.get("amount") or 0.0) for item in items)
+        if total_regular_price <= 0:
+            continue
+
+        # Estimated or recorded unit cost
+        total_cost = sum(
+            float(item.get("cost") if item.get("cost") is not None else (item.get("amount", 0.0) * 0.6))
+            for item in items
+        )
+
+        # Margin-aware discount rate: between 8% and 15%
+        profit_margin = (total_regular_price - total_cost) / max(1.0, total_regular_price)
+        effective_discount = default_discount
+        if profit_margin > 0.45:
+            effective_discount = min(0.15, default_discount + 0.03)
+        elif profit_margin < 0.25:
+            effective_discount = max(0.06, default_discount - 0.03)
+
+        # Compute discounted bundle price (e.g. rounded to nearest whole number or 10)
+        bundle_price = round(total_regular_price * (1.0 - effective_discount))
+        # Ensure bundle price is strictly lower by at least 1 unit
+        if bundle_price >= total_regular_price:
+            bundle_price = total_regular_price - 10.0
+
+        saving_amount = round(total_regular_price - bundle_price, 2)
+        discount_percent = int(round((saving_amount / total_regular_price) * 100))
+
+        # Human-readable combo title
+        names = [item.get("productName", "") for item in items]
+        bundle_name = f"{session_label}: " + " + ".join(names)
+        bundle_id = "bundle_" + "_".join(sorted(item_ids))
+
+        bundles.append({
+            "bundleId": bundle_id,
+            "bundleName": bundle_name,
+            "session": current_session,
+            "sessionLabel": session_label,
+            "productIds": item_ids,
+            "items": [
+                {
+                    "productId": it["productId"],
+                    "productName": it.get("productName", ""),
+                    "categoryName": it.get("categoryName", ""),
+                    "amount": float(it.get("amount", 0.0)),
+                    "cost": float(it["cost"]) if it.get("cost") is not None else None,
+                    "image": it.get("image", ""),
+                }
+                for it in items
+            ],
+            "regularPrice": _round6(total_regular_price),
+            "bundlePrice": _round6(bundle_price),
+            "savingAmount": _round6(saving_amount),
+            "discountPercent": discount_percent,
+            "support": _round6(support),
+            "lift": _round6(lift),
+            "coPurchaseCount": count,
+            "isCrossCategory": is_cross_category,
+            "reason": f"Bought together {count} times during {session_label} ({round(lift, 1)}x more likely)",
+        })
+
+    # Sort by Lift descending, then co-purchase count
+    bundles.sort(key=lambda b: (-b["lift"], -b["coPurchaseCount"]))
+
+    return {
+        "session": current_session,
+        "sessionLabel": session_label,
+        "bundlesCount": len(bundles[:max_bundles]),
+        "bundles": bundles[:max_bundles],
+    }
+

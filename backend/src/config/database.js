@@ -1,3 +1,4 @@
+const dns = require('dns');
 const mongoose = require('mongoose');
 
 const ENV_DATABASE_NAMES = {
@@ -60,11 +61,21 @@ async function connectDatabase() {
     await mongoose.connect(uri);
   } catch (err) {
     if (err.message && err.message.includes('querySrv')) {
-      console.error(
-        'DNS SRV lookup failed. In Atlas: use the standard mongodb:// connection string, or fix DNS/firewall.',
+      console.warn(
+        'DNS SRV lookup failed with system DNS. Retrying connection using public DNS (8.8.8.8, 1.1.1.1)...',
       );
+      try {
+        dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+        await mongoose.connect(uri);
+      } catch (retryErr) {
+        console.error(
+          'DNS SRV lookup failed. In Atlas: use the standard mongodb:// connection string, or fix DNS/firewall.',
+        );
+        throw retryErr;
+      }
+    } else {
+      throw err;
     }
-    throw err;
   }
 
   console.log(

@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const {
   buildCustomerRecommendations,
+  getTemporalBundles,
 } = require('../novelty/novelty04RecommendationSystem/recommendationController');
 const {
   resolveCustomerOrderContext,
@@ -195,9 +196,15 @@ const getCustomerOrderRecommendations = async (req, res) => {
   }
 };
 
+/** Public: get temporal smart combos for the current meal session */
+const getCustomerOrderBundles = async (req, res) => {
+  return getTemporalBundles(req, res);
+};
+
 module.exports = {
   getCustomerMenu,
   createCustomerOrder,
   getCustomerOrders,
   getCustomerOrderRecommendations,
+  getCustomerOrderBundles,
 };

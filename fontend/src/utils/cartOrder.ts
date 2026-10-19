@@ -7,7 +7,18 @@ function resolveProductId(product: CartLineItem['product']): string {
 export function buildCartOrderFromLines(
   sessionId: string,
   lines: CartLineItem[],
-  summary?: Partial<Pick<CartSessionSummary, 'totalAmount' | 'status'>>,
+  summary?: Partial<
+    Pick<
+      CartSessionSummary,
+      | 'totalAmount'
+      | 'status'
+      | 'isDiscount'
+      | 'isDiscountPercentage'
+      | 'isDiscountAmount'
+      | 'discount'
+      | 'discountedAmount'
+    >
+  >,
 ): CartOrder {
   const items: CartOrderItem[] = lines.map((line) => ({
     productId: resolveProductId(line.product),
@@ -17,17 +28,36 @@ export function buildCartOrderFromLines(
     kitchenSentQuantity: line.kitchenSentQuantity ?? 0,
   }));
 
+  const firstLine = lines[0];
+  const isDiscount = summary?.isDiscount ?? firstLine?.isDiscount ?? false;
+  const isDiscountPercentage = summary?.isDiscountPercentage ?? firstLine?.isDiscountPercentage ?? false;
+  const isDiscountAmount = summary?.isDiscountAmount ?? firstLine?.isDiscountAmount ?? false;
+  const discount = summary?.discount ?? firstLine?.discount ?? 0;
+  const discountedAmount = summary?.discountedAmount ?? firstLine?.discountedAmount ?? 0;
+
   const lineTotal = lines.reduce((sum, line) => sum + line.totalPrice, 0);
-  const totalPrice = summary?.totalAmount ?? lineTotal;
+  // If summary provided a totalAmount (e.g. discounted combo total), use it;
+  // otherwise if cart has cartTotalPrice from line or discountedAmount, calculate final price.
+  let calculatedTotal = summary?.totalAmount ?? lineTotal;
+  if (summary?.totalAmount === undefined && isDiscount && discountedAmount > 0) {
+    calculatedTotal = Math.max(0, lineTotal - discountedAmount);
+  } else if (summary?.totalAmount === undefined && firstLine?.cartTotalPrice != null) {
+    calculatedTotal = firstLine.cartTotalPrice;
+  }
 
   return {
     sessionId,
     items,
-    totalPrice: Number(totalPrice.toFixed(2)),
-    status: summary?.status ?? lines[0]?.status ?? 'pending',
-    user: lines[0]?.user,
-    createdAt: lines[0]?.createdAt,
-    updatedAt: lines[0]?.updatedAt,
+    totalPrice: Number(calculatedTotal.toFixed(2)),
+    status: summary?.status ?? firstLine?.status ?? 'pending',
+    user: firstLine?.user,
+    isDiscount,
+    isDiscountPercentage,
+    isDiscountAmount,
+    discount,
+    discountedAmount,
+    createdAt: firstLine?.createdAt,
+    updatedAt: firstLine?.updatedAt,
   };
 }
 
@@ -38,6 +68,11 @@ export function buildCartOrderFromSession(
   return buildCartOrderFromLines(session.sessionId, lines, {
     totalAmount: session.totalAmount,
     status: session.status,
+    isDiscount: session.isDiscount,
+    isDiscountPercentage: session.isDiscountPercentage,
+    isDiscountAmount: session.isDiscountAmount,
+    discount: session.discount,
+    discountedAmount: session.discountedAmount,
   });
 }
 
