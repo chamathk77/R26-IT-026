@@ -11,6 +11,11 @@ async function requestForecast({ series, horizon, seasonLength }) {
   return response.data;
 }
 
+async function requestSalesCostForecast(payload) {
+  const response = await client.post('/forecast/sales-cost', payload);
+  return response.data;
+}
+
 async function requestCustomerSegments({ customers, k, now }) {
   const response = await client.post('/segments', { customers, k, now });
   return response.data;
@@ -28,6 +33,7 @@ async function requestRecommendations(payload) {
 
 module.exports = {
   requestForecast,
+  requestSalesCostForecast,
   requestCustomerSegments,
   requestProductDemand,
   requestRecommendations,

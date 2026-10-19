@@ -1,4 +1,4 @@
-const { requestForecast } = require('../../services/analysisServiceClient');
+const { requestForecast, requestSalesCostForecast } = require('../../services/analysisServiceClient');
 
 /**
  * Sales/cost forecasting is fully owned by the Python analysis backend
@@ -13,4 +13,25 @@ async function forecastSeriesViaMl(series, horizon, options = {}) {
   return { ...result, poweredBy: 'python' };
 }
 
-module.exports = { forecastSeriesViaMl };
+/**
+ * Adaptive sales + cost + profit forecast in one call (POST /forecast/sales-cost):
+ * per-shop model choice, trading-day adjustment, ranges from past errors,
+ * profit risk and break-even.
+ */
+async function forecastSalesCostsViaMl({ sales, costs, months, horizon, weekdayWeights }) {
+  const result = await requestSalesCostForecast({
+    sales,
+    costs,
+    months,
+    horizon,
+    seasonLength: 12,
+    weekdayWeights: weekdayWeights ?? null,
+  });
+  return {
+    ...result,
+    sales: { ...result.sales, poweredBy: 'python' },
+    costs: { ...result.costs, poweredBy: 'python' },
+  };
+}
+
+module.exports = { forecastSeriesViaMl, forecastSalesCostsViaMl };
