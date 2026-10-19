@@ -1,7 +1,5 @@
 import { ApiClientError } from "../../config/apiConfig";
 import { navigationRef } from "../navigation/RootNavigation";
-import { clearLoginSession } from "../store/reducers/AuthReducer";
-import { store } from "../store/store";
 import type { ApiErrorResponse } from "../type/common";
 import type { LoginShop } from "../type/auth";
 import { clearSavedToken } from "./secureStorage";
@@ -168,6 +166,9 @@ export async function handleSessionExpiredApiError(
     "Login",
     async () => {
       await clearSavedToken();
+      // Lazy imports to avoid require cycles
+      const { store } = require("../store/store");
+      const { clearLoginSession } = require("../store/reducers/AuthReducer");
       store.dispatch(clearLoginSession());
       navigateToLogin();
     },

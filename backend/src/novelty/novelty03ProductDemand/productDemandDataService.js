@@ -1,5 +1,6 @@
 const History = require('../../models/history');
 const Product = require('../../models/product');
+const BranchStock = require('../../models/branchStock');
 
 const REPORTING_TIMEZONE = process.env.FORECAST_TIMEZONE || 'Asia/Colombo';
 const DEFAULT_LOOKBACK_DAYS = 90;
@@ -21,6 +22,9 @@ function dayKeyInTimezone(date, timezone) {
  * handles gracefully (predicts near-zero demand, which is itself a useful
  * signal). Evenly spaced with zero-filled gaps (required for Holt-Winters);
  * "today" is excluded as still partial, same as the other novelties.
+ *
+ * Now also fetches BranchStock qty and Product pricing (amount, cost) to
+ * power the new stockout risk, revenue projection, and trend features.
  */
 async function getDailyProductDemand(shopId, branchId, options = {}) {
   const lookbackDays = options.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
@@ -29,8 +33,10 @@ async function getDailyProductDemand(shopId, branchId, options = {}) {
   const todayKey = dayKeyInTimezone(now, REPORTING_TIMEZONE);
   const rangeStart = new Date(now.getTime() - lookbackDays * ONE_DAY_MS);
 
-  const [catalogProducts, rows] = await Promise.all([
-    Product.find({ shopId, type: 'product' }).select('productName').lean(),
+  const [catalogProducts, rows, stockRows] = await Promise.all([
+    Product.find({ shopId, type: 'product' })
+      .select('productName amount cost')
+      .lean(),
     History.aggregate([
       {
         $match: {
@@ -51,7 +57,14 @@ async function getDailyProductDemand(shopId, branchId, options = {}) {
         },
       },
     ]),
+    BranchStock.find({ shopId, branchId }).select('productId qty').lean(),
   ]);
+
+  // Build a map of productId -> current stock qty
+  const stockByProductId = new Map();
+  for (const row of stockRows) {
+    stockByProductId.set(String(row.productId), row.qty ?? 0);
+  }
 
   const salesByProductId = new Map();
   for (const row of rows) {
@@ -71,11 +84,16 @@ async function getDailyProductDemand(shopId, branchId, options = {}) {
   }
 
   const products = catalogProducts.map((product) => {
-    const dayMap = salesByProductId.get(String(product._id)) ?? new Map();
+    const pid = String(product._id);
+    const dayMap = salesByProductId.get(pid) ?? new Map();
     return {
-      productId: String(product._id),
+      productId: pid,
       productName: product.productName,
       dailyQuantities: dayKeys.map((day) => dayMap.get(day) ?? 0),
+      // New fields for inventory & revenue features
+      currentStock: stockByProductId.get(pid) ?? 0,
+      sellingPrice: product.amount ?? 0,
+      unitCost: product.cost ?? 0,
     };
   });
 
