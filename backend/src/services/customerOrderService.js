@@ -405,7 +405,56 @@ async function createCustomerManualOrder({ shop, branch, payload }) {
     totalPrice += unitPrice * quantity;
   }
 
+  const { getTimedOrderBaskets, getOrderableCatalog } = require('../novelty/novelty04RecommendationSystem/recommendationDataService');
+  const { computeTemporalBundlesViaMl } = require('../novelty/novelty04RecommendationSystem/recommendationClientViaMl');
+  const { resolveMealSession } = require('../novelty/novelty04RecommendationSystem/temporalHelper');
+
+  let discountSavings = 0;
+  try {
+    const sessionInfo = resolveMealSession(new Date());
+    const [timedData, catalog] = await Promise.all([
+      getTimedOrderBaskets(shopId, branchId),
+      getOrderableCatalog(shopId, branchId),
+    ]);
+
+    const bundleResult = await computeTemporalBundlesViaMl({
+      transactions: timedData.timedTransactions,
+      catalog: catalog.map((item) => ({
+        productId: item.productId,
+        productName: item.productName,
+        categoryId: item.categoryId,
+        categoryName: item.categoryName,
+        amount: item.amount,
+        cost: item.cost,
+        image: item.image,
+      })),
+      currentSession: sessionInfo.key,
+      sessionLabel: sessionInfo.label,
+      defaultDiscount: sessionInfo.defaultDiscount,
+      minSupportCount: 2,
+      minLift: 1.15,
+      maxBundles: 6,
+    });
+
+    if (bundleResult?.bundles?.length) {
+      const remainingQty = Object.fromEntries(lineResult.quantityByProductId);
+      for (const b of bundleResult.bundles) {
+        const packCount = Math.min(...b.items.map((it) => remainingQty[it.productId] ?? 0));
+        if (packCount > 0) {
+          discountSavings += b.savingAmount * packCount;
+          b.items.forEach((it) => {
+            remainingQty[it.productId] = (remainingQty[it.productId] ?? 0) - packCount;
+          });
+        }
+      }
+    }
+  } catch (err) {
+    // If bundle service fails, proceed with normal price
+  }
+
   const table = await findBranchTableByNumber({ shopId, branchId, tableNumber });
+
+  const finalPrice = Math.max(0, totalPrice - discountSavings);
 
   const MAX_ATTEMPTS = 5;
   let lastError = null;
@@ -421,7 +470,11 @@ async function createCustomerManualOrder({ shop, branch, payload }) {
         sessionId: new mongoose.Types.ObjectId(),
         cartNumber,
         items,
-        totalPrice: roundMoney(totalPrice),
+        totalPrice: roundMoney(finalPrice),
+        isDiscount: discountSavings > 0,
+        isDiscountAmount: discountSavings > 0,
+        discount: roundMoney(discountSavings),
+        discountedAmount: roundMoney(discountSavings),
         status: MANUAL_CART_STATUS,
         source: CUSTOMER_ORDER_SOURCE,
         customerPhone: phone,
@@ -591,12 +644,21 @@ function toCustomerOrderStatus(cartStatus) {
 }
 
 function mapCustomerOrderFromCart(cart) {
+  const discount = Number(cart.discountedAmount || cart.discount) || 0;
+  const itemsTotal = (cart.items ?? []).reduce(
+    (sum, item) => sum + (Number(item.unitCost) || 0) * (Number(item.quantity) || 0),
+    0,
+  );
+
   return {
     orderRef: String(cart.sessionId),
     orderNumber: cart.cartNumber,
     status: toCustomerOrderStatus(cart.status),
     tableNumber: cart.customerTableNumber || cart.orderLabel || '',
     totalAmount: roundMoney(cart.totalPrice),
+    subtotal: roundMoney(itemsTotal),
+    discount: roundMoney(discount),
+    hasDiscount: discount > 0,
     items: (cart.items ?? []).map((item) => ({
       name: item.name,
       quantity: Number(item.quantity) || 0,
@@ -609,12 +671,21 @@ function mapCustomerOrderFromCart(cart) {
 }
 
 function mapCustomerOrderFromHistory(record) {
+  const discount = Number(record.discountedAmount) || 0;
+  const itemsTotal = (record.items ?? []).reduce(
+    (sum, item) => sum + (Number(item.unitCost) || 0) * (Number(item.qty) || 0),
+    0,
+  );
+
   return {
     orderRef: String(record.cartId),
     orderNumber: record.cartNumber,
     status: 'paid',
     tableNumber: record.orderLabel ?? '',
     totalAmount: roundMoney(record.totalAmount),
+    subtotal: roundMoney(itemsTotal),
+    discount: roundMoney(discount),
+    hasDiscount: discount > 0,
     items: (record.items ?? []).map((item) => ({
       name: item.productName,
       quantity: Number(item.qty) || 0,

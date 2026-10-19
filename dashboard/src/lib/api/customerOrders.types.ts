@@ -85,6 +85,9 @@ export interface CustomerOrder {
   status: CustomerOrderStatus;
   tableNumber: string;
   totalAmount: number;
+  subtotal?: number;
+  discount?: number;
+  hasDiscount?: boolean;
   items: CustomerOrderLine[];
   placedAt: string;
   paid: boolean;
@@ -155,3 +158,41 @@ export interface CustomerRecommendationsResponse {
   poweredBy: string;
   recommendations: CustomerRecommendation[];
 }
+
+export interface SmartBundleProduct {
+  productId: string;
+  productName: string;
+  categoryName?: string;
+  amount: number;
+  cost?: number | null;
+  image?: string;
+}
+
+export interface SmartBundleItem {
+  bundleId: string;
+  bundleName: string;
+  session: string;
+  sessionLabel: string;
+  productIds: string[];
+  items: SmartBundleProduct[];
+  regularPrice: number;
+  bundlePrice: number;
+  savingAmount: number;
+  discountPercent: number;
+  support: number;
+  lift: number;
+  coPurchaseCount: number;
+  isCrossCategory: boolean;
+  reason: string;
+}
+
+export interface CustomerBundlesResponse {
+  session: string;
+  sessionLabel: string;
+  timeWindow: string;
+  generatedAt: string;
+  poweredBy?: string;
+  bundlesCount: number;
+  bundles: SmartBundleItem[];
+}
+

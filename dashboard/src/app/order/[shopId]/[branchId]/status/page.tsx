@@ -78,11 +78,43 @@ function OrderCard({ order }: { order: CustomerOrder }) {
 
         <Divider sx={{ my: 1 }} />
 
+        {order.hasDiscount && order.discount && order.discount > 0 ? (
+          <Stack spacing={0.5} sx={{ mb: 1 }}>
+            <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+              <Typography variant="body2" color="text.secondary">
+                Regular total
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ color: 'text.secondary', textDecoration: 'line-through' }}
+              >
+                {formatLkr(order.subtotal ?? (order.totalAmount + order.discount))}
+              </Typography>
+            </Stack>
+            <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+              <Typography variant="body2" color="success.main" sx={{ fontWeight: 700 }}>
+                ⚡ Meal-time combo savings
+              </Typography>
+              <Typography variant="body2" color="success.main" sx={{ fontWeight: 700 }}>
+                -{formatLkr(order.discount)}
+              </Typography>
+            </Stack>
+          </Stack>
+        ) : null}
+
         <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
           <Typography sx={{ fontWeight: 800 }}>
-            {order.paid ? 'Paid total' : 'Items total'}
+            {order.paid ? 'Paid total' : 'Order total'}
           </Typography>
-          <Typography sx={{ fontWeight: 800 }}>{formatLkr(order.totalAmount)}</Typography>
+          <Typography
+            sx={{
+              fontWeight: 800,
+              fontSize: '1.05rem',
+              color: order.hasDiscount ? 'success.dark' : 'text.primary',
+            }}
+          >
+            {formatLkr(order.totalAmount)}
+          </Typography>
         </Stack>
       </CardContent>
     </Card>

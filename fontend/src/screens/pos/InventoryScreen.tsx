@@ -1501,6 +1501,21 @@ export default function ProductsScreen({ navigation }: Props) {
                   <Text style={[styles.activeCartTitle, { color: paperTheme.colors.onSurface }]}>
                     Cart #{activeSession.cartNumber}
                   </Text>
+                  {reviewOrder?.isDiscount && (reviewOrder?.discountedAmount ?? 0) > 0 ? (
+                    <View
+                      style={{
+                        backgroundColor: '#E8F5E9',
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        borderRadius: 6,
+                        marginLeft: 6,
+                      }}
+                    >
+                      <Text style={{ fontSize: 10, color: '#2E7D32', fontWeight: 'bold' }}>
+                        OFFER APPLIED
+                      </Text>
+                    </View>
+                  ) : null}
                   {isRestaurant && activeSession.orderType ? (
                     <CartOrderTypeBadge
                       orderType={activeSession.orderType}
@@ -1516,6 +1531,11 @@ export default function ProductsScreen({ navigation }: Props) {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
+                  {reviewOrder?.isDiscount && (reviewOrder?.discountedAmount ?? 0) > 0 ? (
+                    <Text style={{ color: '#2E7D32', fontWeight: '600' }}>
+                      {' '}(Save Rs. {(reviewOrder.discountedAmount ?? 0).toFixed(2)})
+                    </Text>
+                  ) : null}
                 </Text>
               </View>
               <View

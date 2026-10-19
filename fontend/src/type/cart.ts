@@ -31,6 +31,11 @@ export interface CartOrder {
   totalPrice: number;
   status: CartStatus;
   user?: string;
+  isDiscount?: boolean;
+  isDiscountPercentage?: boolean;
+  isDiscountAmount?: boolean;
+  discount?: number;
+  discountedAmount?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -51,6 +56,11 @@ export interface CartSessionSummary {
   customerPhone?: string;
   customerName?: string;
   customerTableNumber?: string;
+  isDiscount?: boolean;
+  isDiscountPercentage?: boolean;
+  isDiscountAmount?: boolean;
+  discount?: number;
+  discountedAmount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -67,6 +77,12 @@ export interface CartLineItem {
   kitchenSentQuantity?: number;
   totalPrice: number;
   status: CartStatus;
+  isDiscount?: boolean;
+  isDiscountPercentage?: boolean;
+  isDiscountAmount?: boolean;
+  discount?: number;
+  discountedAmount?: number;
+  cartTotalPrice?: number;
   createdAt?: string;
   updatedAt?: string;
 }

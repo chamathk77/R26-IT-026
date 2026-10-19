@@ -31,10 +31,16 @@ async function requestRecommendations(payload) {
   return response.data;
 }
 
+async function requestTemporalBundles(payload) {
+  const response = await client.post('/temporal-bundles', payload);
+  return response.data;
+}
+
 module.exports = {
   requestForecast,
   requestSalesCostForecast,
   requestCustomerSegments,
   requestProductDemand,
   requestRecommendations,
+  requestTemporalBundles,
 };

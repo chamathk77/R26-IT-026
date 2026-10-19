@@ -1,7 +1,12 @@
 from fastapi import APIRouter, HTTPException
 
-from .recommender import recommend
-from .schemas import RecommendationsRequest, RecommendationsResponse
+from .recommender import generate_temporal_bundles, recommend
+from .schemas import (
+    RecommendationsRequest,
+    RecommendationsResponse,
+    TemporalBundlesRequest,
+    TemporalBundlesResponse,
+)
 
 router = APIRouter(tags=["novelty04RecommendationSystem"])
 
@@ -30,3 +35,29 @@ def recommendations(payload: RecommendationsRequest):
         )
     except Exception as error:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(error)) from error
+
+
+@router.post("/temporal-bundles", response_model=TemporalBundlesResponse)
+def temporal_bundles(payload: TemporalBundlesRequest):
+    """
+    Mines synergistic frequent itemsets partitioned by local meal-time session,
+    calculates cross-category compatibility and Lift, and applies margin-aware
+    discounting ensuring the bundle price is strictly LESS than the sum of
+    individual item prices.
+    """
+    try:
+        transactions = [tx.model_dump() for tx in payload.transactions]
+        catalog = [item.model_dump() for item in payload.catalog]
+        return generate_temporal_bundles(
+            transactions=transactions,
+            catalog=catalog,
+            current_session=payload.currentSession,
+            session_label=payload.sessionLabel,
+            default_discount=payload.defaultDiscount,
+            min_support_count=payload.minSupportCount,
+            min_lift=payload.minLift,
+            max_bundles=payload.maxBundles,
+        )
+    except Exception as error:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(error)) from error
+

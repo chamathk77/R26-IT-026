@@ -1,9 +1,14 @@
 const {
   getOrderBaskets,
+  getTimedOrderBaskets,
   getOrderableCatalog,
   getCustomerFavouriteProductIds,
 } = require('./recommendationDataService');
-const { computeRecommendationsViaMl } = require('./recommendationClientViaMl');
+const {
+  computeRecommendationsViaMl,
+  computeTemporalBundlesViaMl,
+} = require('./recommendationClientViaMl');
+const { resolveMealSession, MEAL_SESSIONS } = require('./temporalHelper');
 
 // Scores flatten out quickly, so the 7th-10th suggestions are about as good as
 // the 6th — showing fewer just hides equivalent options behind nothing.
@@ -260,9 +265,135 @@ const getRecommendationInsights = async (req, res) => {
   }
 };
 
+/**
+ * Temporal Context-Aware Dynamic Bundle Recommendation
+ * Resolves current meal session based on shop timezone, pulls historical timed
+ * baskets, and asks Python to synthesize synergistic combo deals priced LESS
+ * than individual item totals.
+ */
+const getTemporalBundles = async (req, res) => {
+  try {
+    const shopId = normalizeId(req.user?.shopId || req.params?.shopId);
+    const branchId = normalizeId(req.user?.branchId || req.params?.branchId);
+
+    if (!shopId || !branchId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Shop ID and Branch ID are required.',
+      });
+    }
+
+    const requestedSessionKey = req.query?.session ? String(req.query.session).toUpperCase() : null;
+    const currentSessionInfo = resolveMealSession(new Date());
+    const sessionInfo = (requestedSessionKey && MEAL_SESSIONS[requestedSessionKey]) 
+      ? MEAL_SESSIONS[requestedSessionKey] 
+      : currentSessionInfo;
+
+    const [timedData, catalog] = await Promise.all([
+      getTimedOrderBaskets(shopId, branchId),
+      getOrderableCatalog(shopId, branchId),
+    ]);
+
+    const formattedCatalog = catalog.map((item) => ({
+      productId: item.productId,
+      productName: item.productName,
+      categoryId: item.categoryId,
+      categoryName: item.categoryName,
+      amount: item.amount,
+      cost: item.cost,
+      image: item.image,
+    }));
+
+    // If supervisor requests 'ALL' sessions, compute bundles for each meal session
+    if (requestedSessionKey === 'ALL') {
+      const allSessionKeys = Object.keys(MEAL_SESSIONS);
+      const allSessionResults = await Promise.all(
+        allSessionKeys.map(async (key) => {
+          const sInfo = MEAL_SESSIONS[key];
+          try {
+            const resMl = await computeTemporalBundlesViaMl({
+              transactions: timedData.timedTransactions,
+              catalog: formattedCatalog,
+              currentSession: sInfo.key,
+              sessionLabel: sInfo.label,
+              defaultDiscount: sInfo.defaultDiscount,
+              minSupportCount: 2,
+              minLift: 1.15,
+              maxBundles: 4,
+            });
+            return {
+              session: sInfo.key,
+              sessionLabel: sInfo.label,
+              timeWindow: sInfo.timeWindow,
+              bundles: resMl.bundles || [],
+            };
+          } catch {
+            return {
+              session: sInfo.key,
+              sessionLabel: sInfo.label,
+              timeWindow: sInfo.timeWindow,
+              bundles: [],
+            };
+          }
+        })
+      );
+
+      return res.status(200).json({
+        success: true,
+        shopId,
+        branchId,
+        data: {
+          currentSession: currentSessionInfo.key,
+          currentSessionLabel: currentSessionInfo.label,
+          currentTimeWindow: currentSessionInfo.timeWindow,
+          session: currentSessionInfo.key,
+          sessionLabel: currentSessionInfo.label,
+          timeWindow: currentSessionInfo.timeWindow,
+          generatedAt: new Date().toISOString(),
+          sessions: allSessionResults,
+          bundles: (allSessionResults.find(s => s.session === currentSessionInfo.key)?.bundles) || [],
+        },
+        message: 'Loaded bundles across all meal sessions',
+      });
+    }
+
+    const result = await computeTemporalBundlesViaMl({
+      transactions: timedData.timedTransactions,
+      catalog: formattedCatalog,
+      currentSession: sessionInfo.key,
+      sessionLabel: sessionInfo.label,
+      defaultDiscount: sessionInfo.defaultDiscount,
+      minSupportCount: 2,
+      minLift: 1.15,
+      maxBundles: 6,
+    });
+
+    return res.status(200).json({
+      success: true,
+      shopId,
+      branchId,
+      data: {
+        session: sessionInfo.key,
+        sessionLabel: sessionInfo.label,
+        timeWindow: sessionInfo.timeWindow,
+        generatedAt: new Date().toISOString(),
+        poweredBy: result.poweredBy,
+        bundlesCount: result.bundlesCount,
+        bundles: result.bundles,
+      },
+      message: result.bundlesCount > 0
+        ? `Generated ${result.bundlesCount} ${sessionInfo.label} bundles`
+        : `No frequent bundles detected for ${sessionInfo.label} yet`,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   buildCustomerRecommendations,
   getRecommendationInsights,
+  getTemporalBundles,
   MIN_LIMIT,
   MAX_LIMIT,
   DEFAULT_LIMIT,

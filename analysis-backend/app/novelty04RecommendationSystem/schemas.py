@@ -77,3 +77,68 @@ class RecommendationsResponse(BaseModel):
     recommendations: List[Recommendation]
     rules: List[Rule]
     categoryAttach: List[CategoryAttach]
+
+
+# ---------------------------------------------------------------------------
+# Temporal Context-Aware Dynamic Bundle Recommendation Schemas
+# ---------------------------------------------------------------------------
+
+class TimedTransaction(BaseModel):
+    items: List[str]
+    session: str  # 'BREAKFAST', 'LUNCH', 'SNACK', 'DINNER', 'LATE_NIGHT'
+
+
+class BundleProductIn(BaseModel):
+    productId: str
+    productName: str
+    categoryId: Optional[str] = None
+    categoryName: str = ""
+    amount: float
+    cost: Optional[float] = None
+    image: Optional[str] = ""
+
+
+class TemporalBundlesRequest(BaseModel):
+    transactions: List[TimedTransaction]
+    catalog: List[BundleProductIn]
+    currentSession: str = "LUNCH"
+    sessionLabel: str = "Lunch Combo"
+    defaultDiscount: float = 0.10
+    minSupportCount: int = 2
+    minLift: float = 1.15
+    maxBundles: int = 6
+
+
+class BundleProductRef(BaseModel):
+    productId: str
+    productName: str
+    categoryName: str = ""
+    amount: float
+    cost: Optional[float] = None
+    image: Optional[str] = ""
+
+
+class SmartBundleItem(BaseModel):
+    bundleId: str
+    bundleName: str
+    session: str
+    sessionLabel: str
+    productIds: List[str]
+    items: List[BundleProductRef]
+    regularPrice: float
+    bundlePrice: float
+    savingAmount: float
+    discountPercent: int
+    support: float
+    lift: float
+    coPurchaseCount: int
+    isCrossCategory: bool
+    reason: str
+
+
+class TemporalBundlesResponse(BaseModel):
+    session: str
+    sessionLabel: str
+    bundlesCount: int
+    bundles: List[SmartBundleItem]
+

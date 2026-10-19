@@ -130,3 +130,47 @@ export async function fetchRecommendationInsights(): Promise<RecommendationInsig
     throw toApiErrorResponse(error);
   }
 }
+
+/**
+ * Fetches temporal context-aware smart bundles for the current meal session or all sessions
+ */
+export async function fetchTemporalBundles(session?: string): Promise<{
+  session: string;
+  sessionLabel: string;
+  timeWindow: string;
+  currentSession?: string;
+  currentSessionLabel?: string;
+  currentTimeWindow?: string;
+  sessions?: Array<{
+    session: string;
+    sessionLabel: string;
+    timeWindow: string;
+    bundles: any[];
+  }>;
+  bundles: any[];
+}> {
+  try {
+    await ensureInternetConnection();
+
+    const response = await apiClient.get<any>(
+      '/api/recommendations/bundles',
+      {
+        params: session ? { session } : undefined,
+      },
+    );
+
+    if (isHttpSuccess(response.status) && response.data?.success) {
+      return response.data.data;
+    }
+
+    throw {
+      error: 'Error',
+      message: response.data?.message || 'Could not load temporal bundles',
+      status: response.status,
+      timestamp: new Date().toISOString(),
+    };
+  } catch (error: unknown) {
+    throw toApiErrorResponse(error);
+  }
+}
+

@@ -100,3 +100,47 @@ export interface GetRecommendationInsightsResponse {
   data: WireInsightsData;
   message: string;
 }
+
+export interface SmartBundleProduct {
+  productId: string;
+  productName: string;
+  categoryName?: string;
+  amount: number;
+  cost?: number | null;
+  image?: string;
+}
+
+export interface SmartBundleItem {
+  bundleId: string;
+  bundleName: string;
+  session: string;
+  sessionLabel: string;
+  productIds: string[];
+  items: SmartBundleProduct[];
+  regularPrice: number;
+  bundlePrice: number;
+  savingAmount: number;
+  discountPercent: number;
+  support: number;
+  lift: number;
+  coPurchaseCount: number;
+  isCrossCategory: boolean;
+  reason: string;
+}
+
+export interface GetTemporalBundlesResponse {
+  success: boolean;
+  shopId?: string;
+  branchId?: string;
+  data: {
+    session: string;
+    sessionLabel: string;
+    timeWindow: string;
+    generatedAt: string;
+    poweredBy?: string;
+    bundlesCount: number;
+    bundles: SmartBundleItem[];
+  };
+  message: string;
+}
+

@@ -243,10 +243,20 @@ export const CartSlice = createSlice({
     builder.addCase(fetchCartItems_Service.fulfilled, (state, action) => {
       const lines = Array.isArray(action.payload?.data) ? action.payload.data : [];
       const sessionId = action.payload.sessionId ?? lines[0]?.sessionId ?? null;
+      const matchedSession =
+        state.addedSessions.items.find((s) => s.sessionId === sessionId) ??
+        state.pendingSessions.items.find((s) => s.sessionId === sessionId);
+
       const order =
         sessionId !== null
           ? buildCartOrderFromLines(sessionId, lines, {
               status: action.meta.arg.status ?? lines[0]?.status,
+              totalAmount: matchedSession?.totalAmount,
+              isDiscount: matchedSession?.isDiscount,
+              isDiscountPercentage: matchedSession?.isDiscountPercentage,
+              isDiscountAmount: matchedSession?.isDiscountAmount,
+              discount: matchedSession?.discount,
+              discountedAmount: matchedSession?.discountedAmount,
             })
           : null;
 
@@ -363,11 +373,21 @@ export const CartSlice = createSlice({
       state.cartTab.sessionId = action.payload.sessionId;
       state.cartTab.cartNumber = action.payload.cartNumber ?? null;
       state.cartTab.orderType = action.payload.orderType ?? null;
-      state.cartTab.orderLabel = action.payload.orderLabel ?? '';
+      const pendingMatch = state.pendingSessions.items.find(
+        (s) => s.sessionId === action.payload.sessionId,
+      );
       state.cartTab.order = buildCartOrderFromLines(
         action.payload.sessionId,
         Array.isArray(action.payload?.data) ? action.payload.data : [],
-        { status: action.payload.status },
+        {
+          status: action.payload.status,
+          totalAmount: pendingMatch?.totalAmount,
+          isDiscount: pendingMatch?.isDiscount,
+          isDiscountPercentage: pendingMatch?.isDiscountPercentage,
+          isDiscountAmount: pendingMatch?.isDiscountAmount,
+          discount: pendingMatch?.discount,
+          discountedAmount: pendingMatch?.discountedAmount,
+        },
       );
       if (state.activeSession.sessionId === action.payload.sessionId) {
         state.activeSession = initialState.activeSession;

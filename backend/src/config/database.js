@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
 const dns = require('dns');
+const mongoose = require('mongoose');
 
 try {
   dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
@@ -65,10 +65,11 @@ async function connectDatabase() {
     await mongoose.connect(uri);
   } catch (err) {
     if (err.message && err.message.includes('querySrv')) {
-      console.log('DNS SRV lookup failed with local DNS. Retrying with public DNS (8.8.8.8, 1.1.1.1)...');
+      console.warn(
+        'DNS SRV lookup failed with system DNS. Retrying connection using public DNS (8.8.8.8, 1.1.1.1)...',
+      );
       try {
-        const dns = require('dns');
-        dns.setServers(['8.8.8.8', '1.1.1.1']);
+        dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
         await mongoose.connect(uri);
       } catch (retryErr) {
         console.error(
